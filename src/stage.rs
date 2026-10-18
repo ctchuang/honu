@@ -125,7 +125,7 @@ impl Stage {
 
     /// Adds `bubble`, popping out of `mouth` at `time` and flying to a place up
     /// and to the right of it inside `canvas`, where it opens into its panel.
-    pub fn spit_panel(&mut self, bubble: Bubble, mouth: Pos2, canvas: Rect, time: f64) {
+    pub fn spit_panel(&mut self, bubble: Bubble, mouth: Pos2, canvas: Rect, time: f64) -> BubbleId {
         let mut bubble = bubble.open_on_landing();
         // Drift out of step with the other bubbles once closed.
         bubble.phase = (time % 100.0) as f32;
@@ -148,7 +148,7 @@ impl Stage {
         }
         bubble.center = place;
         bubble.spawn_from(mouth);
-        self.add(bubble);
+        self.add(bubble)
     }
 
     /// Moves every bubble, and where a dragged one was picked up, by `offset`.

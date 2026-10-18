@@ -8,7 +8,9 @@ use std::sync::mpsc;
 use eframe::egui::{self, Color32, FontId, RichText};
 
 use crate::claude;
-use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState};
+use crate::microapp::{
+    AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState, focus_at_end,
+};
 use crate::services::{ApiKey, Services};
 use crate::view::bubble::{Gesture, short_label};
 
@@ -89,10 +91,9 @@ impl ChatView {
         }
     }
 
-    fn take_focus(&mut self, response: &egui::Response, interactive: bool) {
-        if interactive && std::mem::take(&mut self.focus_pending) {
-            response.request_focus();
-        }
+    /// Whether the field shown now should take the focus, which it then does.
+    fn focus_due(&mut self, interactive: bool) -> bool {
+        interactive && std::mem::take(&mut self.focus_pending)
     }
 
     /// Asks for an API key and stores it in `api_key` once entered.
@@ -120,7 +121,9 @@ impl ChatView {
                 .desired_width(f32::INFINITY)
                 .interactive(interactive),
         );
-        self.take_focus(&response, interactive);
+        if self.focus_due(interactive) {
+            focus_at_end(ui, &response, &self.key_draft);
+        }
         ui.add(egui::Label::new(RichText::new(KEY_NOTE).color(color.gamma_multiply(0.6))).wrap());
         let key = self.key_draft.trim();
         if submitted(ui, &response) && !key.is_empty() {
@@ -221,8 +224,9 @@ impl MicroApp for AskApp {
             .id_salt(view.bubble)
             .max_rect(view.rect);
         let (color, interactive) = (view.text_color, view.interactive);
+        let typed = &view.typed_ahead;
         let response = ui.scope_builder(builder, |ui| {
-            chat.ui(state, ui, color, interactive, cx.services)
+            chat.ui(state, ui, color, interactive, cx.services, typed)
         });
         Some(response.inner)
     }
@@ -313,8 +317,15 @@ impl Chat {
         color: Color32,
         interactive: bool,
         services: &mut Services,
+        typed_ahead: &str,
     ) -> f32 {
         let Services { api_key, claude } = services;
+        // Text typed before the panel opened goes to the field it shows first.
+        match (api_key.get(), &self.status) {
+            (None, _) => view.key_draft.push_str(typed_ahead),
+            (Some(_), Status::Typing { .. }) => self.question.push_str(typed_ahead),
+            _ => {}
+        }
         if let Some(message) = self.key_rejected.take() {
             api_key.clear();
             view.key_error = Some(message);
@@ -362,7 +373,9 @@ impl Chat {
                 .desired_width(f32::INFINITY)
                 .interactive(interactive),
         );
-        view.take_focus(&response, interactive);
+        if view.focus_due(interactive) {
+            focus_at_end(ui, &response, &self.question);
+        }
         submitted(ui, &response) && !self.question.trim().is_empty()
     }
 

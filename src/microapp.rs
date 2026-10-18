@@ -75,6 +75,21 @@ pub struct View<'a> {
     pub interactive: bool,
     /// The bubble's own state, made by the microapp's `new_view`.
     pub state: &'a mut dyn Any,
+    /// Text typed while a new bubble was still flying out of the turtle, for
+    /// the field that takes the focus when it opens; empty otherwise.
+    pub typed_ahead: String,
+}
+
+/// Gives the text field of `response`, which shows `text`, the keyboard
+/// focus, with the cursor at the end so typing carries on where it stops.
+pub fn focus_at_end(ui: &egui::Ui, response: &egui::Response, text: &str) {
+    response.request_focus();
+    let mut state = egui::text_edit::TextEditState::load(ui.ctx(), response.id).unwrap_or_default();
+    let end = egui::text::CCursor::new(text.chars().count());
+    state
+        .cursor
+        .set_char_range(Some(egui::text::CCursorRange::one(end)));
+    state.store(ui.ctx(), response.id);
 }
 
 /// Something a microapp asks of the bubbles showing its items.

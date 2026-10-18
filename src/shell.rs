@@ -12,7 +12,7 @@ use crate::services::Services;
 use crate::sprite::octopus::Octopus;
 use crate::sprite::turtle::Turtle;
 use crate::stage::Stage;
-use crate::view::bubble::Bubble;
+use crate::view::bubble::{Bubble, BubbleId};
 use crate::view::render;
 
 /// Size of the window in `--windowed` mode. The app starts out laid out for it
@@ -49,6 +49,13 @@ enum Interaction {
     MenuDismissed,
 }
 
+/// Text typed while a new bubble flies out of the turtle, kept for it until
+/// it first takes input: until then, no text field has the focus to take it.
+struct TypeAhead {
+    bubble: BubbleId,
+    text: String,
+}
+
 /// What is under the pointer, from the top layer down.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Hit {
@@ -68,6 +75,9 @@ pub struct HonuApp {
     /// Deletes the bubbles dropped on it.
     octopus: Octopus,
     interaction: Interaction,
+    /// Text typed for the bubbles the turtle spat out, until each first takes
+    /// input; what is typed goes to the newest.
+    type_ahead: Vec<TypeAhead>,
     /// What the microapps share, such as the key for asking Claude.
     services: Services,
     /// Whether the window floats on the real desktop rather than showing a wallpaper.
@@ -102,6 +112,7 @@ impl HonuApp {
             turtle,
             octopus: Octopus::new(),
             interaction: Interaction::Idle,
+            type_ahead: Vec::new(),
             services,
             floating,
             passthrough: false,
@@ -159,6 +170,7 @@ impl HonuApp {
         self.octopus.summon(summoned);
         for gone in self.octopus.update(canvas, self.turtle.center(), time, dt) {
             if let Some(bubble) = self.stage.remove(gone) {
+                self.type_ahead.retain(|t| t.bubble != bubble.id);
                 self.delete_if_unseen(bubble.target);
             }
         }
@@ -203,6 +215,20 @@ impl HonuApp {
                 pressed.then(|| i.pointer.interact_pos()).flatten()
             })
         };
+
+        // Text typed while no field has the focus has nowhere to go but the
+        // newest bubble, once it opens.
+        if let Some(type_ahead) = self.type_ahead.last_mut()
+            && ui.memory(|m| m.focused().is_none())
+        {
+            ui.input(|i| {
+                for event in &i.events {
+                    if let egui::Event::Text(text) = event {
+                        type_ahead.text.push_str(text);
+                    }
+                }
+            });
+        }
 
         // Pressing anywhere outside the menu, or Escape, closes it. Pressing
         // the turtle closes it too, like a toggle.
@@ -372,8 +398,15 @@ impl HonuApp {
                 // Only the front bubble's content takes input, so a bubble lying
                 // on top of another's content can still be grabbed.
                 let interactive = Some(i) == front && !dragging;
+                // A new bubble gets what was typed while it flew out, the first
+                // time it takes input.
+                let pending = self.type_ahead.iter().position(|t| t.bubble == bubble.id);
+                let typed_ahead = match pending {
+                    Some(i) if interactive => self.type_ahead.remove(i).text,
+                    _ => String::new(),
+                };
                 let cx = (&mut effects, &mut self.services);
-                content_ui(ui, bubble, interactive, &mut self.apps, cx);
+                content_ui(ui, bubble, interactive, typed_ahead, &mut self.apps, cx);
             }
         }
         self.apply(effects);
@@ -411,7 +444,11 @@ impl HonuApp {
         bubble.label = app.title(item);
         bubble.state = app.new_view(item);
         let mouth = self.turtle.spit(time);
-        self.stage.spit_panel(bubble, mouth, canvas, time);
+        let bubble = self.stage.spit_panel(bubble, mouth, canvas, time);
+        self.type_ahead.push(TypeAhead {
+            bubble,
+            text: String::new(),
+        });
     }
 
     /// Has the octopus spit back the bubble it swallowed last, if it still can.
@@ -561,6 +598,7 @@ fn content_ui(
     ui: &mut egui::Ui,
     bubble: &mut Bubble,
     interactive: bool,
+    typed_ahead: String,
     apps: &mut Registry,
     (effects, services): (&mut Vec<Effect>, &mut Services),
 ) {
@@ -575,6 +613,7 @@ fn content_ui(
         text_color: render::text_color(bubble),
         interactive,
         state: bubble.state.as_mut(),
+        typed_ahead,
     };
     let mut cx = Context::new(app, effects, services);
     if let Some(height) = microapp.ui(item, ui, view, &mut cx) {

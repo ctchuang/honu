@@ -6,7 +6,9 @@ use std::collections::BTreeMap;
 
 use eframe::egui::{self, Color32, FontId};
 
-use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState};
+use crate::microapp::{
+    AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState, focus_at_end,
+};
 use crate::view::bubble::short_label;
 
 const ID: AppId = AppId("notes");
@@ -96,6 +98,7 @@ impl MicroApp for NotesApp {
         let note = self.notes.get_mut(&item)?;
         let state = view.state.downcast_mut::<NoteView>()?;
         let (rect, color, interactive) = (view.rect, view.text_color, view.interactive);
+        note.text.push_str(&view.typed_ahead);
         ui.scope_builder(
             egui::UiBuilder::new().id_salt(view.bubble).max_rect(rect),
             |ui| {
@@ -118,7 +121,7 @@ impl MicroApp for NotesApp {
                                 .interactive(interactive),
                         );
                         if interactive && std::mem::take(&mut state.focus_pending) {
-                            response.request_focus();
+                            focus_at_end(ui, &response, &note.text);
                         }
                     });
             },
