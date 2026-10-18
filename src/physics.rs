@@ -7,17 +7,21 @@ use eframe::egui::{Rect, Vec2, vec2};
 use crate::bubble::Bubble;
 
 /// Velocity decay rate (1/s); higher stops a thrown bubble sooner.
-const FRICTION: f32 = 2.5;
+const FRICTION: f32 = 4.0;
 /// Peak acceleration (px/s²) of the idle float.
 const FLOAT_ACCEL: f32 = 14.0;
 /// Bubbles only push each other once their centers are closer than this
 /// fraction of the sum of their radii, so partial overlaps (which show off
 /// the glass) are left alone.
-const PERSONAL_SPACE: f32 = 0.7;
-/// Spring stiffness (1/s²) of the push between crowded bubbles.
-const PUSH_STIFFNESS: f32 = 25.0;
+const PERSONAL_SPACE: f32 = 0.8;
+/// Spring stiffness of the push between crowded bubbles; a bubble of radius
+/// 100 pressed in by 1px is pushed back at this many px/s².
+const PUSH_STIFFNESS: f32 = 160.0;
+/// Damping of that push relative to critical damping. It soaks up the impact
+/// when bubbles collide, so they bump and share momentum instead of jiggling.
+const PUSH_DAMPING: f32 = 0.45;
 /// Fraction of speed kept after bouncing off a window edge.
-const BOUNCE: f32 = 0.6;
+const BOUNCE: f32 = 0.5;
 /// Speed limit (px/s) for thrown bubbles.
 const MAX_SPEED: f32 = 2500.0;
 
@@ -48,9 +52,13 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
                 continue;
             }
             let dir = if dist > 1e-3 { delta / dist } else { Vec2::X };
-            let force = dir * PUSH_STIFFNESS * (min_dist - dist);
-            accel[i] -= force / mass(a);
-            accel[j] += force / mass(b);
+            let (ma, mb) = (mass(a), mass(b));
+            let closing_speed = (a.velocity - b.velocity).dot(dir);
+            let damping = PUSH_DAMPING * 2.0 * (PUSH_STIFFNESS * ma * mb / (ma + mb)).sqrt();
+            // Never pull: separating bubbles should not stick together.
+            let push = (PUSH_STIFFNESS * (min_dist - dist) + damping * closing_speed).max(0.0);
+            accel[i] -= dir * push / ma;
+            accel[j] += dir * push / mb;
         }
     }
 
@@ -95,5 +103,60 @@ fn confine(bubble: &mut Bubble, bounds: Rect) {
             bubble.center[axis] = hi;
             bubble.velocity[axis] = -bubble.velocity[axis].abs() * BOUNCE;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eframe::egui::{Color32, Pos2, pos2};
+
+    const DT: f32 = 1.0 / 60.0;
+
+    fn ball(x: f32, radius: f32) -> Bubble {
+        Bubble::new("", pos2(x, 500.0), radius, Color32::WHITE, false)
+    }
+
+    /// Runs the simulation for `seconds` in a large window, calling `watch` after each step.
+    fn simulate(bubbles: &mut [Bubble], seconds: f32, mut watch: impl FnMut(&[Bubble])) {
+        let bounds = Rect::from_min_max(Pos2::ZERO, pos2(4000.0, 1000.0));
+        for frame in 0..(seconds / DT) as usize {
+            step(bubbles, bounds, None, f64::from(frame as f32 * DT), DT);
+            watch(bubbles);
+        }
+    }
+
+    #[test]
+    fn thrown_bubble_glides_a_short_way() {
+        let mut bubbles = [ball(500.0, 80.0)];
+        bubbles[0].velocity = vec2(1500.0, 0.0);
+        simulate(&mut bubbles, 3.0, |_| {});
+        let travel = bubbles[0].center.x - 500.0;
+        eprintln!("glide travel: {travel:.0}px");
+        assert!(travel < 450.0, "glided {travel:.0}px");
+        assert!(bubbles[0].velocity.length() < 20.0);
+    }
+
+    #[test]
+    fn thrown_bubble_knocks_another_instead_of_passing_through() {
+        let mut bubbles = [ball(500.0, 80.0), ball(700.0, 80.0)];
+        bubbles[0].velocity = vec2(1500.0, 0.0);
+        let mut closest = f32::INFINITY;
+        simulate(&mut bubbles, 3.0, |b| {
+            closest = closest.min(b[1].center.x - b[0].center.x);
+        });
+        let knocked = bubbles[1].center.x - 700.0;
+        eprintln!("closest: {closest:.0}px, knocked: {knocked:.0}px");
+        assert!(closest > 100.0, "centers came within {closest:.0}px");
+        assert!(knocked > 100.0, "only knocked {knocked:.0}px");
+    }
+
+    #[test]
+    fn resting_partial_overlap_is_kept() {
+        let mut bubbles = [ball(500.0, 80.0), ball(650.0, 80.0)];
+        simulate(&mut bubbles, 3.0, |_| {});
+        let gap = bubbles[1].center.x - bubbles[0].center.x;
+        eprintln!("resting gap: {gap:.0}px");
+        assert!(gap < 160.0, "pushed apart to {gap:.0}px");
     }
 }

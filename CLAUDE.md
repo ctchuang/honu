@@ -13,7 +13,7 @@ cargo run                    # build and launch the app window
 cargo build --release        # optimized build
 cargo clippy --all-targets   # lint
 cargo fmt                    # format (cargo fmt --check to verify)
-cargo test                   # run tests (none exist yet)
+cargo test                   # run tests (physics simulations in src/physics.rs)
 cargo test <name>            # run a single test by name filter
 ```
 
@@ -21,7 +21,7 @@ cargo test <name>            # run a single test by name filter
 
 - `src/main.rs`: `main()` configures the window (`NativeOptions` / `ViewportBuilder`) and starts the event loop with `eframe::run_native`, constructing `HonuApp` via `Default`. `HonuApp` holds all state; `bubbles` is kept in back-to-front paint order, and pressing on a bubble moves it to the end (top). `impl eframe::App for HonuApp` allocates one full-window painter, handles drag, double-click, and hit-testing on it, then paints each bubble followed by its content (if open), so content stacks correctly. Only the top bubble's content takes input, so bubbles lying over another's content can still be grabbed.
 - `src/bubble.rs`: `Bubble` and its outline `Shape`, a rounded rectangle with a lit rim. Double-clicking toggles `open`; the bubble then morphs (with a small overshoot) from a circle into a panel that shows its `Content`.
-- `src/physics.rs`: per-frame motion, stepped from `ui()` before painting. Released bubbles keep the pointer's velocity and slow down with friction, idle bubbles drift with a slow per-bubble float, crowded bubbles push each other apart (partial overlaps are allowed so the glass stays visible), and bubbles bounce off the window edges. Open bubbles can be thrown but neither float nor push. The app repaints continuously.
+- `src/physics.rs`: per-frame motion, stepped from `ui()` before painting. Released bubbles keep the pointer's velocity and slow down with friction, idle bubbles drift with a slow per-bubble float, crowded bubbles push each other apart with a damped soft collision that passes momentum on (partial overlaps are allowed so the glass stays visible), and bubbles bounce off the window edges. Open bubbles can be thrown but neither float nor push. The app repaints continuously.
 - `src/render.rs`: all custom drawing. Bubbles are vertex-colored meshes of nested outlines (circles, or rounded rectangles when open) shaded on the CPU by a small lighting model (diffuse/specular, Fresnel rim for glass); there are no custom shaders, so true background blur/refraction is not implemented (planned in `TODO.md`).
 
 egui is **immediate mode**: `ui()` runs every frame and rebuilds the whole interface from the current state, so UI changes are made by mutating `HonuApp` fields, not by holding widget handles.
