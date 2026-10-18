@@ -1,16 +1,18 @@
 //! Custom painting for the desktop background and the bubbles.
 //!
-//! Everything is drawn as vertex-colored meshes: each bubble is a disk of
-//! concentric rings whose vertex colors come from a tiny lighting model
-//! (diffuse + specular, plus a Fresnel rim for glass), which gives the 3D look
-//! without any custom shaders.
+//! Everything is drawn as vertex-colored meshes: each bubble is a stack of
+//! concentric outlines (circles, or rounded rectangles for opened bubbles)
+//! whose vertex colors come from a tiny lighting model (diffuse + specular,
+//! plus a Fresnel rim for glass), which gives the 3D look without any custom
+//! shaders.
 
 use eframe::egui::{Align2, Color32, FontId, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2};
 
-use crate::Bubble;
+use crate::bubble::{Bubble, Shape};
 
 const RINGS: usize = 28;
-const SEGMENTS: usize = 72;
+/// Points per quarter of an outline.
+const ARC_POINTS: usize = 19;
 /// Width of the transparent outer ring that anti-aliases a disk's edge.
 const FEATHER_PX: f32 = 1.5;
 
@@ -34,7 +36,7 @@ pub fn paint_background(painter: &Painter, rect: Rect) {
 
     // Large, faint color glows so translucent bubbles have something to show through.
     let glow = |center: Pos2, radius: f32, rgb: [f32; 3], strength: f32| {
-        painter.add(radial_mesh(center, Vec2::splat(radius), 0.0, |x, y| {
+        painter.add(shape_mesh(Shape::circle(center, radius), 0.0, |x, y| {
             let falloff = (1.0 - (x * x + y * y)).max(0.0).powi(2);
             [rgb[0], rgb[1], rgb[2], strength * falloff]
         }));
@@ -67,9 +69,13 @@ pub fn paint_background(painter: &Painter, rect: Rect) {
     }
 }
 
+/// Paints a bubble's body and label. An opened bubble's content is drawn
+/// separately by the caller, on top of this.
 pub fn paint_bubble(painter: &Painter, bubble: &Bubble) {
     let r = bubble.radius;
     let base = to_rgb(bubble.color);
+    let shape = bubble.shape();
+    let openness = bubble.openness();
 
     // Soft drop shadow, offset away from the light.
     let shadow_alpha = if bubble.glass { 0.18 } else { 0.32 };
@@ -78,46 +84,50 @@ pub fn paint_bubble(painter: &Painter, bubble: &Bubble) {
     } else {
         [0.05, 0.05, 0.1]
     };
-    let shadow_center = bubble.center + vec2(r * 0.12, r * 0.22);
-    painter.add(radial_mesh(
-        shadow_center,
-        Vec2::splat(r * 1.12),
-        0.0,
-        |x, y| {
-            let falloff = (1.0 - (x * x + y * y)).max(0.0).powi(2);
-            [
-                shadow_rgb[0],
-                shadow_rgb[1],
-                shadow_rgb[2],
-                shadow_alpha * falloff,
-            ]
-        },
-    ));
+    let mut shadow = shape.expand(r * 0.12);
+    shadow.center += vec2(r * 0.12, r * 0.22);
+    painter.add(shape_mesh(shadow, 0.0, |x, y| {
+        let falloff = (1.0 - (x * x + y * y)).max(0.0).powi(2);
+        [
+            shadow_rgb[0],
+            shadow_rgb[1],
+            shadow_rgb[2],
+            shadow_alpha * falloff,
+        ]
+    }));
 
-    let shade = if bubble.glass {
-        shade_glass
-    } else {
-        shade_solid
-    };
-    painter.add(radial_mesh(
-        bubble.center,
-        Vec2::splat(r),
-        FEATHER_PX,
-        |x, y| shade(base, x, y),
-    ));
+    // Opened glass gets frosted so its content stays readable.
+    let frost = 0.6 * openness.clamp(0.0, 1.0);
+    painter.add(shape_mesh(shape, FEATHER_PX, |x, y| {
+        if bubble.glass {
+            let mut rgba = shade_glass(base, x, y);
+            rgba[3] = rgba[3].max(frost);
+            rgba
+        } else {
+            shade_solid(base, x, y)
+        }
+    }));
 
-    let text_color = if bubble.glass {
-        Color32::from_rgba_unmultiplied(30, 40, 60, 210)
-    } else {
-        Color32::from_white_alpha(235)
-    };
+    // The label slides from the middle of the ball to the panel's title bar.
+    let title_pos = pos2(shape.center.x, shape.rect().top() + 28.0);
+    let label_pos = shape.center.lerp(title_pos, openness.clamp(0.0, 1.0));
+    let closed_size = (r * 0.22).clamp(12.0, 28.0);
     painter.text(
-        bubble.center,
+        label_pos,
         Align2::CENTER_CENTER,
         &bubble.label,
-        FontId::proportional((r * 0.22).clamp(12.0, 28.0)),
-        text_color,
+        FontId::proportional(closed_size + (20.0 - closed_size) * openness),
+        text_color(bubble),
     );
+}
+
+/// Color for text drawn on top of a bubble.
+pub fn text_color(bubble: &Bubble) -> Color32 {
+    if bubble.glass {
+        Color32::from_rgba_unmultiplied(30, 40, 60, 220)
+    } else {
+        Color32::from_white_alpha(235)
+    }
 }
 
 /// Opaque, glossy ball.
@@ -166,52 +176,63 @@ fn shade_glass(base: [f32; 3], x: f32, y: f32) -> Rgba {
     [c[0], c[1], c[2], alpha.min(1.0)]
 }
 
-/// Builds a filled ellipse as concentric rings of vertices. `color_at` receives
-/// coordinates on the unit disk and returns unmultiplied RGBA in 0..=1.
-/// A positive `feather` adds an outer ring that fades to transparent over that
-/// many pixels, which anti-aliases the edge.
-fn radial_mesh(
-    center: Pos2,
-    radius: Vec2,
-    feather: f32,
-    color_at: impl Fn(f32, f32) -> Rgba,
-) -> Mesh {
-    let mut mesh = Mesh::default();
-    mesh.colored_vertex(center, to_color32(color_at(0.0, 0.0)));
+/// Builds a filled `shape` as nested outlines, each inset further from the
+/// edge. `color_at` receives a point on the unit disk standing in for the
+/// surface there: its direction is the outward direction of the edge, and its
+/// length runs from 0 where the surface turns flat to 1 at the edge. It returns
+/// unmultiplied RGBA in 0..=1. A positive `feather` adds an outer outline that
+/// fades to transparent over that many pixels, which anti-aliases the edge.
+fn shape_mesh(shape: Shape, feather: f32, color_at: impl Fn(f32, f32) -> Rgba) -> Mesh {
+    // Each outline is (inset from the edge, position on the unit disk, alpha override).
+    // The first is inset all the way, so it collapses to a line or point in the middle.
+    let deepest = shape.half.min_elem();
+    let mut outlines = vec![(deepest, 0.0, None)];
+    for ring in 0..=RINGS {
+        let t = ring as f32 / RINGS as f32;
+        let inset = shape.bevel * (1.0 - t);
+        if inset < deepest {
+            outlines.push((inset, t, None));
+        }
+    }
+    if feather > 0.0 {
+        outlines.push((-feather, 1.0, Some(0.0)));
+    }
 
-    let ring_count = if feather > 0.0 { RINGS + 1 } else { RINGS };
-    for ring in 1..=ring_count {
-        let (t, fade) = if ring > RINGS {
-            (1.0 + feather / radius.x.min(radius.y), true)
-        } else {
-            (ring as f32 / RINGS as f32, false)
-        };
-        for seg in 0..SEGMENTS {
-            let angle = seg as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
-            let (sin, cos) = angle.sin_cos();
-            // Sample the color on the disk edge for the feather ring.
-            let (ux, uy) = if fade { (cos, sin) } else { (cos * t, sin * t) };
-            let mut rgba = color_at(ux, uy);
-            if fade {
-                rgba[3] = 0.0;
+    let mut mesh = Mesh::default();
+    for &(inset, t, alpha) in &outlines {
+        let half = shape.half - Vec2::splat(inset);
+        let corner = (shape.corner - inset).max(0.0);
+        let straight = (half - Vec2::splat(corner)).max(Vec2::ZERO);
+        for quarter in 0..4 {
+            // Quarters go clockwise on screen, starting at the bottom-right corner.
+            let sign = [
+                vec2(1.0, 1.0),
+                vec2(-1.0, 1.0),
+                vec2(-1.0, -1.0),
+                vec2(1.0, -1.0),
+            ][quarter];
+            let corner_center = shape.center + straight * sign;
+            for i in 0..ARC_POINTS {
+                let angle = (quarter as f32 + i as f32 / (ARC_POINTS - 1) as f32)
+                    * std::f32::consts::FRAC_PI_2;
+                let dir = Vec2::angled(angle);
+                let mut rgba = color_at(dir.x * t, dir.y * t);
+                if let Some(alpha) = alpha {
+                    rgba[3] = alpha;
+                }
+                mesh.colored_vertex(corner_center + dir * corner, to_color32(rgba));
             }
-            let pos = center + vec2(cos * radius.x * t, sin * radius.y * t);
-            mesh.colored_vertex(pos, to_color32(rgba));
         }
     }
 
-    let segments = SEGMENTS as u32;
-    for seg in 0..segments {
-        let next = (seg + 1) % segments;
-        mesh.add_triangle(0, 1 + seg, 1 + next);
-    }
-    for ring in 1..ring_count as u32 {
-        let inner = 1 + (ring - 1) * segments;
-        let outer = 1 + ring * segments;
-        for seg in 0..segments {
-            let next = (seg + 1) % segments;
-            mesh.add_triangle(inner + seg, outer + seg, outer + next);
-            mesh.add_triangle(inner + seg, outer + next, inner + next);
+    let points = (4 * ARC_POINTS) as u32;
+    for outline in 1..outlines.len() as u32 {
+        let inner = (outline - 1) * points;
+        let outer = outline * points;
+        for i in 0..points {
+            let next = (i + 1) % points;
+            mesh.add_triangle(inner + i, outer + i, outer + next);
+            mesh.add_triangle(inner + i, outer + next, inner + next);
         }
     }
     mesh

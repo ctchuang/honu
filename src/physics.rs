@@ -1,9 +1,10 @@
 //! Bubble motion: momentum after a throw, an idle float, soft pushing between
-//! crowded bubbles, and bounces off the window edges.
+//! crowded bubbles, and bounces off the window edges. Opened bubbles act like
+//! windows: they can still be thrown, but they neither float nor push.
 
 use eframe::egui::{Rect, Vec2, vec2};
 
-use crate::Bubble;
+use crate::bubble::Bubble;
 
 /// Velocity decay rate (1/s); higher stops a thrown bubble sooner.
 const FRICTION: f32 = 2.5;
@@ -23,11 +24,23 @@ const MAX_SPEED: f32 = 2500.0;
 /// Advances all bubbles by `dt` seconds. The `held` bubble follows the pointer,
 /// so it pushes others but is not moved by any force itself.
 pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64, dt: f32) {
-    let mut accel: Vec<Vec2> = bubbles.iter().map(|b| float_accel(b, time)).collect();
+    let mut accel: Vec<Vec2> = bubbles
+        .iter()
+        .map(|b| {
+            if b.is_closed() {
+                float_accel(b, time)
+            } else {
+                Vec2::ZERO
+            }
+        })
+        .collect();
 
     for i in 0..bubbles.len() {
         for j in i + 1..bubbles.len() {
             let (a, b) = (&bubbles[i], &bubbles[j]);
+            if !a.is_closed() || !b.is_closed() {
+                continue;
+            }
             let delta = b.center - a.center;
             let dist = delta.length();
             let min_dist = PERSONAL_SPACE * (a.radius + b.radius);
@@ -68,9 +81,9 @@ fn mass(bubble: &Bubble) -> f32 {
 
 /// Keeps the whole bubble inside `bounds`, bouncing it off any edge it hits.
 fn confine(bubble: &mut Bubble, bounds: Rect) {
-    let r = bubble.radius;
+    let half = bubble.shape().half;
     for axis in 0..2 {
-        let (lo, hi) = (bounds.min[axis] + r, bounds.max[axis] - r);
+        let (lo, hi) = (bounds.min[axis] + half[axis], bounds.max[axis] - half[axis]);
         if lo > hi {
             // The window is smaller than the bubble: just center it.
             bubble.center[axis] = (bounds.min[axis] + bounds.max[axis]) / 2.0;
