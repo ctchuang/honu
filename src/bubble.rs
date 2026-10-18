@@ -1,15 +1,24 @@
-//! Bubbles and their outline. A bubble is a circle when closed and morphs
-//! into a rounded panel that shows its content when opened.
+//! Bubbles and their outline. A bubble is a rounded square, like a macOS app
+//! icon, when closed and morphs into a larger panel that shows its content
+//! when opened.
 
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
+/// Corner radius of a closed bubble, as a fraction of its radius.
+const CLOSED_CORNER: f32 = 0.28;
+/// Width of a closed bubble's rounded, lit rim, as a fraction of its radius.
+/// Keep it at most the corner radius: a wider rim makes its inner edge
+/// square-cornered, which shows as diagonal creases at the corners.
+const CLOSED_BEVEL: f32 = 0.2;
+/// Superellipse exponent of the corners. 2 would be circular arcs; higher
+/// values give the smoother, continuous-curvature corners of macOS shapes.
+const CORNER_EXPONENT: f32 = 4.0;
 /// Size of an opened bubble.
 const PANEL_SIZE: Vec2 = vec2(380.0, 300.0);
 /// Corner radius of an opened bubble.
-const PANEL_CORNER: f32 = 36.0;
-/// Width of the rounded, lit rim of an opened bubble. A closed bubble's rim
-/// spans its whole radius, which is what makes it look like a ball.
-const PANEL_BEVEL: f32 = 22.0;
+const PANEL_CORNER: f32 = 22.0;
+/// Width of the rounded, lit rim of an opened bubble; at most `PANEL_CORNER`.
+const PANEL_BEVEL: f32 = 14.0;
 /// Seconds to open or close a bubble.
 const MORPH_SECONDS: f32 = 0.35;
 
@@ -23,7 +32,7 @@ pub enum Content {
 pub struct Bubble {
     pub label: String,
     pub center: Pos2,
-    /// Radius when closed.
+    /// Half the side of the closed square.
     pub radius: f32,
     pub color: Color32,
     /// Whether the bubble is see-through glass (true) or a solid, opaque ball (false).
@@ -95,18 +104,19 @@ impl Bubble {
         Shape {
             center: self.center,
             half,
-            corner: lerp(r, PANEL_CORNER, t).clamp(0.0, max_round),
-            bevel: lerp(r, PANEL_BEVEL, t).clamp(1.0, max_round),
+            corner: lerp(CLOSED_CORNER * r, PANEL_CORNER, t).clamp(0.0, max_round),
+            bevel: lerp(CLOSED_BEVEL * r, PANEL_BEVEL, t).clamp(1.0, max_round),
+            exponent: CORNER_EXPONENT,
         }
     }
 
     pub fn contains(&self, p: Pos2) -> bool {
-        self.shape().signed_distance(p) <= 0.0
+        self.shape().contains(p)
     }
 }
 
 /// A rounded rectangle with a lit, rounded rim. With `half` equal to `corner`
-/// and `bevel` on both axes it is a sphere.
+/// and `bevel` on both axes and an `exponent` of 2 it is a sphere.
 #[derive(Clone, Copy)]
 pub struct Shape {
     pub center: Pos2,
@@ -117,6 +127,8 @@ pub struct Shape {
     /// How far in from the edge the surface curves before it turns flat,
     /// at most the smaller of `half`'s components.
     pub bevel: f32,
+    /// Superellipse exponent of the corners; 2 makes them circular arcs.
+    pub exponent: f32,
 }
 
 impl Shape {
@@ -126,6 +138,7 @@ impl Shape {
             half: Vec2::splat(radius),
             corner: radius,
             bevel: radius,
+            exponent: 2.0,
         }
     }
 
@@ -140,15 +153,21 @@ impl Shape {
             half: self.half + Vec2::splat(amount),
             corner: (self.corner + amount).max(0.0),
             bevel: (self.bevel + amount).max(1.0),
+            exponent: self.exponent,
         }
     }
 
-    /// Distance from `p` to the outline: negative inside, positive outside.
-    pub fn signed_distance(&self, p: Pos2) -> f32 {
+    pub fn contains(&self, p: Pos2) -> bool {
+        // Offset from the center of the nearest corner, inside the square of that corner.
         let q = (p - self.center).abs() - (self.half - Vec2::splat(self.corner));
-        let outside = q.max(Vec2::ZERO).length();
-        let inside = q.max_elem().min(0.0);
-        outside + inside - self.corner
+        if q.x > self.corner || q.y > self.corner {
+            return false;
+        }
+        if q.x <= 0.0 || q.y <= 0.0 || self.corner <= 0.0 {
+            return true;
+        }
+        let q = q / self.corner;
+        q.x.powf(self.exponent) + q.y.powf(self.exponent) <= 1.0
     }
 }
 

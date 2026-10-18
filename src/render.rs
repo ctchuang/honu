@@ -1,7 +1,7 @@
 //! Custom painting for the desktop background and the bubbles.
 //!
 //! Everything is drawn as vertex-colored meshes: each bubble is a stack of
-//! concentric outlines (circles, or rounded rectangles for opened bubbles)
+//! concentric rounded-rectangle outlines
 //! whose vertex colors come from a tiny lighting model (diffuse + specular,
 //! plus a Fresnel rim for glass), which gives the 3D look without any custom
 //! shaders.
@@ -215,12 +215,12 @@ fn shape_mesh(shape: Shape, feather: f32, color_at: impl Fn(f32, f32) -> Rgba) -
             for i in 0..ARC_POINTS {
                 let angle = (quarter as f32 + i as f32 / (ARC_POINTS - 1) as f32)
                     * std::f32::consts::FRAC_PI_2;
-                let dir = Vec2::angled(angle);
-                let mut rgba = color_at(dir.x * t, dir.y * t);
+                let (point, normal) = superellipse(angle, shape.exponent);
+                let mut rgba = color_at(normal.x * t, normal.y * t);
                 if let Some(alpha) = alpha {
                     rgba[3] = alpha;
                 }
-                mesh.colored_vertex(corner_center + dir * corner, to_color32(rgba));
+                mesh.colored_vertex(corner_center + point * corner, to_color32(rgba));
             }
         }
     }
@@ -236,6 +236,16 @@ fn shape_mesh(shape: Shape, feather: f32, color_at: impl Fn(f32, f32) -> Rgba) -
         }
     }
     mesh
+}
+
+/// A point on the unit superellipse |x|^n + |y|^n = 1 in the direction of
+/// `angle`, and the outward unit normal there. With n = 2 it is a circle.
+fn superellipse(angle: f32, n: f32) -> (Vec2, Vec2) {
+    let (sin, cos) = angle.sin_cos();
+    let curve = |c: f32, power: f32| c.signum() * c.abs().powf(power);
+    let point = vec2(curve(cos, 2.0 / n), curve(sin, 2.0 / n));
+    let normal = vec2(curve(point.x, n - 1.0), curve(point.y, n - 1.0)).normalized();
+    (point, normal)
 }
 
 /// Surface normal of a unit sphere seen from the front, and its z component.
