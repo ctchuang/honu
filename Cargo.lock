@@ -1525,6 +1525,7 @@ dependencies = [
  "dotenvy",
  "eframe",
  "ehttp",
+ "serde",
  "serde_json",
  "wasm-bindgen-futures",
 ]

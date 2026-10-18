@@ -33,7 +33,6 @@ impl Stage {
     }
 
     /// The bubbles in back-to-front paint order.
-    #[cfg(test)]
     pub fn bubbles(&self) -> &[Bubble] {
         &self.bubbles
     }

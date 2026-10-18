@@ -74,6 +74,8 @@ handy during development.
   **click** the octopus (or press <kbd>⌘</kbd><kbd>Z</kbd>) and it spits the bubble back.
 - **Double-click** a bubble to open it into a panel; double-click its title or edge to
   close it again.
+- Bubbles, notes, and answers are saved as you go, so quitting and reopening Honu brings
+  them back where you left them. A bubble still in the octopus when you quit is gone.
 
 ### In a web browser
 

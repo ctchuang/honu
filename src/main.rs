@@ -2,6 +2,7 @@ mod apps;
 mod claude;
 mod desktop;
 mod microapp;
+mod persistence;
 mod services;
 mod shell;
 mod sprite;

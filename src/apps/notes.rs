@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 
 use eframe::egui::{self, Color32, FontId};
+use serde::{Deserialize, Serialize};
 
 use crate::microapp::{
     AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState, focus_at_end,
@@ -20,6 +21,13 @@ const NOTE_YELLOW: Color32 = Color32::from_rgb(255, 236, 150);
 /// One note.
 /// One note: the model.
 struct Note {
+    text: String,
+}
+
+/// A note as saved between launches.
+#[derive(Serialize, Deserialize)]
+struct SavedNote {
+    id: u64,
     text: String,
 }
 
@@ -72,10 +80,10 @@ impl MicroApp for NotesApp {
         }
     }
 
-    /// A note is for writing in, so a new bubble starts with the cursor in it.
-    fn new_view(&self, _item: ItemId) -> ViewState {
+    /// A new note is for writing in, so its bubble starts with the cursor in it.
+    fn new_view(&self, _item: ItemId, fresh: bool) -> ViewState {
         Box::new(NoteView {
-            focus_pending: true,
+            focus_pending: fresh,
         })
     }
 
@@ -133,6 +141,30 @@ impl MicroApp for NotesApp {
     fn remove(&mut self, item: ItemId) {
         self.notes.remove(&item);
     }
+
+    fn items(&self) -> Vec<ItemId> {
+        self.notes.keys().copied().collect()
+    }
+
+    fn save(&self) -> serde_json::Value {
+        let notes: Vec<_> = self
+            .notes
+            .iter()
+            .map(|(id, note)| SavedNote {
+                id: id.0,
+                text: note.text.clone(),
+            })
+            .collect();
+        serde_json::to_value(notes).unwrap_or_default()
+    }
+
+    fn load(&mut self, saved: serde_json::Value) {
+        let notes: Vec<SavedNote> = serde_json::from_value(saved).unwrap_or_default();
+        for SavedNote { id, text } in notes {
+            self.ids.skip_past(ItemId(id));
+            self.notes.insert(ItemId(id), Note { text });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -155,6 +187,22 @@ mod tests {
             title("Remember to call the aquarium about the turtle"),
             "Remember to call the aqu…"
         );
+    }
+
+    #[test]
+    fn notes_come_back_after_a_relaunch() {
+        let mut notes = NotesApp::new();
+        let a = notes.create();
+        notes.notes.get_mut(&a).unwrap().text = "Groceries\nmilk".to_owned();
+        let mut restored = NotesApp::new();
+        restored.load(notes.save());
+        assert_eq!(restored.items(), vec![a]);
+        assert_eq!(restored.notes[&a].text, "Groceries\nmilk");
+        assert!(restored.create() > a, "reused a restored id");
+        // Anything unreadable is simply nothing to restore.
+        let mut empty = NotesApp::new();
+        empty.load(serde_json::json!({"not": "notes"}));
+        assert!(empty.items().is_empty());
     }
 
     #[test]

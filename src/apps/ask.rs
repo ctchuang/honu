@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::mpsc;
 
 use eframe::egui::{self, Color32, FontId, RichText};
+use serde::{Deserialize, Serialize};
 
 use crate::claude;
 use crate::microapp::{
@@ -60,6 +61,18 @@ struct Chat {
     focus_requests: u32,
 }
 
+/// A chat as saved between launches. A stream cannot be saved, so a
+/// question still being answered is saved as interrupted.
+#[derive(Serialize, Deserialize)]
+struct SavedChat {
+    id: u64,
+    question: String,
+    title: Option<String>,
+    answer: String,
+    /// Why the last try failed, if it did.
+    error: Option<String>,
+}
+
 /// What one bubble showing a chat keeps for itself: the view state.
 struct ChatView {
     /// What is typed into the key field before it is saved.
@@ -73,12 +86,13 @@ struct ChatView {
 }
 
 impl ChatView {
-    fn new() -> Self {
+    /// The view of a chat; one `fresh` from the menu starts with the cursor
+    /// in it, since it is for asking.
+    fn new(fresh: bool) -> Self {
         Self {
             key_draft: String::new(),
             key_error: None,
-            // A new chat is for asking, so start with the cursor in it.
-            focus_pending: true,
+            focus_pending: fresh,
             focus_requests_seen: 0,
         }
     }
@@ -210,8 +224,8 @@ impl MicroApp for AskApp {
         }
     }
 
-    fn new_view(&self, _item: ItemId) -> ViewState {
-        Box::new(ChatView::new())
+    fn new_view(&self, _item: ItemId, fresh: bool) -> ViewState {
+        Box::new(ChatView::new(fresh))
     }
 
     /// Shows a chat and returns the panel height that fits it. Without an
@@ -235,6 +249,28 @@ impl MicroApp for AskApp {
     fn remove(&mut self, item: ItemId) {
         self.chats.remove(&item);
     }
+
+    fn items(&self) -> Vec<ItemId> {
+        self.chats.keys().copied().collect()
+    }
+
+    fn save(&self) -> serde_json::Value {
+        let chats: Vec<_> = self
+            .chats
+            .iter()
+            .map(|(id, chat)| chat.saved(*id))
+            .collect();
+        serde_json::to_value(chats).unwrap_or_default()
+    }
+
+    fn load(&mut self, saved: serde_json::Value) {
+        let chats: Vec<SavedChat> = serde_json::from_value(saved).unwrap_or_default();
+        for saved in chats {
+            let id = ItemId(saved.id);
+            self.ids.skip_past(id);
+            self.chats.insert(id, Chat::restored(saved));
+        }
+    }
 }
 
 impl Chat {
@@ -247,6 +283,41 @@ impl Chat {
             stream: None,
             key_rejected: None,
             focus_requests: 0,
+        }
+    }
+
+    /// The chat as saved, under `id`.
+    fn saved(&self, id: ItemId) -> SavedChat {
+        let error = match &self.status {
+            Status::Typing { error } => error.clone(),
+            Status::Thinking => Some("Honu quit before Claude answered.".to_owned()),
+            Status::Answering => Some("Honu quit before the answer was finished.".to_owned()),
+            Status::Done => None,
+            Status::Failed(message) => Some(message.clone()),
+        };
+        SavedChat {
+            id: id.0,
+            question: self.question.clone(),
+            title: self.title.clone(),
+            answer: self.answer.clone(),
+            error,
+        }
+    }
+
+    /// A chat as it was saved. Without an answer, the question can simply be
+    /// sent again.
+    fn restored(saved: SavedChat) -> Self {
+        let status = match (saved.answer.is_empty(), saved.error) {
+            (true, error) => Status::Typing { error },
+            (false, Some(message)) => Status::Failed(message),
+            (false, None) => Status::Done,
+        };
+        Self {
+            question: saved.question,
+            title: saved.title,
+            answer: saved.answer,
+            status,
+            ..Self::new()
         }
     }
 
@@ -451,7 +522,7 @@ mod tests {
     #[test]
     fn every_view_takes_the_focus_once_per_request() {
         let mut chat = Chat::new();
-        let (mut a, mut b) = (ChatView::new(), ChatView::new());
+        let (mut a, mut b) = (ChatView::new(true), ChatView::new(true));
         a.focus_pending = false;
         b.focus_pending = false;
         a.catch_up(chat.focus_requests);
@@ -464,6 +535,37 @@ mod tests {
         a.focus_pending = false;
         a.catch_up(chat.focus_requests);
         assert!(!a.focus_pending, "took the focus twice for one request");
+    }
+
+    #[test]
+    fn chats_come_back_after_a_relaunch_with_interrupted_answers_failed() {
+        let mut asks = AskApp::new();
+        let claude = claude::Fake::default();
+        let done = ask(&mut asks, &claude, "Why is the sea salty?");
+        let thinking = ask(&mut asks, &claude, "Why is it wet?");
+        let answering = ask(&mut asks, &claude, "Why is it blue?");
+        claude.answer(0, claude::Event::Text("Salt.".to_owned()));
+        claude.answer(0, claude::Event::Done);
+        claude.answer(2, claude::Event::Text("Light".to_owned()));
+        update(&mut asks);
+
+        let mut restored = AskApp::new();
+        restored.load(asks.save());
+        assert_eq!(restored.items(), vec![done, thinking, answering]);
+        let chat = |item| &restored.chats[&item];
+        assert!(matches!(chat(done).status, Status::Done));
+        assert_eq!(chat(done).answer, "Salt.");
+        assert_eq!(restored.title(done), "Why is the sea salty?");
+        // No answer yet: the question can be sent again.
+        assert!(matches!(
+            chat(thinking).status,
+            Status::Typing { error: Some(_) }
+        ));
+        assert_eq!(chat(thinking).question, "Why is it wet?");
+        // Part of an answer: kept, marked as cut off.
+        assert!(matches!(chat(answering).status, Status::Failed(_)));
+        assert_eq!(chat(answering).answer, "Light");
+        assert!(!restored.is_busy(answering));
     }
 
     #[test]

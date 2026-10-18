@@ -1,23 +1,5 @@
 # TODO
 
-## Save bubbles to disk (next step)
-
-Only the turtle's place persists today. Notes and Ask bubbles vanish when Honu quits,
-which loses whatever was written in a note.
-
-- Save every bubble: its kind, label, color, place, and whether it is open, plus a
-  note's text and an Ask bubble's question and answer. An answer still streaming when
-  Honu quits can be saved as interrupted, like a failed one.
-- Keep them in eframe's `Storage` next to the turtle's place (serialized with
-  `serde_json`, already a dependency), which the web version keeps in local storage.
-- Save when something changes (a drag ends, a note's text changes, an answer
-  finishes, the octopus's undo time runs out) rather than only in `save`: quitting
-  with ⌘Q or from the Dock exits without calling it.
-- Store places relative to the window center, as the turtle's place is, and keep
-  restored bubbles inside a window smaller than the one they were saved in.
-- Bubbles still in the octopus count as deleted.
-- This is what **Space as memory** below builds on.
-
 ## Real refractive glass (wgpu shader)
 
 Glass bubbles currently fake transparency by layering translucent vertex colors.
@@ -42,10 +24,10 @@ Real Liquid Glass–style glass would blur, magnify, and distort whatever is beh
 The guiding idea: Claude should work with the bubbles on the desktop, not live in a
 chat window. Done so far: the turtle's menu has **Ask AI**, which spits out a bubble
 whose answer streams in while the panel grows to fit it (`src/apps/ask.rs`, `src/claude.rs`).
-Its **Add Note** makes plain note bubbles to write in (`src/apps/notes.rs`), and the octopus
-deletes bubbles (`src/sprite/octopus.rs`).
+Its **Add Note** makes plain note bubbles to write in (`src/apps/notes.rs`), the octopus
+deletes bubbles (`src/sprite/octopus.rs`), and bubbles are saved across launches.
 
-- **Spit out several bubbles at once**: give Claude a `create_bubble` tool,
+- **Spit out several bubbles at once** (next step): give Claude a `create_bubble` tool,
   so "give me five weekend ideas" becomes five bubbles the turtle spits out one by one.
   Reuses the spawn animation, tool use, and streaming that already exist.
   Several bubbles also give the octopus more to do: keep the ideas you like and feed
@@ -59,8 +41,8 @@ deletes bubbles (`src/sprite/octopus.rs`).
 - **Physics shows status** (started): Ask bubbles breathe while Claude works, float up
   when the answer is in, and wobble when something needs the user (`Bubble::set_busy`,
   `Gesture`). New kinds of bubbles should report their state the same way.
-- **Space as memory**: bubbles that sit together belong to the same project. Needs the
-  bubbles saved to disk first (see **Save bubbles to disk** above).
+- **Space as memory**: bubbles that sit together belong to the same project, now that
+  bubbles and where they sit are saved across launches (`src/persistence.rs`).
 - **Confirm before side effects**: before Claude sends mail, changes a file, or runs a
   command, the turtle spits out a confirmation bubble, and nothing happens until it is
   accepted. Each bubble should also show where it came from.

@@ -8,6 +8,7 @@ use crate::apps::ask::AskApp;
 use crate::apps::notes::NotesApp;
 use crate::desktop;
 use crate::microapp::{AppId, Context, Effect, Registry, View, ViewTarget};
+use crate::persistence::{self, Autosave};
 use crate::services::Services;
 use crate::sprite::octopus::Octopus;
 use crate::sprite::turtle::Turtle;
@@ -80,6 +81,8 @@ pub struct HonuApp {
     type_ahead: Vec<TypeAhead>,
     /// What the microapps share, such as the key for asking Claude.
     services: Services,
+    /// Keeps the bubbles and their items for the next launch.
+    autosave: Autosave,
     /// Whether the window floats on the real desktop rather than showing a wallpaper.
     floating: bool,
     /// Whether clicks currently pass through the window to the apps below.
@@ -106,14 +109,24 @@ impl HonuApp {
             // the turtle to the real window.
             turtle.set_offset_from((WINDOWED_SIZE / 2.0).to_pos2(), offset);
         }
+        let mut apps = Registry::new(vec![Box::new(NotesApp::new()), Box::new(AskApp::new())]);
+        let mut stage = Stage::new();
+        // Like the turtle, start out laid out for the windowed size.
+        persistence::restore(
+            storage,
+            &mut apps,
+            &mut stage,
+            (WINDOWED_SIZE / 2.0).to_pos2(),
+        );
         Self {
-            stage: Stage::new(),
-            apps: Registry::new(vec![Box::new(NotesApp::new()), Box::new(AskApp::new())]),
+            stage,
+            apps,
             turtle,
             octopus: Octopus::new(),
             interaction: Interaction::Idle,
             type_ahead: Vec::new(),
             services,
+            autosave: Autosave::new(),
             floating,
             passthrough: false,
             last_canvas: None,
@@ -336,6 +349,7 @@ impl HonuApp {
             .drag(response.drag_delta(), velocity, over_octopus);
         if response.drag_stopped() {
             self.interaction = Interaction::Idle;
+            self.autosave.moved();
             self.octopus.set_eager(false);
             if let Some((bubble, home)) = self.stage.end_drag()
                 && over_octopus
@@ -411,6 +425,10 @@ impl HonuApp {
         }
         self.apply(effects);
         self.services.store(frame.storage_mut());
+        let center = canvas.center();
+        let storage = frame.storage_mut();
+        self.autosave
+            .tick(time, storage, &self.apps, &self.stage, center);
         self.octopus.paint(painter, time);
         self.turtle.paint(painter);
 
@@ -434,15 +452,13 @@ impl HonuApp {
         let Some(app) = self.apps.get_mut(id) else {
             return;
         };
-        let item = app.create();
-        let look = app.appearance(item);
-        let target = ViewTarget { app: id, item };
-        let mut bubble = Bubble::new(target, Pos2::ZERO, look.radius, look.color, look.glass);
-        if let Some(height) = look.panel_height {
-            bubble = bubble.with_panel_height(height);
-        }
-        bubble.label = app.title(item);
-        bubble.state = app.new_view(item);
+        let target = ViewTarget {
+            app: id,
+            item: app.create(),
+        };
+        let Some(bubble) = self.apps.bubble_for(target, true) else {
+            return;
+        };
         let mouth = self.turtle.spit(time);
         let bubble = self.stage.spit_panel(bubble, mouth, canvas, time);
         self.type_ahead.push(TypeAhead {
@@ -491,6 +507,10 @@ impl HonuApp {
 impl eframe::App for HonuApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         self.store_turtle(storage);
+        if let Some(canvas) = self.last_canvas {
+            self.autosave
+                .save(storage, &self.apps, &self.stage, canvas.center());
+        }
     }
 
     fn persist_egui_memory(&self) -> bool {

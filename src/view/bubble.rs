@@ -223,6 +223,13 @@ impl Bubble {
         self.gesture = Some((gesture, 0.0));
     }
 
+    /// Opens the bubble at once, without morphing, as one restored open.
+    pub fn opened(mut self) -> Self {
+        self.open = true;
+        self.progress = 1.0;
+        self
+    }
+
     /// Opens the bubble as soon as it lands after spawning.
     pub fn open_on_landing(mut self) -> Self {
         self.open_on_landing = true;

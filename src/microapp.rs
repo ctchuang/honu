@@ -5,10 +5,10 @@
 
 use std::any::Any;
 
-use eframe::egui::{self, Color32, Rect};
+use eframe::egui::{self, Color32, Pos2, Rect};
 
 use crate::services::Services;
-use crate::view::bubble::{BubbleId, Gesture};
+use crate::view::bubble::{Bubble, BubbleId, Gesture};
 
 /// Names a microapp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -55,6 +55,12 @@ impl ItemIds {
     pub fn next(&mut self) -> ItemId {
         self.next += 1;
         ItemId(self.next)
+    }
+
+    /// Makes sure ids handed out from now on come after `id`, one restored
+    /// from a previous launch.
+    pub fn skip_past(&mut self, id: ItemId) {
+        self.next = self.next.max(id.0);
     }
 }
 
@@ -142,8 +148,10 @@ pub trait MicroApp {
 
     fn appearance(&self, item: ItemId) -> Appearance;
 
-    /// The state a new bubble showing `item` starts with.
-    fn new_view(&self, _item: ItemId) -> ViewState {
+    /// The state a new bubble showing `item` starts with. A `fresh` item was
+    /// just created, as opposed to restored from a previous launch, so its
+    /// bubble may take the focus.
+    fn new_view(&self, _item: ItemId, _fresh: bool) -> ViewState {
         Box::new(())
     }
 
@@ -164,6 +172,16 @@ pub trait MicroApp {
 
     /// Deletes `item` for good.
     fn remove(&mut self, item: ItemId);
+
+    /// Every item kept.
+    fn items(&self) -> Vec<ItemId>;
+
+    /// The items, in a form that `load` takes back on the next launch.
+    fn save(&self) -> serde_json::Value;
+
+    /// Takes back the items `save` returned on a previous launch, keeping
+    /// their ids.
+    fn load(&mut self, saved: serde_json::Value);
 }
 
 /// The microapps, in the order the turtle's menu lists them.
@@ -198,6 +216,12 @@ impl Registry {
             .unwrap_or_default()
     }
 
+    /// Whether the microapp of `target` keeps its item.
+    pub fn has(&self, target: ViewTarget) -> bool {
+        self.get(target.app)
+            .is_some_and(|app| app.items().contains(&target.item))
+    }
+
     pub fn is_busy(&self, target: ViewTarget) -> bool {
         self.get(target.app)
             .is_some_and(|app| app.is_busy(target.item))
@@ -214,6 +238,25 @@ impl Registry {
         if let Some(app) = self.get_mut(target.app) {
             app.remove(target.item);
         }
+    }
+
+    /// A new bubble showing `target`, looking the way its microapp says, or
+    /// `None` if no microapp has that id. A `fresh` item was just created.
+    pub fn bubble_for(&self, target: ViewTarget, fresh: bool) -> Option<Bubble> {
+        let app = self.get(target.app)?;
+        let look = app.appearance(target.item);
+        let mut bubble = Bubble::new(target, Pos2::ZERO, look.radius, look.color, look.glass);
+        if let Some(height) = look.panel_height {
+            bubble = bubble.with_panel_height(height);
+        }
+        bubble.label = app.title(target.item);
+        bubble.state = app.new_view(target.item, fresh);
+        Some(bubble)
+    }
+
+    /// The id of the microapp named `name`, as `AppId` spells it.
+    pub fn find(&self, name: &str) -> Option<AppId> {
+        self.iter().map(|app| app.id()).find(|id| id.0 == name)
     }
 }
 
@@ -276,6 +319,36 @@ mod tests {
         fn remove(&mut self, item: ItemId) {
             self.items.remove(&item);
         }
+
+        fn items(&self) -> Vec<ItemId> {
+            self.items.keys().copied().collect()
+        }
+
+        fn save(&self) -> serde_json::Value {
+            let counts: Vec<_> = self.items.iter().map(|(id, n)| (id.0, *n)).collect();
+            serde_json::json!(counts)
+        }
+
+        fn load(&mut self, saved: serde_json::Value) {
+            let counts: Vec<(u64, u32)> = serde_json::from_value(saved).unwrap_or_default();
+            for (id, n) in counts {
+                self.ids.skip_past(ItemId(id));
+                self.items.insert(ItemId(id), n);
+            }
+        }
+    }
+
+    #[test]
+    fn restored_items_keep_their_ids_and_new_ones_come_after() {
+        let mut counters = Counters::default();
+        let a = counters.create();
+        let b = counters.create();
+        counters.items.insert(b, 5);
+        let mut restored = Counters::default();
+        restored.load(counters.save());
+        assert_eq!(restored.items(), vec![a, b]);
+        assert_eq!(restored.title(b), "5");
+        assert!(restored.create() > b, "reused a restored id");
     }
 
     #[test]
