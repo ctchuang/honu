@@ -36,6 +36,30 @@ impl TurtleMenu {
     }
 }
 
+/// What the user is in the middle of doing with the pointer.
+enum Interaction {
+    Idle,
+    DraggingTurtle,
+    /// Dragging a bubble, which the stage keeps on top.
+    DraggingBubble,
+    /// The turtle's menu is open.
+    Menu(TurtleMenu),
+    /// A press on the turtle just closed its menu, so the click it ends in
+    /// must not open the menu again.
+    MenuDismissed,
+}
+
+/// What is under the pointer, from the top layer down.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Hit {
+    Menu,
+    Turtle,
+    Octopus,
+    /// The bubble at this index on the stage.
+    Bubble(usize),
+    Nothing,
+}
+
 pub struct HonuApp {
     /// The bubbles, each showing an item of one of the microapps below.
     stage: Stage,
@@ -43,13 +67,7 @@ pub struct HonuApp {
     turtle: Turtle,
     /// Deletes the bubbles dropped on it.
     octopus: Octopus,
-    /// True while the turtle is being dragged.
-    dragging_turtle: bool,
-    /// Set when pressing the turtle closed its menu, so the click that press
-    /// ends in does not open the menu again.
-    menu_dismissed: bool,
-    /// The turtle's menu, while open.
-    menu: Option<TurtleMenu>,
+    interaction: Interaction,
     /// What the microapps share, such as the key for asking Claude.
     services: Services,
     /// Whether the window floats on the real desktop rather than showing a wallpaper.
@@ -63,6 +81,14 @@ pub struct HonuApp {
 
 impl HonuApp {
     pub fn new(floating: bool, storage: Option<&dyn eframe::Storage>) -> Self {
+        Self::with_services(floating, storage, Services::load(storage))
+    }
+
+    fn with_services(
+        floating: bool,
+        storage: Option<&dyn eframe::Storage>,
+        services: Services,
+    ) -> Self {
         let mut turtle = Turtle::new();
         let saved = storage.and_then(|storage| storage.get_string(turtle_key(floating)));
         if let Some(offset) = saved.as_deref().and_then(parse_offset) {
@@ -75,28 +101,71 @@ impl HonuApp {
             apps: Registry::new(vec![Box::new(NotesApp::new()), Box::new(AskApp::new())]),
             turtle,
             octopus: Octopus::new(),
-            dragging_turtle: false,
-            menu_dismissed: false,
-            menu: None,
-            services: Services::load(storage),
+            interaction: Interaction::Idle,
+            services,
             floating,
             passthrough: false,
             last_canvas: None,
         }
     }
 
-    /// Index of the topmost bubble under `p`, if any. The turtle and the
-    /// octopus sit above all bubbles, and bubbles still flying out of the
-    /// turtle cannot be grabbed.
-    fn hit_test(&self, p: Pos2) -> Option<usize> {
-        if self.turtle.contains(p) || self.octopus.contains(p) {
-            return None;
+    /// What is under `p`. The open menu is on top, then the turtle and the
+    /// octopus, then the bubbles; bubbles flying out of the turtle or into
+    /// the octopus cannot be grabbed.
+    fn hit(&self, p: Pos2) -> Hit {
+        if let Interaction::Menu(menu) = &self.interaction
+            && menu.contains(p)
+        {
+            Hit::Menu
+        } else if self.turtle.contains(p) {
+            Hit::Turtle
+        } else if self.octopus.contains(p) {
+            Hit::Octopus
+        } else if let Some(i) = self.stage.hit_test(p) {
+            Hit::Bubble(i)
+        } else {
+            Hit::Nothing
         }
-        self.stage.hit_test(p)
     }
 
-    /// Lets clicks through to the apps below unless the mouse is on a bubble
-    /// or the turtle.
+    /// Keeps everything centered when the window changes size, starting from
+    /// the windowed size the app is first laid out for, and places the turtle.
+    fn lay_out(&mut self, ui: &egui::Ui, canvas: egui::Rect, time: f64) {
+        if self.last_canvas.is_none() && self.floating {
+            // Fill the screen except the menu bar and Dock. Asking for this when
+            // the window is created has no effect on a borderless window on macOS.
+            ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
+        }
+        let last_center = self
+            .last_canvas
+            .map_or((WINDOWED_SIZE / 2.0).to_pos2(), |rect| rect.center());
+        let offset = canvas.center() - last_center;
+        if offset != egui::Vec2::ZERO {
+            self.stage.translate(offset);
+            self.turtle.translate(offset);
+            self.octopus.translate(offset);
+        }
+        self.last_canvas = Some(canvas);
+        self.turtle.place(canvas, time);
+    }
+
+    /// Calls the octopus up once a bubble has been dragged a little way, and
+    /// deletes for good the bubbles it forgets.
+    fn update_octopus(&mut self, canvas: egui::Rect, time: f64, dt: f32) {
+        let summoned = self
+            .stage
+            .drag_distance()
+            .is_some_and(|distance| distance > SUMMON_DISTANCE);
+        self.octopus.summon(summoned);
+        for gone in self.octopus.update(canvas, self.turtle.center(), time, dt) {
+            if let Some(bubble) = self.stage.remove(gone) {
+                self.delete_if_unseen(bubble.target);
+            }
+        }
+    }
+
+    /// Lets clicks through to the apps below unless the mouse is on something
+    /// of Honu's, or the user is in the middle of something.
     fn update_passthrough(&mut self, ui: &egui::Ui) {
         let Some(window) = ui.input(|i| i.viewport().inner_rect) else {
             return;
@@ -107,16 +176,222 @@ impl HonuApp {
         let p = cursor - window.min.to_vec2();
         // An open menu takes every click, like a native menu: a click outside
         // it only closes it.
-        let on_bubble = self.menu.is_some()
-            || self.stage.is_dragging()
-            || self.dragging_turtle
-            || self.hit_test(p).is_some()
-            || self.turtle.contains(p)
-            || self.octopus.contains(p);
-        if self.passthrough == on_bubble {
-            self.passthrough = !on_bubble;
+        let capture = !matches!(self.interaction, Interaction::Idle) || self.hit(p) != Hit::Nothing;
+        if self.passthrough == capture {
+            self.passthrough = !capture;
             ui.ctx()
                 .send_viewport_cmd(ViewportCommand::MousePassthrough(self.passthrough));
+        }
+    }
+
+    /// Routes this frame's presses, drags, and clicks on the canvas.
+    fn handle_input(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        frame: &mut eframe::Frame,
+        canvas: egui::Rect,
+        time: f64,
+    ) {
+        let pressed_at = |primary_only: bool| {
+            ui.input(|i| {
+                let pressed = if primary_only {
+                    i.pointer.primary_pressed()
+                } else {
+                    i.pointer.any_pressed()
+                };
+                pressed.then(|| i.pointer.interact_pos()).flatten()
+            })
+        };
+
+        // Pressing anywhere outside the menu, or Escape, closes it. Pressing
+        // the turtle closes it too, like a toggle.
+        if let Interaction::Menu(menu) = &self.interaction {
+            let pressed_at = pressed_at(false);
+            let outside = pressed_at.is_some_and(|p| !menu.contains(p));
+            if outside || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.interaction = if pressed_at.is_some_and(|p| self.turtle.contains(p)) {
+                    Interaction::MenuDismissed
+                } else {
+                    Interaction::Idle
+                };
+            }
+        }
+
+        // Any press on a bubble brings it to the front, including presses on
+        // an opened bubble's content, which the canvas response never sees.
+        if let Some(Hit::Bubble(i)) = pressed_at(true).map(|p| self.hit(p)) {
+            self.stage.raise(i);
+        }
+
+        if response.drag_started()
+            && matches!(
+                self.interaction,
+                Interaction::Idle | Interaction::MenuDismissed
+            )
+        {
+            match ui.input(|i| i.pointer.press_origin()).map(|p| self.hit(p)) {
+                Some(Hit::Turtle) => self.interaction = Interaction::DraggingTurtle,
+                Some(Hit::Bubble(i)) => {
+                    self.stage.start_drag(i);
+                    self.interaction = Interaction::DraggingBubble;
+                }
+                _ => {}
+            }
+        }
+        match self.interaction {
+            Interaction::DraggingTurtle => self.drag_turtle(response, frame, canvas, time),
+            Interaction::DraggingBubble => self.drag_bubble(ui, response, time),
+            _ => {}
+        }
+
+        // Clicking the turtle with either button opens its menu where the
+        // pointer is. A tap counts too, so it works on touch screens.
+        let clicked_at = (response.clicked() || response.secondary_clicked())
+            .then(|| response.interact_pointer_pos())
+            .flatten();
+        match clicked_at.map(|p| (p, self.hit(p))) {
+            Some((pos, Hit::Turtle)) if matches!(self.interaction, Interaction::Idle) => {
+                self.turtle.hop(time);
+                self.interaction = Interaction::Menu(TurtleMenu { pos, rect: None });
+            }
+            Some((_, Hit::Octopus)) if response.clicked() => self.undo_delete(time),
+            _ => {}
+        }
+        // ⌘Z (Ctrl+Z elsewhere) also undoes, unless a text field wants it.
+        let undo_key = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z))
+            && ui.memory(|m| m.focused().is_none());
+        if undo_key {
+            self.undo_delete(time);
+        }
+        if matches!(self.interaction, Interaction::MenuDismissed)
+            && ui.input(|i| i.pointer.any_released())
+        {
+            self.interaction = Interaction::Idle;
+        }
+
+        if response.double_clicked()
+            && let Some(Hit::Bubble(i)) = response.interact_pointer_pos().map(|p| self.hit(p))
+        {
+            self.stage.toggle_open(i);
+        }
+    }
+
+    fn drag_turtle(
+        &mut self,
+        response: &egui::Response,
+        frame: &mut eframe::Frame,
+        canvas: egui::Rect,
+        time: f64,
+    ) {
+        self.turtle.move_by(response.drag_delta());
+        // Place it again so it follows the pointer this frame.
+        self.turtle.place(canvas, time);
+        if response.drag_stopped() {
+            self.interaction = Interaction::Idle;
+            // Save right away: quitting with ⌘Q or from the Dock ends the app
+            // without calling `save`.
+            if let Some(storage) = frame.storage_mut() {
+                self.store_turtle(storage);
+                storage.flush();
+            }
+        }
+    }
+
+    /// Moves the dragged bubble. Holding it over the octopus shrinks it, and
+    /// letting go there deletes it. Where the pointer is decides, not where a
+    /// thrown bubble ends up, so only a deliberate drop deletes.
+    fn drag_bubble(&mut self, ui: &egui::Ui, response: &egui::Response, time: f64) {
+        let pointer = ui.input(|i| i.pointer.latest_pos());
+        let over_octopus = pointer.is_some_and(|p| self.octopus.in_reach(p));
+        self.octopus.set_eager(over_octopus);
+        let velocity = ui.input(|i| i.pointer.velocity());
+        self.stage
+            .drag(response.drag_delta(), velocity, over_octopus);
+        if response.drag_stopped() {
+            self.interaction = Interaction::Idle;
+            self.octopus.set_eager(false);
+            if let Some((bubble, home)) = self.stage.end_drag()
+                && over_octopus
+            {
+                let mouth = self.octopus.swallow(bubble, home, time);
+                self.stage.swallow(bubble, mouth);
+            }
+        }
+    }
+
+    /// Lets the microapps catch up, shows on each bubble what its item is
+    /// doing (an Ask bubble breathes while Claude works), and moves the bubbles.
+    fn update_bubbles(&mut self, canvas: egui::Rect, time: f64, dt: f32) {
+        let mut effects = Vec::new();
+        self.apps.update(&mut effects, &mut self.services);
+        for bubble in self.stage.bubbles_mut() {
+            bubble.label = self.apps.title(bubble.target);
+            bubble.set_busy(self.apps.is_busy(bubble.target));
+        }
+        self.apply(effects);
+        self.stage.step(canvas, time, dt);
+    }
+
+    fn update_cursor(&self, ui: &egui::Ui, response: &egui::Response) {
+        let hovered = response.hover_pos().map(|p| self.hit(p));
+        let icon = match (&self.interaction, hovered) {
+            (Interaction::DraggingTurtle | Interaction::DraggingBubble, _) => CursorIcon::Grabbing,
+            (_, Some(Hit::Bubble(_))) => CursorIcon::Grab,
+            (_, Some(Hit::Turtle)) => CursorIcon::PointingHand,
+            (_, Some(Hit::Octopus)) if self.octopus.can_undo() => CursorIcon::PointingHand,
+            _ => return,
+        };
+        ui.ctx().set_cursor_icon(icon);
+    }
+
+    /// Paints everything back to front: the wallpaper, each bubble followed by
+    /// its content, the octopus, the turtle, and the turtle's menu, carrying
+    /// out the menu item chosen.
+    fn paint(
+        &mut self,
+        ui: &mut egui::Ui,
+        painter: &egui::Painter,
+        frame: &mut eframe::Frame,
+        canvas: egui::Rect,
+        time: f64,
+    ) {
+        if !self.floating {
+            render::paint_background(painter, canvas);
+        }
+        let mut effects = Vec::new();
+        let dragging = matches!(self.interaction, Interaction::DraggingBubble);
+        let front = self.stage.front();
+        for (i, bubble) in self.stage.bubbles_mut().iter_mut().enumerate() {
+            if bubble.is_swallowed() {
+                // Out of sight in the octopus's stomach.
+                continue;
+            }
+            render::paint_bubble(painter, bubble);
+            if bubble.is_fully_open() {
+                // Only the front bubble's content takes input, so a bubble lying
+                // on top of another's content can still be grabbed.
+                let interactive = Some(i) == front && !dragging;
+                let cx = (&mut effects, &mut self.services);
+                content_ui(ui, bubble, interactive, &mut self.apps, cx);
+            }
+        }
+        self.apply(effects);
+        self.services.store(frame.storage_mut());
+        self.octopus.paint(painter, time);
+        self.turtle.paint(painter);
+
+        let chosen = match &mut self.interaction {
+            Interaction::Menu(menu) => turtle_menu_ui(ui.ctx(), menu, &self.apps),
+            _ => None,
+        };
+        if let Some(item) = chosen {
+            self.interaction = Interaction::Idle;
+            match item {
+                MenuItem::Start(id) => self.start(id, canvas, time),
+                #[cfg(not(target_arch = "wasm32"))]
+                MenuItem::Exit => ui.ctx().send_viewport_cmd(ViewportCommand::Close),
+            }
         }
     }
 
@@ -202,35 +477,8 @@ impl eframe::App for HonuApp {
                 let canvas = response.rect;
                 let (time, dt) = ui.input(|i| (i.time, i.stable_dt.min(1.0 / 30.0)));
 
-                if self.last_canvas.is_none() && self.floating {
-                    // Fill the screen except the menu bar and Dock. Asking for this when
-                    // the window is created has no effect on a borderless window on macOS.
-                    ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
-                }
-                // Keep everything centered when the window changes size, starting
-                // from the windowed size the app is first laid out for.
-                let last_center = self
-                    .last_canvas
-                    .map_or((WINDOWED_SIZE / 2.0).to_pos2(), |rect| rect.center());
-                let offset = canvas.center() - last_center;
-                if offset != egui::Vec2::ZERO {
-                    self.stage.translate(offset);
-                    self.turtle.translate(offset);
-                    self.octopus.translate(offset);
-                }
-                self.last_canvas = Some(canvas);
-                self.turtle.place(canvas, time);
-                // The octopus comes up once a bubble has been dragged a little way.
-                let summoned = self
-                    .stage
-                    .drag_distance()
-                    .is_some_and(|distance| distance > SUMMON_DISTANCE);
-                self.octopus.summon(summoned);
-                for gone in self.octopus.update(canvas, self.turtle.center(), time, dt) {
-                    if let Some(bubble) = self.stage.remove(gone) {
-                        self.delete_if_unseen(bubble.target);
-                    }
-                }
+                self.lay_out(ui, canvas, time);
+                self.update_octopus(canvas, time, dt);
                 if self.floating {
                     self.update_passthrough(ui);
                     // A borderless window has no close button, so handle ⌘Q ourselves.
@@ -238,176 +486,12 @@ impl eframe::App for HonuApp {
                         ui.ctx().send_viewport_cmd(ViewportCommand::Close);
                     }
                 }
-
-                // Pressing anywhere outside the menu, or Escape, closes it.
-                let any_pressed_at = ui.input(|i| {
-                    i.pointer
-                        .any_pressed()
-                        .then(|| i.pointer.interact_pos())
-                        .flatten()
-                });
-                if let Some(menu) = &self.menu {
-                    let outside = any_pressed_at.is_some_and(|p| !menu.contains(p));
-                    if outside || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                        self.menu = None;
-                        // Clicking the turtle again closes the menu, like a toggle.
-                        self.menu_dismissed =
-                            any_pressed_at.is_some_and(|p| self.turtle.contains(p));
-                    }
-                }
-                let on_menu = |p: Pos2| self.menu.as_ref().is_some_and(|menu| menu.contains(p));
-
-                // Any press on a bubble brings it to the front, including presses on
-                // an opened bubble's content, which the canvas response never sees.
-                let pressed_at = ui
-                    .input(|i| {
-                        i.pointer
-                            .primary_pressed()
-                            .then(|| i.pointer.interact_pos())
-                            .flatten()
-                    })
-                    .filter(|&p| !on_menu(p));
-                if let Some(i) = pressed_at.and_then(|p| self.hit_test(p)) {
-                    self.stage.raise(i);
-                }
-
-                let pointer = ui.input(|i| i.pointer.latest_pos());
-
-                if response.drag_started() {
-                    let origin = ui.input(|i| i.pointer.press_origin());
-                    if origin.is_some_and(|p| self.turtle.contains(p)) {
-                        self.dragging_turtle = true;
-                    } else if let Some(i) = origin.and_then(|p| self.hit_test(p)) {
-                        self.stage.start_drag(i);
-                    }
-                }
-                if self.dragging_turtle {
-                    self.turtle.move_by(response.drag_delta());
-                    // Place it again so it follows the pointer this frame.
-                    self.turtle.place(canvas, time);
-                    if response.drag_stopped() {
-                        self.dragging_turtle = false;
-                        // Save right away: quitting with ⌘Q or from the Dock ends the
-                        // app without calling `save`.
-                        if let Some(storage) = frame.storage_mut() {
-                            self.store_turtle(storage);
-                            storage.flush();
-                        }
-                    }
-                }
-                if self.stage.is_dragging() {
-                    // Holding a bubble over the octopus shrinks it, and letting go
-                    // there deletes it. Where the pointer is decides, not where a
-                    // thrown bubble ends up, so only a deliberate drop deletes.
-                    let over_octopus = pointer.is_some_and(|p| self.octopus.in_reach(p));
-                    self.octopus.set_eager(over_octopus);
-                    let velocity = ui.input(|i| i.pointer.velocity());
-                    self.stage
-                        .drag(response.drag_delta(), velocity, over_octopus);
-                    if response.drag_stopped() {
-                        self.octopus.set_eager(false);
-                        if let Some((bubble, home)) = self.stage.end_drag()
-                            && over_octopus
-                        {
-                            let mouth = self.octopus.swallow(bubble, home, time);
-                            self.stage.swallow(bubble, mouth);
-                        }
-                    }
-                }
-
-                // Clicking the turtle with either button opens its menu where the
-                // pointer is. A tap counts too, so it works on touch screens.
-                let turtle_clicked_at = (response.clicked() || response.secondary_clicked())
-                    .then(|| response.interact_pointer_pos())
-                    .flatten()
-                    .filter(|&p| self.turtle.contains(p));
-                let clicked_octopus = response.clicked()
-                    && response
-                        .interact_pointer_pos()
-                        .is_some_and(|p| self.octopus.contains(p));
-                // ⌘Z (Ctrl+Z elsewhere) also undoes, unless a text field wants it.
-                let undo_key = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z))
-                    && ui.memory(|m| m.focused().is_none());
-                if clicked_octopus || undo_key {
-                    self.undo_delete(time);
-                }
-                if let Some(pos) = turtle_clicked_at
-                    && !self.menu_dismissed
-                {
-                    self.turtle.hop(time);
-                    self.menu = Some(TurtleMenu { pos, rect: None });
-                }
-                if ui.input(|i| i.pointer.any_released()) {
-                    self.menu_dismissed = false;
-                }
-
-                if response.double_clicked() {
-                    let pos = response.interact_pointer_pos();
-                    if let Some(i) = pos.and_then(|p| self.hit_test(p)) {
-                        self.stage.toggle_open(i);
-                    }
-                }
-
-                // Let the microapps catch up, then show on each bubble what its
-                // item is doing: an Ask bubble breathes while Claude works.
-                let mut effects = Vec::new();
-                self.apps.update(&mut effects, &mut self.services);
-                for bubble in self.stage.bubbles_mut() {
-                    bubble.label = self.apps.title(bubble.target);
-                    bubble.set_busy(self.apps.is_busy(bubble.target));
-                }
-                self.apply(effects);
-                self.stage.step(canvas, time, dt);
+                self.handle_input(ui, &response, frame, canvas, time);
+                self.update_bubbles(canvas, time, dt);
                 // Bubbles are always drifting, so keep animating.
                 ui.ctx().request_repaint();
-
-                let hovered = response.hover_pos().and_then(|p| self.hit_test(p));
-                if self.stage.is_dragging() || self.dragging_turtle {
-                    ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
-                } else if hovered.is_some() {
-                    ui.ctx().set_cursor_icon(CursorIcon::Grab);
-                } else if response.hover_pos().is_some_and(|p| {
-                    self.turtle.contains(p) || (self.octopus.can_undo() && self.octopus.contains(p))
-                }) {
-                    ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-                }
-
-                if !self.floating {
-                    render::paint_background(&painter, canvas);
-                }
-                let mut effects = Vec::new();
-                let dragging = self.stage.is_dragging();
-                let front = self.stage.front();
-                for (i, bubble) in self.stage.bubbles_mut().iter_mut().enumerate() {
-                    if bubble.is_swallowed() {
-                        // Out of sight in the octopus's stomach.
-                        continue;
-                    }
-                    render::paint_bubble(&painter, bubble);
-                    if bubble.is_fully_open() {
-                        // Only the front bubble's content takes input, so a bubble lying
-                        // on top of another's content can still be grabbed.
-                        let interactive = Some(i) == front && !dragging;
-                        let cx = (&mut effects, &mut self.services);
-                        content_ui(ui, bubble, interactive, &mut self.apps, cx);
-                    }
-                }
-                self.apply(effects);
-                self.services.store(frame.storage_mut());
-                self.octopus.paint(&painter, time);
-                self.turtle.paint(&painter);
-                let chosen = self
-                    .menu
-                    .as_mut()
-                    .and_then(|menu| turtle_menu_ui(ui.ctx(), menu, &self.apps));
-                if let Some(item) = chosen {
-                    self.menu = None;
-                    match item {
-                        MenuItem::Start(id) => self.start(id, canvas, time),
-                        #[cfg(not(target_arch = "wasm32"))]
-                        MenuItem::Exit => ui.ctx().send_viewport_cmd(ViewportCommand::Close),
-                    }
-                }
+                self.update_cursor(ui, &response);
+                self.paint(ui, &painter, frame, canvas, time);
             });
     }
 }
@@ -501,6 +585,57 @@ fn content_ui(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::claude;
+    use eframe::egui::{Rect, pos2, vec2};
+
+    /// An app laid out in the windowed size, asking a stand-in for Claude.
+    fn app() -> (HonuApp, Rect) {
+        let services = Services::fake(None, claude::Fake::default());
+        let mut app = HonuApp::with_services(false, None, services);
+        let canvas = Rect::from_min_size(Pos2::ZERO, WINDOWED_SIZE);
+        app.turtle.place(canvas, 0.0);
+        app.last_canvas = Some(canvas);
+        (app, canvas)
+    }
+
+    #[test]
+    fn the_menu_and_the_turtle_are_hit_before_bubbles() {
+        let (mut app, _) = app();
+        let turtle = app.turtle.center();
+        let target = ViewTarget::TEST;
+        let white = egui::Color32::WHITE;
+        app.stage
+            .add(Bubble::new(target, turtle, 80.0, white, false));
+        app.stage
+            .add(Bubble::new(target, pos2(600.0, 300.0), 80.0, white, false));
+        assert_eq!(app.hit(turtle), Hit::Turtle);
+        assert_eq!(app.hit(pos2(600.0, 300.0)), Hit::Bubble(1));
+        assert_eq!(app.hit(turtle + vec2(0.0, -70.0)), Hit::Bubble(0));
+        assert_eq!(app.hit(pos2(1000.0, 100.0)), Hit::Nothing);
+
+        let rect = Rect::from_min_size(pos2(550.0, 250.0), vec2(120.0, 80.0));
+        app.interaction = Interaction::Menu(TurtleMenu {
+            pos: rect.min,
+            rect: Some(rect),
+        });
+        assert_eq!(app.hit(pos2(600.0, 300.0)), Hit::Menu);
+    }
+
+    #[test]
+    fn every_menu_item_starts_an_item_shown_in_a_new_bubble() {
+        let (mut app, canvas) = app();
+        let ids: Vec<_> = app.apps.iter().map(|a| a.id()).collect();
+        for &id in &ids {
+            app.start(id, canvas, 0.0);
+        }
+        let bubbles = app.stage.bubbles_mut();
+        assert_eq!(bubbles.len(), ids.len());
+        for (bubble, &id) in bubbles.iter().zip(&ids) {
+            assert_eq!(bubble.target.app, id);
+            assert!(bubble.is_spawning() && bubble.is_or_will_be_open());
+            assert!(!bubble.label.is_empty());
+        }
+    }
 
     #[test]
     fn saved_offset_round_trips() {
