@@ -1,4 +1,6 @@
+mod ask;
 mod bubble;
+mod claude;
 mod desktop;
 mod physics;
 mod render;
@@ -15,9 +17,12 @@ const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 const LONG_PRESS_SECONDS: f64 = 0.5;
 /// Seconds between bubbles coming out of the turtle's mouth.
 const RELEASE_INTERVAL: f64 = 0.5;
-/// Whether the turtle has a menu. Its only item, Exit, means nothing in a web
-/// page, so the web version has none yet.
-const HAS_MENU: bool = !cfg!(target_arch = "wasm32");
+/// A soft, slightly warm white for the opaque bubbles.
+const PAPER: Color32 = Color32::from_rgb(250, 249, 246);
+/// Storage key for the Claude API key the web version asks for. The desktop
+/// version reads `ANTHROPIC_API_KEY` from `.env` instead and stores nothing.
+#[cfg(target_arch = "wasm32")]
+const API_KEY_KEY: &str = "anthropic_api_key";
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
@@ -111,6 +116,8 @@ struct HonuApp {
     long_pressed: bool,
     /// The turtle's menu, while open.
     menu: Option<TurtleMenu>,
+    /// The key for asking Claude, once known.
+    api_key: Option<String>,
     /// Whether the window floats on the real desktop rather than showing a wallpaper.
     floating: bool,
     /// Whether clicks currently pass through the window to the apps below.
@@ -123,8 +130,7 @@ struct HonuApp {
 impl HonuApp {
     fn new(floating: bool, storage: Option<&dyn eframe::Storage>) -> Self {
         let rgb = Color32::from_rgb;
-        // A soft, slightly warm white for the opaque bubbles.
-        let white = rgb(250, 249, 246);
+        let white = PAPER;
         let notes = Content::Notes(
             "Double-click a bubble to open it, and double-click its edge or title to close it."
                 .to_owned(),
@@ -158,6 +164,7 @@ impl HonuApp {
             turtle_pressed_at: None,
             long_pressed: false,
             menu: None,
+            api_key: initial_api_key(storage),
             floating,
             passthrough: false,
             last_canvas: None,
@@ -204,12 +211,34 @@ impl HonuApp {
         while let Some(at) = self.next_release.filter(|&at| time >= at) {
             if let Some(mut bubble) = self.pending.pop() {
                 bubble.spawn_from(self.turtle.spit(time));
-                // A dragged bubble must stay on top.
-                let index = self.bubbles.len() - usize::from(self.dragging);
-                self.bubbles.insert(index, bubble);
+                self.add_bubble(bubble);
             }
             self.next_release = (!self.pending.is_empty()).then_some(at + RELEASE_INTERVAL);
         }
+    }
+
+    /// Puts a new bubble on top, below a bubble being dragged, which must stay on top.
+    fn add_bubble(&mut self, bubble: Bubble) {
+        let index = self.bubbles.len() - usize::from(self.dragging);
+        self.bubbles.insert(index, bubble);
+    }
+
+    /// Has the turtle spit out an Ask bubble, which opens into a panel for a
+    /// question when it lands next to the turtle.
+    fn spit_ask_bubble(&mut self, canvas: egui::Rect, time: f64) {
+        let mouth = self.turtle.spit(time);
+        let mut bubble = Bubble::new("Ask", mouth, 60.0, PAPER, false)
+            .with_content(Content::Ask(ask::Ask::new()))
+            .with_panel_height(ask::START_HEIGHT)
+            .open_on_landing();
+        // Land up and to the right of the mouth, with the whole panel on screen.
+        let half = bubble.panel_target() / 2.0;
+        let margin = egui::Vec2::splat(16.0);
+        let lo = canvas.min + half + margin;
+        let hi = (canvas.max - half - margin).max(lo);
+        bubble.center = (mouth + egui::vec2(half.x + 40.0, -half.y - 20.0)).clamp(lo, hi);
+        bubble.spawn_from(mouth);
+        self.add_bubble(bubble);
     }
 
     /// Records where the turtle rests, if it has been dragged.
@@ -315,7 +344,7 @@ impl eframe::App for HonuApp {
                 }
 
                 // Right-clicking or long-pressing the turtle opens its menu.
-                if HAS_MENU && pressed_at.is_some_and(|p| self.turtle.contains(p)) {
+                if pressed_at.is_some_and(|p| self.turtle.contains(p)) {
                     self.turtle_pressed_at = Some(time);
                 }
                 let (down, pointer) =
@@ -335,8 +364,7 @@ impl eframe::App for HonuApp {
                     .secondary_clicked()
                     .then(|| response.interact_pointer_pos())
                     .flatten();
-                if let Some(pos) = right_clicked_at.filter(|&p| HAS_MENU && self.turtle.contains(p))
-                {
+                if let Some(pos) = right_clicked_at.filter(|&p| self.turtle.contains(p)) {
                     self.menu = Some(TurtleMenu { pos, rect: None });
                 }
 
@@ -400,6 +428,9 @@ impl eframe::App for HonuApp {
                 let held = self.dragging.then(|| self.bubbles.len() - 1);
                 for bubble in &mut self.bubbles {
                     bubble.animate(dt);
+                    if let Content::Ask(ask) = &mut bubble.content {
+                        ask.poll();
+                    }
                 }
                 physics::step(&mut self.bubbles, canvas, held, time, dt);
                 // Bubbles are always drifting, so keep animating.
@@ -420,6 +451,7 @@ impl eframe::App for HonuApp {
                 if !self.floating {
                     render::paint_background(&painter, canvas);
                 }
+                let key_before = self.api_key.clone();
                 let top = self.bubbles.len().saturating_sub(1);
                 for (i, bubble) in self.bubbles.iter_mut().enumerate() {
                     render::paint_bubble(&painter, bubble);
@@ -427,19 +459,39 @@ impl eframe::App for HonuApp {
                         // Only the front bubble's content takes input, so a bubble lying
                         // on top of another's content can still be grabbed.
                         let interactive = i == top && !self.dragging;
-                        content_ui(ui, bubble, interactive);
+                        content_ui(ui, bubble, interactive, &mut self.api_key);
                     }
                 }
+                if self.api_key != key_before {
+                    remember_api_key(frame, self.api_key.as_deref());
+                }
                 self.turtle.paint(&painter);
-                if let Some(menu) = &mut self.menu {
-                    turtle_menu_ui(ui.ctx(), menu);
+                let chosen = self
+                    .menu
+                    .as_mut()
+                    .and_then(|menu| turtle_menu_ui(ui.ctx(), menu));
+                if let Some(item) = chosen {
+                    self.menu = None;
+                    match item {
+                        MenuItem::Ask => self.spit_ask_bubble(canvas, time),
+                        #[cfg(not(target_arch = "wasm32"))]
+                        MenuItem::Exit => ui.ctx().send_viewport_cmd(ViewportCommand::Close),
+                    }
                 }
             });
     }
 }
 
-/// Shows the turtle's menu and carries out the chosen item.
-fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) {
+/// An item of the turtle's menu.
+enum MenuItem {
+    Ask,
+    /// Quitting means nothing in a web page.
+    #[cfg(not(target_arch = "wasm32"))]
+    Exit,
+}
+
+/// Shows the turtle's menu and returns the item chosen this frame, if any.
+fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) -> Option<MenuItem> {
     let area = egui::Area::new(egui::Id::unique("turtle_menu"))
         .order(egui::Order::Foreground)
         .fixed_pos(menu.pos)
@@ -448,15 +500,56 @@ fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) {
                 .show(ui, |ui| {
                     // As wide as its text, with no button frame until hovered.
                     let item = |text| egui::Button::new(text).frame_when_inactive(false);
-                    ui.add(item("Exit")).clicked()
+                    let mut chosen = None;
+                    if ui.add(item("Ask…")).clicked() {
+                        chosen = Some(MenuItem::Ask);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.add(item("Exit")).clicked() {
+                        chosen = Some(MenuItem::Exit);
+                    }
+                    chosen
                 })
                 .inner
         });
     menu.rect = Some(area.response.rect);
-    if area.inner {
-        ctx.send_viewport_cmd(ViewportCommand::Close);
-    }
+    area.inner
 }
+
+/// The desktop version takes the key from `ANTHROPIC_API_KEY`, which may be
+/// set in a `.env` file in or above the working directory.
+#[cfg(not(target_arch = "wasm32"))]
+fn initial_api_key(_storage: Option<&dyn eframe::Storage>) -> Option<String> {
+    dotenvy::dotenv().ok();
+    std::env::var("ANTHROPIC_API_KEY")
+        .ok()
+        .filter(|key| !key.trim().is_empty())
+}
+
+/// The web version uses the key pasted into an Ask bubble earlier, kept in
+/// the browser's local storage.
+#[cfg(target_arch = "wasm32")]
+fn initial_api_key(storage: Option<&dyn eframe::Storage>) -> Option<String> {
+    storage.and_then(|storage| storage.get_string(API_KEY_KEY))
+}
+
+/// Saves a key just pasted into an Ask bubble, or forgets one the API
+/// refused. Only the web version keeps it; the desktop version forgets it on
+/// quit, so it never lands in a file.
+#[cfg(target_arch = "wasm32")]
+fn remember_api_key(frame: &mut eframe::Frame, key: Option<&str>) {
+    let Some(storage) = frame.storage_mut() else {
+        return;
+    };
+    match key {
+        Some(key) => storage.set_string(API_KEY_KEY, key.to_owned()),
+        None => storage.remove_string(API_KEY_KEY),
+    }
+    storage.flush();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn remember_api_key(_frame: &mut eframe::Frame, _key: Option<&str>) {}
 
 /// Storage key for where the turtle rests, kept apart for the desktop and
 /// for `--windowed`, whose windows differ in size.
@@ -480,7 +573,12 @@ fn parse_offset(text: &str) -> Option<egui::Vec2> {
 }
 
 /// Draws an opened bubble's content inside its panel, below the title.
-fn content_ui(ui: &mut egui::Ui, bubble: &mut Bubble, interactive: bool) {
+fn content_ui(
+    ui: &mut egui::Ui,
+    bubble: &mut Bubble,
+    interactive: bool,
+    api_key: &mut Option<String>,
+) {
     let body = bubble.shape().rect().shrink(22.0);
     let body = body.with_min_y(body.top() + 34.0);
     let color = render::text_color(bubble);
@@ -507,6 +605,13 @@ fn content_ui(ui: &mut egui::Ui, bubble: &mut Bubble, interactive: bool) {
                         );
                     });
             });
+        }
+        Content::Ask(ask) => {
+            let response = ask.ui(ui, body, color, interactive, api_key);
+            bubble.set_panel_height(response.height);
+            if let Some(label) = response.asked {
+                bubble.label = label;
+            }
         }
         Content::Empty => {
             ui.painter().text(

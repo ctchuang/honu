@@ -4,6 +4,8 @@
 
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
+use crate::ask::Ask;
+
 /// Corner radius of a closed bubble, as a fraction of its radius.
 const CLOSED_CORNER: f32 = 0.28;
 /// Width of a closed bubble's rounded, lit rim, as a fraction of its radius.
@@ -13,8 +15,10 @@ const CLOSED_BEVEL: f32 = 0.2;
 /// Superellipse exponent of the corners. 2 would be circular arcs; higher
 /// values give the smoother, continuous-curvature corners of macOS shapes.
 const CORNER_EXPONENT: f32 = 4.0;
-/// Size of an opened bubble.
+/// Size of an opened bubble, unless its content asks for another height.
 const PANEL_SIZE: Vec2 = vec2(380.0, 300.0);
+/// How quickly an opened panel follows a new height (1/s); higher is snappier.
+const PANEL_RESIZE_RATE: f32 = 10.0;
 /// Corner radius of an opened bubble.
 const PANEL_CORNER: f32 = 22.0;
 /// Width of the rounded, lit rim of an opened bubble; at most `PANEL_CORNER`.
@@ -27,6 +31,8 @@ const SPAWN_SECONDS: f32 = 1.6;
 /// What an opened bubble shows.
 pub enum Content {
     Notes(String),
+    /// A question for Claude and its answer.
+    Ask(Ask),
     Empty,
 }
 
@@ -58,6 +64,11 @@ pub struct Bubble {
     progress: f32,
     /// Set while the bubble is still flying to its place after popping out.
     spawn: Option<Spawn>,
+    /// Whether to open as soon as the spawn flight lands.
+    open_on_landing: bool,
+    /// Size of the opened panel, easing towards `panel_target`.
+    panel: Vec2,
+    panel_target: Vec2,
 }
 
 impl Bubble {
@@ -74,11 +85,38 @@ impl Bubble {
             open: false,
             progress: 0.0,
             spawn: None,
+            open_on_landing: false,
+            panel: PANEL_SIZE,
+            panel_target: PANEL_SIZE,
         }
     }
 
     pub fn with_content(mut self, content: Content) -> Self {
         self.content = content;
+        self
+    }
+
+    /// Opens the bubble as soon as it lands after spawning.
+    pub fn open_on_landing(mut self) -> Self {
+        self.open_on_landing = true;
+        self
+    }
+
+    /// Size of the opened panel once it has finished resizing.
+    pub fn panel_target(&self) -> Vec2 {
+        self.panel_target
+    }
+
+    /// Makes the opened panel grow or shrink smoothly to `height`.
+    pub fn set_panel_height(&mut self, height: f32) {
+        self.panel_target.y = height;
+    }
+
+    /// Resizes the panel immediately, as for a bubble that starts out with
+    /// a different height.
+    pub fn with_panel_height(mut self, height: f32) -> Self {
+        self.panel_target.y = height;
+        self.panel.y = height;
         self
     }
 
@@ -125,8 +163,13 @@ impl Bubble {
             self.center = spawn.from.lerp(spawn.to, ease_out_quad(spawn.progress));
             if spawn.progress == 1.0 {
                 self.spawn = None;
+                if self.open_on_landing {
+                    self.open = true;
+                    self.open_on_landing = false;
+                }
             }
         }
+        self.panel += (self.panel_target - self.panel) * (1.0 - (-PANEL_RESIZE_RATE * dt).exp());
 
         let target = if self.open { 1.0 } else { 0.0 };
         let step = dt / MORPH_SECONDS;
@@ -156,7 +199,7 @@ impl Bubble {
     pub fn shape(&self) -> Shape {
         let t = self.openness();
         let r = self.radius * self.scale();
-        let half = (Vec2::splat(r) + (PANEL_SIZE / 2.0 - Vec2::splat(r)) * t).max(Vec2::splat(1.0));
+        let half = (Vec2::splat(r) + (self.panel / 2.0 - Vec2::splat(r)) * t).max(Vec2::splat(1.0));
         let max_round = half.min_elem();
         Shape {
             center: self.center,

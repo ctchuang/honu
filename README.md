@@ -27,9 +27,9 @@ rustup update stable   # if Rust is already installed
 Honu is developed on macOS. It builds on other platforms too, but floating on the
 desktop with click-through (see below) currently works only on macOS.
 
-### 2. Add your Claude API key (optional for now)
+### 2. Add your Claude API key (for asking Claude)
 
-Honu will use Claude for its LLM features. Keep your key in a local `.env` file,
+Honu uses Claude to answer questions. Keep your key in a local `.env` file,
 which git ignores:
 
 ```sh
@@ -41,7 +41,9 @@ in the [Claude Console](https://console.anthropic.com/settings/keys). Never comm
 `.env` or put your key anywhere else in the repository; only the empty template
 `.env.example` is tracked.
 
-No feature uses the key yet, so you can skip this step until one does.
+The **Ask…** item in the turtle's menu uses it. Without one, the Ask bubble asks you to
+paste a key, which the desktop app keeps only until it quits. The web version keeps a
+pasted key in that browser's local storage, since a web page cannot read `.env`.
 
 ### 3. Run
 
@@ -64,8 +66,8 @@ handy during development.
 - Honu starts with just a little pixel turtle in the bottom-left corner. **Click** it to
   release the bubbles, and **drag** it to move it anywhere. It stays where you leave it,
   even after you quit and reopen Honu.
-- **Right-click** or **long-press** the turtle for its menu, which has **Exit** to quit
-  Honu.
+- **Right-click** or **long-press** the turtle for its menu: **Ask…** makes it spit out a
+  bubble where you can ask Claude a question, and **Exit** quits Honu.
 - **Drag** a bubble to move it, and **throw** it to let it glide.
 - **Double-click** a bubble to open it into a panel; double-click its title or edge to
   close it again.
