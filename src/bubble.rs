@@ -8,8 +8,7 @@
 
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
-use crate::ask::Ask;
-use crate::note::Note;
+use crate::microapp::ViewTarget;
 
 /// Corner radius of a closed bubble, as a fraction of its radius.
 const CLOSED_CORNER: f32 = 0.28;
@@ -77,14 +76,6 @@ impl Gesture {
     }
 }
 
-/// What an opened bubble shows.
-pub enum Content {
-    Note(Note),
-    /// A question for Claude and its answer.
-    Ask(Ask),
-    Empty,
-}
-
 /// A new bubble's flight from where it popped out to its place.
 struct Spawn {
     from: Pos2,
@@ -103,8 +94,11 @@ struct Swallow {
     progress: f32,
 }
 
-/// A draggable, window-like bubble on the desktop.
+/// A draggable, window-like bubble on the desktop: a view of one item of a
+/// microapp, which keeps the item's data.
 pub struct Bubble {
+    /// The item this bubble shows.
+    pub target: ViewTarget,
     pub label: String,
     pub center: Pos2,
     /// Half the side of the closed square.
@@ -116,7 +110,6 @@ pub struct Bubble {
     pub velocity: Vec2,
     /// Offset (in seconds) into the idle float, so bubbles drift out of sync.
     pub phase: f32,
-    pub content: Content,
     /// Whether the bubble is open (or opening).
     pub open: bool,
     /// Linear progress of the open/close morph, from 0 (closed) to 1 (open).
@@ -146,16 +139,16 @@ pub struct Bubble {
 }
 
 impl Bubble {
-    pub fn new(label: &str, center: Pos2, radius: f32, color: Color32, glass: bool) -> Self {
+    pub fn new(target: ViewTarget, center: Pos2, radius: f32, color: Color32, glass: bool) -> Self {
         Self {
-            label: label.to_owned(),
+            target,
+            label: String::new(),
             center,
             radius,
             color,
             glass,
             velocity: Vec2::ZERO,
             phase: 0.0,
-            content: Content::Empty,
             open: false,
             progress: 0.0,
             spawn: None,
@@ -218,11 +211,6 @@ impl Bubble {
     /// Plays `gesture`, replacing any gesture still playing.
     pub fn play(&mut self, gesture: Gesture) {
         self.gesture = Some((gesture, 0.0));
-    }
-
-    pub fn with_content(mut self, content: Content) -> Self {
-        self.content = content;
-        self
     }
 
     /// Opens the bubble as soon as it lands after spawning.
@@ -489,7 +477,13 @@ mod tests {
     const DT: f32 = 1.0 / 60.0;
 
     fn bubble() -> Bubble {
-        Bubble::new("", pos2(500.0, 500.0), 80.0, Color32::WHITE, false)
+        Bubble::new(
+            ViewTarget::TEST,
+            pos2(500.0, 500.0),
+            80.0,
+            Color32::WHITE,
+            false,
+        )
     }
 
     fn run(bubble: &mut Bubble, seconds: f32, mut watch: impl FnMut(&Bubble)) {

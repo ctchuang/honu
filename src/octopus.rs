@@ -165,6 +165,15 @@ impl Octopus {
         self.swallowing.iter().map(|s| &s.bubble)
     }
 
+    /// Every bubble inside: those being swallowed and those that can still
+    /// be brought back.
+    pub fn contents(&self) -> impl Iterator<Item = &Bubble> {
+        self.swallowing
+            .iter()
+            .chain(&self.stomach)
+            .map(|s| &s.bubble)
+    }
+
     /// Moves the bubbles inside along with the others when the window changes size.
     pub fn translate(&mut self, offset: Vec2) {
         for swallowed in self.swallowing.iter_mut().chain(&mut self.stomach) {
@@ -175,8 +184,9 @@ impl Octopus {
 
     /// Advances swallowing, forgets bubbles too old to bring back, and rises
     /// or sinks in the bottom corner of `canvas` farther from `turtle`. Call
-    /// once per frame before hit-testing or painting.
-    pub fn update(&mut self, canvas: Rect, turtle: Pos2, time: f64, dt: f32) {
+    /// once per frame before hit-testing or painting. Returns the bubbles
+    /// forgotten this frame, which are now deleted for good.
+    pub fn update(&mut self, canvas: Rect, turtle: Pos2, time: f64, dt: f32) -> Vec<Bubble> {
         for swallowed in &mut self.swallowing {
             swallowed.bubble.animate(dt);
         }
@@ -189,10 +199,14 @@ impl Octopus {
             self.gulped_at = time;
             self.undo_until = time + UNDO_SECONDS;
         }
-        if time >= self.undo_until {
-            // Dropping an Ask bubble also stops its answer from streaming in.
-            self.stomach.clear();
-        }
+        let gone = if time >= self.undo_until {
+            std::mem::take(&mut self.stomach)
+                .into_iter()
+                .map(|s| s.bubble)
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         let wanted = self.summoned || !self.swallowing.is_empty() || self.can_undo();
         let target = if wanted { 1.0 } else { 0.0 };
@@ -220,6 +234,7 @@ impl Octopus {
             0.0
         };
         self.origin = pos2(x, canvas.bottom() - MARGIN - size.y + hidden - lift).round();
+        gone
     }
 
     pub fn paint(&mut self, painter: &Painter, time: f64) {
@@ -315,6 +330,7 @@ fn color(c: char) -> Option<Color32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::microapp::ViewTarget;
 
     const DT: f32 = 1.0 / 60.0;
 
@@ -322,14 +338,16 @@ mod tests {
         Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 700.0))
     }
 
-    /// Runs the octopus and any bubbles it swallowed for `seconds` from `start`.
-    fn run(octopus: &mut Octopus, turtle: Pos2, start: f64, seconds: f64) -> f64 {
+    /// Runs the octopus and any bubbles it swallowed for `seconds` from
+    /// `start`. Returns the time reached and the bubbles deleted for good.
+    fn run(octopus: &mut Octopus, turtle: Pos2, start: f64, seconds: f64) -> (f64, Vec<Bubble>) {
         let mut time = start;
+        let mut gone = Vec::new();
         while time < start + seconds {
-            octopus.update(canvas(), turtle, time, DT);
+            gone.extend(octopus.update(canvas(), turtle, time, DT));
             time += f64::from(DT);
         }
-        time
+        (time, gone)
     }
 
     #[test]
@@ -362,12 +380,18 @@ mod tests {
         let mut octopus = Octopus::new();
         let turtle = pos2(60.0, 650.0);
         octopus.summon(true);
-        let time = run(&mut octopus, turtle, 0.0, 1.0);
+        let (time, _) = run(&mut octopus, turtle, 0.0, 1.0);
         octopus.summon(false);
         let home = pos2(400.0, 300.0);
-        let bubble = Bubble::new("", octopus.middle(), 80.0, Color32::WHITE, false);
+        let bubble = Bubble::new(
+            ViewTarget::TEST,
+            octopus.middle(),
+            80.0,
+            Color32::WHITE,
+            false,
+        );
         octopus.swallow(bubble, home);
-        let time = run(&mut octopus, turtle, time, 1.0);
+        let (time, _) = run(&mut octopus, turtle, time, 1.0);
         assert!(octopus.can_undo());
         assert!(
             octopus.in_reach(octopus.middle()),
@@ -391,8 +415,10 @@ mod tests {
         assert_eq!(bubble.center, home);
 
         octopus.swallow(bubble, home);
-        run(&mut octopus, turtle, time, UNDO_SECONDS + 1.0);
+        let (_, gone) = run(&mut octopus, turtle, time, UNDO_SECONDS + 1.0);
         assert!(!octopus.can_undo(), "kept the bubble too long");
+        assert_eq!(gone.len(), 1, "did not report the deleted bubble");
+        assert_eq!(octopus.contents().count(), 0);
         assert!(octopus.spit_back(time).is_none());
     }
 }

@@ -110,12 +110,19 @@ fn confine(bubble: &mut Bubble, bounds: Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::microapp::ViewTarget;
     use eframe::egui::{Color32, Pos2, pos2};
 
     const DT: f32 = 1.0 / 60.0;
 
     fn ball(x: f32, radius: f32) -> Bubble {
-        Bubble::new("", pos2(x, 500.0), radius, Color32::WHITE, false)
+        Bubble::new(
+            ViewTarget::TEST,
+            pos2(x, 500.0),
+            radius,
+            Color32::WHITE,
+            false,
+        )
     }
 
     /// Runs the simulation for `seconds` in a large window, calling `watch` after each step.

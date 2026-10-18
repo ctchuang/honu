@@ -1,15 +1,18 @@
-mod ask;
+mod apps;
 mod bubble;
 mod claude;
 mod desktop;
-mod note;
+mod microapp;
 mod octopus;
 mod physics;
 mod render;
 mod turtle;
 
-use bubble::{Bubble, Content, Gesture};
-use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand};
+use apps::ask::{self, AskApp};
+use apps::notes::{self, NotesApp};
+use bubble::{Bubble, Gesture};
+use eframe::egui::{self, CursorIcon, Pos2, Sense, ViewportCommand};
+use microapp::{Appearance, ViewTarget};
 use octopus::Octopus;
 use turtle::Turtle;
 
@@ -19,12 +22,6 @@ const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 /// How far a bubble must be dragged before the octopus comes up, so nudging
 /// a bubble into place does not call it.
 const SUMMON_DISTANCE: f32 = 40.0;
-/// A soft, slightly warm white for the opaque bubbles.
-const PAPER: Color32 = Color32::from_rgb(250, 249, 246);
-/// The pale yellow of a sticky note, for Note bubbles.
-const NOTE_YELLOW: Color32 = Color32::from_rgb(255, 236, 150);
-/// Size of a closed bubble the turtle spits out from its menu.
-const SPAT_RADIUS: f32 = 60.0;
 /// How far a new panel steps aside from one already in its place.
 const CASCADE_STEP: f32 = 28.0;
 /// Most steps aside a new panel takes before landing where it is.
@@ -106,8 +103,11 @@ impl TurtleMenu {
 }
 
 struct HonuApp {
-    /// Bubbles in back-to-front paint order; the last one is on top.
+    /// Bubbles in back-to-front paint order; the last one is on top. Each
+    /// shows an item of one of the microapps below.
     bubbles: Vec<Bubble>,
+    notes: NotesApp,
+    asks: AskApp,
     turtle: Turtle,
     /// Deletes the bubbles dropped on it.
     octopus: Octopus,
@@ -145,6 +145,8 @@ impl HonuApp {
         }
         Self {
             bubbles: Vec::new(),
+            notes: NotesApp::new(),
+            asks: AskApp::new(),
             turtle,
             octopus: Octopus::new(),
             dragging: false,
@@ -202,26 +204,38 @@ impl HonuApp {
         self.bubbles.insert(index, bubble);
     }
 
-    /// Has the turtle spit out a new Note bubble, which opens for writing.
-    fn spit_note_bubble(&mut self, canvas: egui::Rect, time: f64) {
-        let bubble = Bubble::new("Note", Pos2::ZERO, SPAT_RADIUS, NOTE_YELLOW, false)
-            .with_content(Content::Note(note::Note::new()));
-        self.spit_panel(bubble, canvas, time);
+    /// Starts a new note, whose bubble opens for writing.
+    fn add_note(&mut self, canvas: egui::Rect, time: f64) {
+        let item = self.notes.create();
+        let look = self.notes.appearance(item);
+        self.spit_panel(
+            ViewTarget {
+                app: notes::ID,
+                item,
+            },
+            look,
+            canvas,
+            time,
+        );
     }
 
-    /// Has the turtle spit out an Ask bubble, which opens into a panel for a question.
-    fn spit_ask_bubble(&mut self, canvas: egui::Rect, time: f64) {
-        let bubble = Bubble::new("Ask", Pos2::ZERO, SPAT_RADIUS, PAPER, false)
-            .with_content(Content::Ask(ask::Ask::new()))
-            .with_panel_height(ask::START_HEIGHT);
-        self.spit_panel(bubble, canvas, time);
+    /// Starts a new chat with Claude, whose bubble opens for a question.
+    fn ask_ai(&mut self, canvas: egui::Rect, time: f64) {
+        let item = self.asks.create();
+        let look = self.asks.appearance(item);
+        self.spit_panel(ViewTarget { app: ask::ID, item }, look, canvas, time);
     }
 
-    /// Has the turtle spit out `bubble`, which opens into its panel when it
-    /// lands next to the turtle.
-    fn spit_panel(&mut self, bubble: Bubble, canvas: egui::Rect, time: f64) {
+    /// Has the turtle spit out a bubble showing `target`, which opens into
+    /// its panel when it lands next to the turtle.
+    fn spit_panel(&mut self, target: ViewTarget, look: Appearance, canvas: egui::Rect, time: f64) {
         let mouth = self.turtle.spit(time);
-        let mut bubble = bubble.open_on_landing();
+        let mut bubble =
+            Bubble::new(target, Pos2::ZERO, look.radius, look.color, look.glass).open_on_landing();
+        if let Some(height) = look.panel_height {
+            bubble = bubble.with_panel_height(height);
+        }
+        bubble.label = title(&self.notes, &self.asks, target);
         // Drift out of step with the other bubbles once closed.
         bubble.phase = (time % 100.0) as f32;
         // Land up and to the right of the mouth, with the whole panel on screen.
@@ -250,6 +264,23 @@ impl HonuApp {
     fn undo_delete(&mut self, time: f64) {
         if let Some(bubble) = self.octopus.spit_back(time) {
             self.add_bubble(bubble);
+        }
+    }
+
+    /// Deletes an item for good once no bubble shows it anymore.
+    fn delete_if_unseen(&mut self, target: ViewTarget) {
+        let seen = self
+            .bubbles
+            .iter()
+            .chain(self.octopus.contents())
+            .any(|b| b.target == target);
+        if seen {
+            return;
+        }
+        match target.app {
+            notes::ID => self.notes.remove(target.item),
+            ask::ID => self.asks.remove(target.item),
+            _ => {}
         }
     }
 
@@ -326,7 +357,9 @@ impl eframe::App for HonuApp {
                         (top.center - self.drag_home).length() > SUMMON_DISTANCE
                     });
                 self.octopus.summon(summoned);
-                self.octopus.update(canvas, self.turtle.center(), time, dt);
+                for gone in self.octopus.update(canvas, self.turtle.center(), time, dt) {
+                    self.delete_if_unseen(gone.target);
+                }
                 if self.floating {
                     self.update_passthrough(ui);
                     // A borderless window has no close button, so handle ⌘Q ourselves.
@@ -450,13 +483,14 @@ impl eframe::App for HonuApp {
 
                 let held = self.dragging.then(|| self.bubbles.len() - 1);
                 for bubble in &mut self.bubbles {
+                    bubble.label = title(&self.notes, &self.asks, bubble.target);
                     // Show what an Ask bubble is doing: it breathes while Claude
                     // works, floats up when the answer is in, and wobbles when
                     // something needs the user.
-                    if let Content::Ask(ask) = &mut bubble.content {
-                        let outcome = ask.poll();
-                        let busy = ask.is_busy();
-                        bubble.set_busy(busy);
+                    if bubble.target.app == ask::ID {
+                        let item = bubble.target.item;
+                        let outcome = self.asks.poll(item);
+                        bubble.set_busy(self.asks.is_busy(item));
                         match outcome {
                             Some(ask::Outcome::Answered) => bubble.play(Gesture::Rise),
                             Some(ask::Outcome::NeedsAttention) => bubble.play(Gesture::Wobble),
@@ -491,7 +525,8 @@ impl eframe::App for HonuApp {
                         // Only the front bubble's content takes input, so a bubble lying
                         // on top of another's content can still be grabbed.
                         let interactive = i == top && !self.dragging;
-                        content_ui(ui, bubble, interactive, &mut self.api_key);
+                        let apps = (&mut self.notes, &mut self.asks);
+                        content_ui(ui, bubble, interactive, apps, &mut self.api_key);
                     }
                 }
                 if self.api_key != key_before {
@@ -509,8 +544,8 @@ impl eframe::App for HonuApp {
                 if let Some(item) = chosen {
                     self.menu = None;
                     match item {
-                        MenuItem::AddNote => self.spit_note_bubble(canvas, time),
-                        MenuItem::Ask => self.spit_ask_bubble(canvas, time),
+                        MenuItem::AddNote => self.add_note(canvas, time),
+                        MenuItem::Ask => self.ask_ai(canvas, time),
                         #[cfg(not(target_arch = "wasm32"))]
                         MenuItem::Exit => ui.ctx().send_viewport_cmd(ViewportCommand::Close),
                     }
@@ -613,37 +648,36 @@ fn parse_offset(text: &str) -> Option<egui::Vec2> {
     }
 }
 
-/// Draws an opened bubble's content inside its panel, below the title.
+/// The label for a bubble showing `target`, from the microapp that keeps it.
+fn title(notes: &NotesApp, asks: &AskApp, target: ViewTarget) -> String {
+    match target.app {
+        notes::ID => notes.title(target.item),
+        ask::ID => asks.title(target.item),
+        _ => String::new(),
+    }
+}
+
+/// Draws an opened bubble's content inside its panel, below the title, from
+/// the microapp that keeps it.
 fn content_ui(
     ui: &mut egui::Ui,
     bubble: &mut Bubble,
     interactive: bool,
+    (notes, asks): (&mut NotesApp, &mut AskApp),
     api_key: &mut Option<String>,
 ) {
     let body = bubble.shape().rect().shrink(22.0);
     let body = body.with_min_y(body.top() + 34.0);
     let color = render::text_color(bubble);
-    match &mut bubble.content {
-        Content::Note(note) => {
-            note.ui(ui, body, color, interactive);
-            bubble.label = note.label();
-        }
-        Content::Ask(ask) => {
-            let response = ask.ui(ui, body, color, interactive, api_key);
-            bubble.set_panel_height(response.height);
-            if let Some(label) = response.asked {
-                bubble.label = label;
+    let item = bubble.target.item;
+    match bubble.target.app {
+        notes::ID => notes.ui(item, ui, body, color, interactive),
+        ask::ID => {
+            if let Some(height) = asks.ui(item, ui, body, color, interactive, api_key) {
+                bubble.set_panel_height(height);
             }
         }
-        Content::Empty => {
-            ui.painter().text(
-                body.center(),
-                Align2::CENTER_CENTER,
-                "Nothing here yet",
-                FontId::proportional(15.0),
-                color.gamma_multiply(0.7),
-            );
-        }
+        _ => {}
     }
 }
 

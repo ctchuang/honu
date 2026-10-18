@@ -1,16 +1,24 @@
-//! An Ask bubble: type a question, and Claude's answer streams into the
-//! panel, which grows to fit it.
+//! The Ask AI microapp: any number of chats with Claude. In a chat's bubble
+//! you type a question, and Claude's answer streams into the panel, which
+//! grows to fit it.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::BTreeMap;
 use std::sync::mpsc;
 
 use eframe::egui::{self, Color32, FontId, Rect, RichText};
 
 use crate::bubble::short_label;
 use crate::claude;
+use crate::microapp::{AppId, Appearance, ItemId, ItemIds};
+
+pub const ID: AppId = AppId("ask");
+/// A soft, slightly warm white, like paper.
+const PAPER: Color32 = Color32::from_rgb(250, 249, 246);
+/// The label of a chat with no question asked yet.
+const EMPTY_LABEL: &str = "Ask";
 
 /// Panel height while asking for a key or a question.
-pub const START_HEIGHT: f32 = 150.0;
+const START_HEIGHT: f32 = 150.0;
 /// The tallest the panel grows; longer answers scroll.
 const MAX_HEIGHT: f32 = 560.0;
 /// Panel height not taken by the content: the title bar and the margins.
@@ -34,10 +42,11 @@ enum Status {
     Failed(String),
 }
 
-pub struct Ask {
-    /// Keeps the panel's widget ids stable when bubbles change order.
-    serial: u64,
+/// One question for Claude and its answer.
+struct Chat {
     question: String,
+    /// The bubble's label, once a question has been asked.
+    title: Option<String>,
     answer: String,
     status: Status,
     stream: Option<mpsc::Receiver<claude::Event>>,
@@ -60,20 +69,81 @@ pub enum Outcome {
     NeedsAttention,
 }
 
-/// What happened in the panel this frame.
-pub struct Response {
-    /// Panel height that fits the content.
-    pub height: f32,
-    /// A short label for the bubble, once a question has been asked.
-    pub asked: Option<String>,
+pub struct AskApp {
+    chats: BTreeMap<ItemId, Chat>,
+    ids: ItemIds,
 }
 
-impl Ask {
+impl AskApp {
     pub fn new() -> Self {
-        static NEXT_SERIAL: AtomicU64 = AtomicU64::new(0);
         Self {
-            serial: NEXT_SERIAL.fetch_add(1, Ordering::Relaxed),
+            chats: BTreeMap::new(),
+            ids: ItemIds::default(),
+        }
+    }
+
+    /// Starts a chat with no question yet.
+    pub fn create(&mut self) -> ItemId {
+        let id = self.ids.next();
+        self.chats.insert(id, Chat::new());
+        id
+    }
+
+    pub fn appearance(&self, _item: ItemId) -> Appearance {
+        Appearance {
+            color: PAPER,
+            glass: false,
+            radius: 60.0,
+            panel_height: Some(START_HEIGHT),
+        }
+    }
+
+    /// A short label for a chat's bubble: its question, once asked.
+    pub fn title(&self, item: ItemId) -> String {
+        self.chats
+            .get(&item)
+            .and_then(|chat| chat.title.clone())
+            .unwrap_or_else(|| EMPTY_LABEL.to_owned())
+    }
+
+    /// Whether Claude is still working on a chat's answer.
+    pub fn is_busy(&self, item: ItemId) -> bool {
+        self.chats.get(&item).is_some_and(Chat::is_busy)
+    }
+
+    /// Takes in whatever a chat's answer stream has delivered, and reports how
+    /// the question ended if it just did. Call every frame.
+    pub fn poll(&mut self, item: ItemId) -> Option<Outcome> {
+        self.chats.get_mut(&item).and_then(Chat::poll)
+    }
+
+    /// Shows a chat in `rect` and returns the panel height that fits it.
+    /// Without an `api_key` it first asks for one and stores it there; a key
+    /// the API refused is cleared from it.
+    pub fn ui(
+        &mut self,
+        item: ItemId,
+        ui: &mut egui::Ui,
+        rect: Rect,
+        color: Color32,
+        interactive: bool,
+        api_key: &mut Option<String>,
+    ) -> Option<f32> {
+        let chat = self.chats.get_mut(&item)?;
+        Some(chat.ui(ui, item, rect, color, interactive, api_key))
+    }
+
+    /// Forgets a chat, which also stops its answer from streaming in.
+    pub fn remove(&mut self, item: ItemId) {
+        self.chats.remove(&item);
+    }
+}
+
+impl Chat {
+    fn new() -> Self {
+        Self {
             question: String::new(),
+            title: None,
             answer: String::new(),
             status: Status::Typing { error: None },
             stream: None,
@@ -85,14 +155,14 @@ impl Ask {
     }
 
     /// Whether Claude is still working on the answer.
-    pub fn is_busy(&self) -> bool {
+    fn is_busy(&self) -> bool {
         matches!(self.status, Status::Thinking | Status::Answering)
     }
 
     /// Takes in whatever the answer stream has delivered, and reports how the
     /// question ended if it just did. Call every frame, whether or not the
     /// panel is open.
-    pub fn poll(&mut self) -> Option<Outcome> {
+    fn poll(&mut self) -> Option<Outcome> {
         let Some(stream) = &self.stream else {
             return None;
         };
@@ -142,26 +212,24 @@ impl Ask {
         }
     }
 
-    /// Shows the panel's content in `rect`. Without an `api_key` it first asks
-    /// for one and stores it there; a key the API refused is cleared from it.
-    pub fn ui(
+    /// Shows the panel's content in `rect` and returns the panel height that
+    /// fits it. `item` keeps the widget ids apart from other chats'.
+    fn ui(
         &mut self,
         ui: &mut egui::Ui,
+        item: ItemId,
         rect: Rect,
         color: Color32,
         interactive: bool,
         api_key: &mut Option<String>,
-    ) -> Response {
+    ) -> f32 {
         if let Some(message) = self.key_rejected.take() {
             *api_key = None;
             self.key_error = Some(message);
         }
-        let mut asked = None;
         let content_height = ui
             .scope_builder(
-                egui::UiBuilder::new()
-                    .id_salt(("ask", self.serial))
-                    .max_rect(rect),
+                egui::UiBuilder::new().id_salt((ID, item)).max_rect(rect),
                 |ui| {
                     // No drag-to-scroll, so dragging the panel body moves the bubble.
                     let scroll_source = egui::scroll_area::ScrollSource {
@@ -175,7 +243,7 @@ impl Ask {
                         .show(ui, |ui| match api_key {
                             None => self.key_ui(ui, color, interactive, api_key),
                             Some(key) if matches!(self.status, Status::Typing { .. }) => {
-                                asked = self.question_ui(ui, color, interactive, key);
+                                self.question_ui(ui, color, interactive, key);
                             }
                             Some(_) => self.answer_ui(ui, color),
                         })
@@ -184,10 +252,7 @@ impl Ask {
                 },
             )
             .inner;
-        Response {
-            height: (content_height + CHROME_HEIGHT).clamp(START_HEIGHT, MAX_HEIGHT),
-            asked,
-        }
+        (content_height + CHROME_HEIGHT).clamp(START_HEIGHT, MAX_HEIGHT)
     }
 
     fn key_ui(
@@ -226,13 +291,7 @@ impl Ask {
         }
     }
 
-    fn question_ui(
-        &mut self,
-        ui: &mut egui::Ui,
-        color: Color32,
-        interactive: bool,
-        api_key: &str,
-    ) -> Option<String> {
+    fn question_ui(&mut self, ui: &mut egui::Ui, color: Color32, interactive: bool, api_key: &str) {
         if let Status::Typing { error: Some(error) } = &self.status {
             ui.add(egui::Label::new(error_text(error)).wrap());
         }
@@ -247,11 +306,11 @@ impl Ask {
         self.take_focus(&response, interactive);
         let question = self.question.trim();
         if !submitted(ui, &response) || question.is_empty() {
-            return None;
+            return;
         }
         self.stream = Some(claude::ask(api_key, question));
         self.status = Status::Thinking;
-        Some(short_label(question))
+        self.title = Some(short_label(question));
     }
 
     fn answer_ui(&self, ui: &mut egui::Ui, color: Color32) {
