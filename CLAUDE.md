@@ -20,6 +20,7 @@ cargo test <name>            # run a single test by name filter
 ## Architecture
 
 - `src/main.rs`: `main()` configures the window (`NativeOptions` / `ViewportBuilder`) and starts the event loop with `eframe::run_native`, constructing `HonuApp` via `Default`. `HonuApp` holds all state; `bubbles` is kept in back-to-front paint order, and grabbing a bubble moves it to the end (top). `impl eframe::App for HonuApp` allocates one full-window painter, handles drag/hit-testing on it, and paints.
+- `src/physics.rs`: per-frame motion, stepped from `ui()` before painting. Released bubbles keep the pointer's velocity and slow down with friction, idle bubbles drift with a slow per-bubble float, crowded bubbles push each other apart (partial overlaps are allowed so the glass stays visible), and bubbles bounce off the window edges. The app repaints continuously.
 - `src/render.rs`: all custom drawing. Bubbles are vertex-colored meshes of concentric rings shaded on the CPU by a small lighting model (diffuse/specular, Fresnel rim for glass); there are no custom shaders, so true background blur/refraction is not implemented.
 
 egui is **immediate mode**: `ui()` runs every frame and rebuilds the whole interface from the current state, so UI changes are made by mutating `HonuApp` fields, not by holding widget handles.
