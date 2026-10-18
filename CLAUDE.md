@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Honu is a native desktop GUI app written in Rust (edition 2024) using **eframe/egui 0.37** — currently a simple list app: type text, press Enter or "Add", and it appears in a numbered, scrollable list. State is in-memory only (no persistence).
+Honu is a native desktop GUI app written in Rust (edition 2024) using **eframe/egui 0.37** — an experiment in desktop GUI design that departs from Windows/macOS conventions. It currently renders a "desktop" of draggable, window-like bubbles (some opaque, some translucent glass) over a soft background. State is in-memory only (no persistence).
 
 ## Commands
 
@@ -19,11 +19,10 @@ cargo test <name>            # run a single test by name filter
 
 ## Architecture
 
-Everything lives in `src/main.rs`:
+- `src/main.rs`: `main()` configures the window (`NativeOptions` / `ViewportBuilder`) and starts the event loop with `eframe::run_native`, constructing `HonuApp` via `Default`. `HonuApp` holds all state; `bubbles` is kept in back-to-front paint order, and grabbing a bubble moves it to the end (top). `impl eframe::App for HonuApp` allocates one full-window painter, handles drag/hit-testing on it, and paints.
+- `src/render.rs`: all custom drawing. Bubbles are vertex-colored meshes of concentric rings shaded on the CPU by a small lighting model (diffuse/specular, Fresnel rim for glass); there are no custom shaders, so true background blur/refraction is not implemented.
 
-- `main()` configures the window (`NativeOptions` / `ViewportBuilder`) and starts the event loop with `eframe::run_native`, constructing `HonuApp` via `Default`.
-- `HonuApp` holds all app state as plain fields.
-- `impl eframe::App for HonuApp` renders the UI. egui is **immediate mode**: `ui()` runs every frame and rebuilds the whole interface from the current state, so UI changes are made by mutating `HonuApp` fields, not by holding widget handles.
+egui is **immediate mode**: `ui()` runs every frame and rebuilds the whole interface from the current state, so UI changes are made by mutating `HonuApp` fields, not by holding widget handles.
 
 Note that egui 0.37's `App` trait uses `fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame)`; older egui examples online use `fn update(&mut self, ctx: &egui::Context, ...)` and won't compile as-is.
 
