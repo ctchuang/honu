@@ -62,7 +62,7 @@ handy during development.
 ### Using the bubbles
 
 - Honu starts with just a little pixel turtle in the bottom-left corner. **Click** it to
-  release the bubbles.
+  release the bubbles, and **drag** it to move it anywhere.
 - **Drag** a bubble to move it, and **throw** it to let it glide.
 - **Double-click** a bubble to open it into a panel; double-click its title or edge to
   close it again.

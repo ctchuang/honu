@@ -1,5 +1,6 @@
-//! The pixel-art sea turtle that sits in the bottom-left corner of the
-//! desktop. Clicking it makes it spit out the bubbles.
+//! The pixel-art sea turtle that starts in the bottom-left corner of the
+//! desktop and can be dragged anywhere. Clicking it makes it spit out the
+//! bubbles.
 
 use eframe::egui::{Color32, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2};
 
@@ -41,6 +42,11 @@ const BOB_RATE: f64 = 1.5;
 pub struct Turtle {
     /// Top-left corner of the sprite this frame.
     origin: Pos2,
+    /// Top-left corner of the sprite at rest, before any hop or bob.
+    rest: Pos2,
+    /// Whether the turtle has been dragged; until then it stays in the
+    /// bottom-left corner.
+    moved: bool,
     /// When the last hop started, in seconds of app time.
     hopped_at: f64,
     /// When the turtle last spat out a bubble, in seconds of app time.
@@ -53,6 +59,8 @@ impl Turtle {
     pub fn new() -> Self {
         Self {
             origin: Pos2::ZERO,
+            rest: Pos2::ZERO,
+            moved: false,
             hopped_at: f64::NEG_INFINITY,
             spat_at: f64::NEG_INFINITY,
             mouth_open: false,
@@ -72,8 +80,23 @@ impl Turtle {
         self.origin + MOUTH * PIXEL
     }
 
-    /// Places the turtle in the bottom-left corner of `canvas`, lifted by a hop
-    /// or an idle bob. Call once per frame before hit-testing or painting.
+    /// Moves the turtle by `delta`, as when dragged.
+    pub fn move_by(&mut self, delta: Vec2) {
+        self.rest += delta;
+        self.moved = true;
+    }
+
+    /// Moves a dragged turtle along with the bubbles when the window changes
+    /// size; one still in its corner follows the corner instead.
+    pub fn translate(&mut self, offset: Vec2) {
+        if self.moved {
+            self.rest += offset;
+        }
+    }
+
+    /// Places the turtle inside `canvas` (in the bottom-left corner until it
+    /// is dragged), lifted by a hop or an idle bob. Call once per frame before
+    /// hit-testing or painting.
     pub fn place(&mut self, canvas: Rect, time: f64) {
         let hop = (time - self.hopped_at) / HOP_SECONDS;
         let lift = if (0.0..1.0).contains(&hop) {
@@ -85,11 +108,13 @@ impl Turtle {
         let lift = lift.round() as f32 * PIXEL;
         self.mouth_open = time - self.spat_at < MOUTH_SECONDS;
         let size = sprite_size();
-        self.origin = pos2(
-            canvas.left() + MARGIN,
-            canvas.bottom() - MARGIN - size.y - lift,
-        )
-        .round();
+        if !self.moved {
+            self.rest = pos2(canvas.left() + MARGIN, canvas.bottom() - MARGIN - size.y);
+        }
+        self.rest = self
+            .rest
+            .clamp(canvas.min, (canvas.max - size).max(canvas.min));
+        self.origin = (self.rest - vec2(0.0, lift)).round();
     }
 
     /// Whether `p` is on one of the turtle's visible pixels.
@@ -160,6 +185,22 @@ mod tests {
         assert!(turtle.contains(pixel(8.0, 4.0)), "shell");
         assert!(!turtle.contains(pixel(0.0, 0.0)), "empty corner");
         assert!(!turtle.contains(pixel(30.0, 4.0)), "outside the sprite");
+    }
+
+    #[test]
+    fn dragged_turtle_stays_inside_the_window() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+        let mut turtle = Turtle::new();
+        turtle.place(canvas, 0.0);
+        turtle.move_by(vec2(300.0, -200.0));
+        turtle.place(canvas, 0.0);
+        assert_eq!(
+            turtle.rest,
+            pos2(MARGIN + 300.0, 600.0 - MARGIN - sprite_size().y - 200.0)
+        );
+        turtle.move_by(vec2(5000.0, 5000.0));
+        turtle.place(canvas, 0.0);
+        assert_eq!(turtle.rest, canvas.max - sprite_size());
     }
 
     #[test]

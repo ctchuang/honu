@@ -53,6 +53,8 @@ struct HonuApp {
     turtle: Turtle,
     /// True while the top bubble is being dragged.
     dragging: bool,
+    /// True while the turtle is being dragged.
+    dragging_turtle: bool,
     /// Whether the window floats on the real desktop rather than showing a wallpaper.
     floating: bool,
     /// Whether clicks currently pass through the window to the apps below.
@@ -89,6 +91,7 @@ impl HonuApp {
             next_release: None,
             turtle: Turtle::new(),
             dragging: false,
+            dragging_turtle: false,
             floating,
             passthrough: false,
             last_canvas: None,
@@ -116,7 +119,10 @@ impl HonuApp {
             return;
         };
         let p = cursor - window.min.to_vec2();
-        let on_bubble = self.dragging || self.hit_test(p).is_some() || self.turtle.contains(p);
+        let on_bubble = self.dragging
+            || self.dragging_turtle
+            || self.hit_test(p).is_some()
+            || self.turtle.contains(p);
         if self.passthrough == on_bubble {
             self.passthrough = !on_bubble;
             ui.ctx()
@@ -177,6 +183,7 @@ impl eframe::App for HonuApp {
                     for bubble in self.bubbles.iter_mut().chain(&mut self.pending) {
                         bubble.translate(offset);
                     }
+                    self.turtle.translate(offset);
                 }
                 self.last_canvas = Some(canvas);
                 self.turtle.place(canvas, time);
@@ -202,9 +209,19 @@ impl eframe::App for HonuApp {
 
                 if response.drag_started() {
                     let origin = ui.input(|i| i.pointer.press_origin());
-                    if let Some(i) = origin.and_then(|p| self.hit_test(p)) {
+                    if origin.is_some_and(|p| self.turtle.contains(p)) {
+                        self.dragging_turtle = true;
+                    } else if let Some(i) = origin.and_then(|p| self.hit_test(p)) {
                         self.raise(i);
                         self.dragging = true;
+                    }
+                }
+                if self.dragging_turtle {
+                    self.turtle.move_by(response.drag_delta());
+                    // Place it again so it follows the pointer this frame.
+                    self.turtle.place(canvas, time);
+                    if response.drag_stopped() {
+                        self.dragging_turtle = false;
                     }
                 }
                 if self.dragging {
@@ -247,7 +264,7 @@ impl eframe::App for HonuApp {
                 ui.ctx().request_repaint();
 
                 let hovered = response.hover_pos().and_then(|p| self.hit_test(p));
-                if self.dragging {
+                if self.dragging || self.dragging_turtle {
                     ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
                 } else if hovered.is_some() {
                     ui.ctx().set_cursor_icon(CursorIcon::Grab);
