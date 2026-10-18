@@ -2,7 +2,9 @@
 //! desktop and can be dragged anywhere. It spits out the bubbles made from
 //! its menu.
 
-use eframe::egui::{Color32, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2};
+use eframe::egui::{Color32, Painter, Pos2, Rect, Vec2, pos2, vec2};
+
+use super::{Grid, PIXEL};
 
 /// The sprite, one character per pixel: Outline, Shell, Light shell spot,
 /// sKin, Rim, Eye, White highlight, Pink cheek, and `.` for transparent.
@@ -22,14 +24,13 @@ const SPRITE: [&str; 14] = [
     "...OKKO.........OKKKKO..",
     "....OO...........OOOO...",
 ];
+const GRID: Grid = Grid::new(SPRITE[0].len(), SPRITE.len());
 /// Pixels (column, row) that turn into the dark inside of the open mouth.
 const OPEN_MOUTH: [(usize, usize); 4] = [(22, 7), (23, 7), (22, 8), (23, 8)];
 /// Where bubbles come out, in sprite pixels: the front of the open mouth.
 const MOUTH: Vec2 = vec2(24.0, 8.0);
 /// Seconds the mouth stays open after spitting.
 const MOUTH_SECONDS: f64 = 0.3;
-/// Size of one sprite pixel, in points.
-const PIXEL: f32 = 5.0;
 /// Gap between the turtle and the corner of the window.
 const MARGIN: f32 = 24.0;
 /// Seconds a hop lasts.
@@ -136,38 +137,26 @@ impl Turtle {
 
     /// Whether `p` is on one of the turtle's visible pixels.
     pub fn contains(&self, p: Pos2) -> bool {
-        let rel = (p - self.origin) / PIXEL;
-        if rel.x < 0.0 || rel.y < 0.0 {
-            return false;
-        }
-        SPRITE
-            .get(rel.y as usize)
-            .and_then(|row| row.as_bytes().get(rel.x as usize))
-            .is_some_and(|&c| c != b'.')
+        GRID.pixel_at(self.origin, p)
+            .is_some_and(|(x, y)| self.pixel(x, y) != '.')
     }
 
     pub fn paint(&self, painter: &Painter) {
-        // One mesh of square, unblended pixels keeps the edges crisp.
-        let mut mesh = Mesh::default();
-        for (y, row) in SPRITE.iter().enumerate() {
-            for (x, c) in row.chars().enumerate() {
-                let c = if self.mouth_open && OPEN_MOUTH.contains(&(x, y)) {
-                    'E'
-                } else {
-                    c
-                };
-                if let Some(color) = color(c) {
-                    let min = self.origin + vec2(x as f32, y as f32) * PIXEL;
-                    mesh.add_colored_rect(Rect::from_min_size(min, Vec2::splat(PIXEL)), color);
-                }
-            }
+        GRID.paint(painter, self.origin, |x, y| color(self.pixel(x, y)));
+    }
+
+    /// The sprite pixel at (`x`, `y`), with the mouth open after spitting.
+    fn pixel(&self, x: usize, y: usize) -> char {
+        if self.mouth_open && OPEN_MOUTH.contains(&(x, y)) {
+            'E'
+        } else {
+            SPRITE[y].as_bytes()[x] as char
         }
-        painter.add(mesh);
     }
 }
 
 fn sprite_size() -> Vec2 {
-    vec2(SPRITE[0].len() as f32, SPRITE.len() as f32) * PIXEL
+    GRID.size()
 }
 
 fn color(c: char) -> Option<Color32> {

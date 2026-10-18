@@ -5,9 +5,9 @@
 //! still inside, and clicking it (or pressing ⌘Z) spits the bubble back to
 //! where it was picked up, so a slip of the hand loses nothing.
 
-use eframe::egui::{
-    Align2, Color32, CornerRadius, FontId, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2,
-};
+use eframe::egui::{Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Vec2, pos2, vec2};
+
+use super::{Grid, PIXEL};
 
 use crate::view::bubble::Bubble;
 
@@ -41,12 +41,11 @@ const TENTACLES: [[&str; 4]; 2] = [
         "...OO.OO.OO.OO.OO.",
     ],
 ];
+const GRID: Grid = Grid::new(HEAD[0].len(), HEAD.len() + TENTACLES[0].len());
 /// Pixels (column, row) that turn dark when the mouth opens wide.
 const OPEN_MOUTH: [(usize, usize); 2] = [(8, 9), (9, 9)];
 /// Where swallowed bubbles go in and spat-out ones come out, in sprite pixels.
 const MOUTH: Vec2 = vec2(9.0, 9.0);
-/// Size of one sprite pixel, in points, matching the turtle.
-const PIXEL: f32 = 5.0;
 /// Gap between the octopus and the corner of the window.
 const MARGIN: f32 = 24.0;
 /// How far from the octopus's middle the pointer may be for a dropped bubble
@@ -131,11 +130,8 @@ impl Octopus {
         if self.can_undo() && self.hint.is_some_and(|hint| hint.contains(p)) {
             return true;
         }
-        let rel = (p - self.origin) / PIXEL;
-        if rel.x < 0.0 || rel.y < 0.0 {
-            return false;
-        }
-        self.pixel(rel.x as usize, rel.y as usize, 0.0)
+        GRID.pixel_at(self.origin, p)
+            .and_then(|(x, y)| self.pixel(x, y, 0.0))
             .is_some_and(|c| c != '.')
     }
 
@@ -242,17 +238,9 @@ impl Octopus {
         if self.shown == 0.0 {
             return;
         }
-        // One mesh of square, unblended pixels keeps the edges crisp.
-        let mut mesh = Mesh::default();
-        for y in 0..HEAD.len() + TENTACLES[0].len() {
-            for x in 0..HEAD[0].len() {
-                if let Some(color) = self.pixel(x, y, time).and_then(color) {
-                    let min = self.origin + vec2(x as f32, y as f32) * PIXEL;
-                    mesh.add_colored_rect(Rect::from_min_size(min, Vec2::splat(PIXEL)), color);
-                }
-            }
-        }
-        painter.add(mesh);
+        GRID.paint(painter, self.origin, |x, y| {
+            self.pixel(x, y, time).and_then(color)
+        });
 
         if self.can_undo() {
             // Fade the hint out over the last second it applies.
@@ -309,10 +297,7 @@ impl Octopus {
 }
 
 fn sprite_size() -> Vec2 {
-    vec2(
-        HEAD[0].len() as f32,
-        (HEAD.len() + TENTACLES[0].len()) as f32,
-    ) * PIXEL
+    GRID.size()
 }
 
 fn color(c: char) -> Option<Color32> {
