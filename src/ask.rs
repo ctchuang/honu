@@ -52,6 +52,15 @@ pub struct Ask {
     focus_pending: bool,
 }
 
+/// How an asked question came to an end, for the bubble to show.
+#[derive(Debug, PartialEq)]
+pub enum Outcome {
+    /// The whole answer arrived.
+    Answered,
+    /// The request failed or the key was refused; the user has to act.
+    NeedsAttention,
+}
+
 /// What happened in the panel this frame.
 pub struct Response {
     /// Panel height that fits the content.
@@ -76,11 +85,17 @@ impl Ask {
         }
     }
 
-    /// Takes in whatever the answer stream has delivered. Call every frame,
-    /// whether or not the panel is open.
-    pub fn poll(&mut self) {
+    /// Whether Claude is still working on the answer.
+    pub fn is_busy(&self) -> bool {
+        matches!(self.status, Status::Thinking | Status::Answering)
+    }
+
+    /// Takes in whatever the answer stream has delivered, and reports how the
+    /// question ended if it just did. Call every frame, whether or not the
+    /// panel is open.
+    pub fn poll(&mut self) -> Option<Outcome> {
         let Some(stream) = &self.stream else {
-            return;
+            return None;
         };
         loop {
             match stream.try_recv() {
@@ -91,11 +106,11 @@ impl Ask {
                 Ok(claude::Event::Done) => {
                     self.status = Status::Done;
                     self.stream = None;
-                    return;
+                    return Some(Outcome::Answered);
                 }
                 Ok(claude::Event::Failed(message)) => {
                     self.fail(message);
-                    return;
+                    return Some(Outcome::NeedsAttention);
                 }
                 Ok(claude::Event::KeyRejected(message)) => {
                     // Ask for another key, then let the same question be sent again.
@@ -103,12 +118,12 @@ impl Ask {
                     self.status = Status::Typing { error: None };
                     self.stream = None;
                     self.focus_pending = true;
-                    return;
+                    return Some(Outcome::NeedsAttention);
                 }
-                Err(mpsc::TryRecvError::Empty) => return,
+                Err(mpsc::TryRecvError::Empty) => return None,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.fail("The answer stopped unexpectedly.".to_owned());
-                    return;
+                    return Some(Outcome::NeedsAttention);
                 }
             }
         }

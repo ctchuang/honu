@@ -34,9 +34,9 @@ whose answer streams in while the panel grows to fit it (`src/ask.rs`, `src/clau
 - **Bumping bubbles shares their context**: dragging one bubble into another hands
   both to Claude, to compare them or find what links them. The collision physics
   already provides the gesture.
-- **Physics shows status**: a thinking bubble pulses gently, a finished background task
-  floats up, and a bubble waiting on a decision wobbles. Today there is only a
-  "Thinking…" spinner.
+- **Physics shows status** (started): Ask bubbles breathe while Claude works, float up
+  when the answer is in, and wobble when something needs the user (`Bubble::set_busy`,
+  `Gesture`). New kinds of bubbles should report their state the same way.
 - **Space as memory**: bubbles that sit together belong to the same project. Needs the
   bubbles saved to disk; only the turtle's place persists today, so Ask bubbles vanish
   when Honu quits.

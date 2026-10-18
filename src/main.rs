@@ -6,7 +6,7 @@ mod physics;
 mod render;
 mod turtle;
 
-use bubble::{Bubble, Content};
+use bubble::{Bubble, Content, Gesture};
 use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand, pos2};
 use turtle::Turtle;
 
@@ -427,10 +427,20 @@ impl eframe::App for HonuApp {
 
                 let held = self.dragging.then(|| self.bubbles.len() - 1);
                 for bubble in &mut self.bubbles {
-                    bubble.animate(dt);
+                    // Show what an Ask bubble is doing: it breathes while Claude
+                    // works, floats up when the answer is in, and wobbles when
+                    // something needs the user.
                     if let Content::Ask(ask) = &mut bubble.content {
-                        ask.poll();
+                        let outcome = ask.poll();
+                        let busy = ask.is_busy();
+                        bubble.set_busy(busy);
+                        match outcome {
+                            Some(ask::Outcome::Answered) => bubble.play(Gesture::Rise),
+                            Some(ask::Outcome::NeedsAttention) => bubble.play(Gesture::Wobble),
+                            None => {}
+                        }
                     }
+                    bubble.animate(dt);
                 }
                 physics::step(&mut self.bubbles, canvas, held, time, dt);
                 // Bubbles are always drifting, so keep animating.

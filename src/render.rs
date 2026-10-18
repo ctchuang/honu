@@ -74,7 +74,7 @@ pub fn paint_background(painter: &Painter, rect: Rect) {
 pub fn paint_bubble(painter: &Painter, bubble: &Bubble) {
     let r = bubble.radius * bubble.scale();
     let base = to_rgb(bubble.color);
-    let shape = bubble.shape();
+    let shape = bubble.display_shape();
     let openness = bubble.openness();
 
     // Soft drop shadow, offset away from the light.

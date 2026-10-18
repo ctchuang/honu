@@ -1,6 +1,8 @@
 //! Bubbles and their outline. A bubble is a rounded square, like a macOS app
 //! icon, when closed and morphs into a larger panel that shows its content
 //! when opened. A new bubble pops out small and grows as it flies to its place.
+//! Bubbles also show what they are doing through motion: a busy bubble
+//! breathes, and a short gesture marks a finished task or a call for attention.
 
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
@@ -27,6 +29,42 @@ const PANEL_BEVEL: f32 = 14.0;
 const MORPH_SECONDS: f32 = 0.35;
 /// Seconds a new bubble takes to fly to its place.
 const SPAWN_SECONDS: f32 = 1.6;
+/// How far a busy bubble's outline swells at the height of each breath.
+const BREATH_POINTS: f32 = 4.0;
+/// Breaths per second while busy.
+const BREATH_RATE: f32 = 0.8;
+/// How quickly breathing fades in and out (1/s), so it never starts or stops abruptly.
+const BREATH_FADE_RATE: f32 = 3.0;
+
+/// A short motion that marks a change in what the bubble is doing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Gesture {
+    /// Floats up a little and settles back: something finished.
+    Rise,
+    /// Shakes side to side: something needs the user.
+    Wobble,
+}
+
+impl Gesture {
+    fn seconds(self) -> f32 {
+        match self {
+            Gesture::Rise => 1.2,
+            Gesture::Wobble => 0.6,
+        }
+    }
+
+    /// How far the gesture moves the bubble `t` seconds in; back to zero by the end.
+    fn offset(self, t: f32) -> Vec2 {
+        let u = (t / self.seconds()).clamp(0.0, 1.0);
+        match self {
+            Gesture::Rise => vec2(0.0, -16.0 * (std::f32::consts::PI * u).sin()),
+            Gesture::Wobble => {
+                let shake = (std::f32::consts::TAU * 5.0 * t).sin();
+                vec2(8.0 * shake * (1.0 - u).powi(2), 0.0)
+            }
+        }
+    }
+}
 
 /// What an opened bubble shows.
 pub enum Content {
@@ -69,6 +107,14 @@ pub struct Bubble {
     /// Size of the opened panel, easing towards `panel_target`.
     panel: Vec2,
     panel_target: Vec2,
+    /// Whether the bubble is working on something, which makes it breathe.
+    busy: bool,
+    /// How strongly the bubble breathes, easing between 0 and 1 with `busy`.
+    breath: f32,
+    /// Seconds of breathing so far, for its rhythm.
+    breath_time: f32,
+    /// The gesture being played and how many seconds into it.
+    gesture: Option<(Gesture, f32)>,
 }
 
 impl Bubble {
@@ -88,7 +134,21 @@ impl Bubble {
             open_on_landing: false,
             panel: PANEL_SIZE,
             panel_target: PANEL_SIZE,
+            busy: false,
+            breath: 0.0,
+            breath_time: 0.0,
+            gesture: None,
         }
+    }
+
+    /// Makes the bubble breathe while `busy`, fading in and out.
+    pub fn set_busy(&mut self, busy: bool) {
+        self.busy = busy;
+    }
+
+    /// Plays `gesture`, replacing any gesture still playing.
+    pub fn play(&mut self, gesture: Gesture) {
+        self.gesture = Some((gesture, 0.0));
     }
 
     pub fn with_content(mut self, content: Content) -> Self {
@@ -171,6 +231,20 @@ impl Bubble {
         }
         self.panel += (self.panel_target - self.panel) * (1.0 - (-PANEL_RESIZE_RATE * dt).exp());
 
+        let target = if self.busy { 1.0 } else { 0.0 };
+        self.breath += (target - self.breath) * (1.0 - (-BREATH_FADE_RATE * dt).exp());
+        self.breath_time = if self.breath > 0.001 {
+            self.breath_time + dt
+        } else {
+            0.0
+        };
+        if let Some((gesture, t)) = &mut self.gesture {
+            *t += dt;
+            if *t >= gesture.seconds() {
+                self.gesture = None;
+            }
+        }
+
         let target = if self.open { 1.0 } else { 0.0 };
         let step = dt / MORPH_SECONDS;
         self.progress = if self.progress < target {
@@ -196,18 +270,30 @@ impl Bubble {
         self.open && self.progress == 1.0
     }
 
+    /// The bubble's outline, used for hit-testing, physics, and laying out its
+    /// content. Gestures move it as a whole, so content moves along unchanged.
     pub fn shape(&self) -> Shape {
+        let gesture = self
+            .gesture
+            .map_or(Vec2::ZERO, |(gesture, t)| gesture.offset(t));
         let t = self.openness();
         let r = self.radius * self.scale();
         let half = (Vec2::splat(r) + (self.panel / 2.0 - Vec2::splat(r)) * t).max(Vec2::splat(1.0));
         let max_round = half.min_elem();
         Shape {
-            center: self.center,
+            center: self.center + gesture,
             half,
             corner: lerp(CLOSED_CORNER * r, PANEL_CORNER, t).clamp(0.0, max_round),
             bevel: lerp(CLOSED_BEVEL * r, PANEL_BEVEL, t).clamp(1.0, max_round),
             exponent: CORNER_EXPONENT,
         }
+    }
+
+    /// The outline as drawn: `shape` swelled by the current breath. Breathing
+    /// only shows in the drawing, so content and hit-testing hold still.
+    pub fn display_shape(&self) -> Shape {
+        let swell = 0.5 - 0.5 * (std::f32::consts::TAU * BREATH_RATE * self.breath_time).cos();
+        self.shape().expand(BREATH_POINTS * self.breath * swell)
     }
 
     pub fn contains(&self, p: Pos2) -> bool {
@@ -286,4 +372,55 @@ fn ease_out_back(t: f32) -> f32 {
     const C3: f32 = C1 + 1.0;
     let u = t - 1.0;
     1.0 + C3 * u * u * u + C1 * u * u
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eframe::egui::pos2;
+
+    const DT: f32 = 1.0 / 60.0;
+
+    fn bubble() -> Bubble {
+        Bubble::new("", pos2(500.0, 500.0), 80.0, Color32::WHITE, false)
+    }
+
+    fn run(bubble: &mut Bubble, seconds: f32, mut watch: impl FnMut(&Bubble)) {
+        for _ in 0..(seconds / DT) as usize {
+            bubble.animate(DT);
+            watch(bubble);
+        }
+    }
+
+    #[test]
+    fn gestures_move_the_bubble_and_return_it() {
+        for gesture in [Gesture::Rise, Gesture::Wobble] {
+            let mut bubble = bubble();
+            let rest = bubble.shape().center;
+            bubble.play(gesture);
+            let mut farthest = 0.0_f32;
+            run(&mut bubble, 2.0, |b| {
+                farthest = farthest.max((b.shape().center - rest).length());
+            });
+            assert!(farthest > 5.0, "{gesture:?} moved only {farthest:.1}");
+            assert_eq!(bubble.shape().center, rest, "{gesture:?} did not settle");
+            assert_eq!(bubble.center, rest, "{gesture:?} moved the bubble itself");
+        }
+    }
+
+    #[test]
+    fn breathing_swells_only_the_drawing_and_fades_out() {
+        let mut bubble = bubble();
+        let rest = bubble.shape().half;
+        bubble.set_busy(true);
+        let mut widest = 0.0_f32;
+        run(&mut bubble, 3.0, |b| {
+            assert_eq!(b.shape().half, rest, "breathing changed the hit area");
+            widest = widest.max(b.display_shape().half.x - rest.x);
+        });
+        assert!(widest > BREATH_POINTS * 0.8, "swelled only {widest:.1}");
+        bubble.set_busy(false);
+        run(&mut bubble, 3.0, |_| {});
+        assert!(bubble.display_shape().half.x - rest.x < 0.1);
+    }
 }
