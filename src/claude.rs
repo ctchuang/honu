@@ -199,6 +199,44 @@ mod tests {
     }
 
     #[test]
+    fn everything_but_answer_text_is_ignored() {
+        let ignored = [
+            "event: content_block_delta",
+            "",
+            ": comment",
+            "data: {\"type\":\"ping\"}",
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\
+             \"thinking\":\"hmm\"}}",
+            "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}",
+            "data: not json",
+        ];
+        for line in ignored {
+            assert_eq!(parse_line(line), None, "{line}");
+        }
+    }
+
+    #[test]
+    fn crlf_line_endings_are_accepted() {
+        let mut stream = Stream::default();
+        let body = "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\
+                    \"text\":\"ok\"}}\r\n\r\n";
+        assert_eq!(
+            stream.feed(body.as_bytes()),
+            vec![Event::Text("ok".to_owned())]
+        );
+    }
+
+    #[test]
+    fn cut_off_answers_fail() {
+        let max_tokens =
+            "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"}}";
+        assert!(matches!(parse_line(max_tokens), Some(Event::Failed(_))));
+        // The body ending without `message_stop` means the connection dropped.
+        let mut stream = Stream::default();
+        assert!(matches!(stream.finish().as_slice(), [Event::Failed(_)]));
+    }
+
+    #[test]
     fn http_errors_report_the_api_message() {
         let error_stream = |status, message: &str| {
             let mut stream = Stream {

@@ -393,6 +393,19 @@ mod tests {
     }
 
     #[test]
+    fn rounded_corners_are_not_hit() {
+        let shape = bubble().shape();
+        let rect = shape.rect();
+        assert!(shape.contains(rect.center()));
+        assert!(shape.contains(rect.left_center() + vec2(1.0, 0.0)), "edge");
+        assert!(!shape.contains(rect.left_top() + vec2(1.0, 1.0)), "corner");
+        assert!(
+            !shape.contains(rect.right_bottom() + vec2(1.0, 1.0)),
+            "outside"
+        );
+    }
+
+    #[test]
     fn gestures_move_the_bubble_and_return_it() {
         for gesture in [Gesture::Rise, Gesture::Wobble] {
             let mut bubble = bubble();
