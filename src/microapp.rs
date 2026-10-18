@@ -7,6 +7,7 @@ use std::any::Any;
 
 use eframe::egui::{self, Color32, Rect};
 
+use crate::services::Services;
 use crate::view::bubble::{BubbleId, Gesture};
 
 /// Names a microapp.
@@ -91,18 +92,16 @@ pub enum Effect {
 pub struct Context<'a> {
     app: AppId,
     effects: &'a mut Vec<Effect>,
-    /// The key for asking Claude, once known. A microapp may ask the user for
-    /// one and set it here, or clear one the API refused.
-    pub api_key: &'a mut Option<String>,
+    pub services: &'a mut Services,
 }
 
 impl<'a> Context<'a> {
     /// A context for `app`, collecting what it asks for in `effects`.
-    pub fn new(app: AppId, effects: &'a mut Vec<Effect>, api_key: &'a mut Option<String>) -> Self {
+    pub fn new(app: AppId, effects: &'a mut Vec<Effect>, services: &'a mut Services) -> Self {
         Self {
             app,
             effects,
-            api_key,
+            services,
         }
     }
 
@@ -190,9 +189,9 @@ impl Registry {
     }
 
     /// Lets every microapp catch up, collecting what they ask for in `effects`.
-    pub fn update(&mut self, effects: &mut Vec<Effect>, api_key: &mut Option<String>) {
+    pub fn update(&mut self, effects: &mut Vec<Effect>, services: &mut Services) {
         for app in &mut self.apps {
-            app.update(&mut Context::new(app.id(), effects, api_key));
+            app.update(&mut Context::new(app.id(), effects, services));
         }
     }
 
@@ -279,7 +278,7 @@ mod tests {
         );
 
         let mut effects = Vec::new();
-        apps.update(&mut effects, &mut None);
+        apps.update(&mut effects, &mut Services::with_api_key(None));
         let rise = Effect::Gesture {
             target,
             gesture: Gesture::Rise,

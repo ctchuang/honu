@@ -9,6 +9,7 @@ use eframe::egui::{self, Color32, FontId, RichText};
 
 use crate::claude;
 use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState};
+use crate::services::ApiKey;
 use crate::view::bubble::{Gesture, short_label};
 
 const ID: AppId = AppId("ask");
@@ -100,7 +101,7 @@ impl ChatView {
         ui: &mut egui::Ui,
         color: Color32,
         interactive: bool,
-        api_key: &mut Option<String>,
+        api_key: &mut ApiKey,
     ) {
         match &self.key_error {
             Some(error) => {
@@ -123,7 +124,7 @@ impl ChatView {
         ui.add(egui::Label::new(RichText::new(KEY_NOTE).color(color.gamma_multiply(0.6))).wrap());
         let key = self.key_draft.trim();
         if submitted(ui, &response) && !key.is_empty() {
-            *api_key = Some(key.to_owned());
+            api_key.set(key.to_owned());
             self.key_draft.clear();
             self.key_error = None;
             // Move straight on to the question field.
@@ -221,7 +222,7 @@ impl MicroApp for AskApp {
             .max_rect(view.rect);
         let (color, interactive) = (view.text_color, view.interactive);
         let response = ui.scope_builder(builder, |ui| {
-            chat.ui(state, ui, color, interactive, cx.api_key)
+            chat.ui(state, ui, color, interactive, &mut cx.services.api_key)
         });
         Some(response.inner)
     }
@@ -311,10 +312,10 @@ impl Chat {
         ui: &mut egui::Ui,
         color: Color32,
         interactive: bool,
-        api_key: &mut Option<String>,
+        api_key: &mut ApiKey,
     ) -> f32 {
         if let Some(message) = self.key_rejected.take() {
-            *api_key = None;
+            api_key.clear();
             view.key_error = Some(message);
         }
         view.catch_up(self.focus_requests);
@@ -327,7 +328,7 @@ impl Chat {
         let content_height = egui::ScrollArea::vertical()
             .scroll_source(scroll_source)
             .stick_to_bottom(true)
-            .show(ui, |ui| match api_key {
+            .show(ui, |ui| match api_key.get() {
                 None => view.key_ui(ui, color, interactive, api_key),
                 Some(key) if matches!(self.status, Status::Typing { .. }) => {
                     self.question_ui(view, ui, color, interactive, key);
@@ -410,11 +411,13 @@ fn submitted(ui: &egui::Ui, response: &egui::Response) -> bool {
 mod tests {
     use super::*;
     use crate::microapp::{Effect, ViewTarget};
+    use crate::services::Services;
 
     /// Runs `update` on `asks` and returns what it asked of the bubbles.
     fn update(asks: &mut AskApp) -> Vec<Effect> {
         let mut effects = Vec::new();
-        asks.update(&mut Context::new(ID, &mut effects, &mut None));
+        let mut services = Services::with_api_key(None);
+        asks.update(&mut Context::new(ID, &mut effects, &mut services));
         effects
     }
 

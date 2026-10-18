@@ -8,6 +8,7 @@ use crate::apps::ask::AskApp;
 use crate::apps::notes::NotesApp;
 use crate::desktop;
 use crate::microapp::{AppId, Context, Effect, Registry, View, ViewTarget};
+use crate::services::Services;
 use crate::sprite::octopus::Octopus;
 use crate::sprite::turtle::Turtle;
 use crate::stage::Stage;
@@ -20,10 +21,6 @@ pub const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 /// How far a bubble must be dragged before the octopus comes up, so nudging
 /// a bubble into place does not call it.
 const SUMMON_DISTANCE: f32 = 40.0;
-/// Storage key for the Claude API key the web version asks for. The desktop
-/// version reads `ANTHROPIC_API_KEY` from `.env` instead and stores nothing.
-#[cfg(target_arch = "wasm32")]
-const API_KEY_KEY: &str = "anthropic_api_key";
 
 /// The turtle's menu, opened by clicking it with either button.
 struct TurtleMenu {
@@ -53,8 +50,8 @@ pub struct HonuApp {
     menu_dismissed: bool,
     /// The turtle's menu, while open.
     menu: Option<TurtleMenu>,
-    /// The key for asking Claude, once known.
-    api_key: Option<String>,
+    /// What the microapps share, such as the key for asking Claude.
+    services: Services,
     /// Whether the window floats on the real desktop rather than showing a wallpaper.
     floating: bool,
     /// Whether clicks currently pass through the window to the apps below.
@@ -81,7 +78,7 @@ impl HonuApp {
             dragging_turtle: false,
             menu_dismissed: false,
             menu: None,
-            api_key: initial_api_key(storage),
+            services: Services::load(storage),
             floating,
             passthrough: false,
             last_canvas: None,
@@ -354,7 +351,7 @@ impl eframe::App for HonuApp {
                 // Let the microapps catch up, then show on each bubble what its
                 // item is doing: an Ask bubble breathes while Claude works.
                 let mut effects = Vec::new();
-                self.apps.update(&mut effects, &mut self.api_key);
+                self.apps.update(&mut effects, &mut self.services);
                 for bubble in self.stage.bubbles_mut() {
                     bubble.label = self.apps.title(bubble.target);
                     bubble.set_busy(self.apps.is_busy(bubble.target));
@@ -378,7 +375,6 @@ impl eframe::App for HonuApp {
                 if !self.floating {
                     render::paint_background(&painter, canvas);
                 }
-                let key_before = self.api_key.clone();
                 let mut effects = Vec::new();
                 let dragging = self.stage.is_dragging();
                 let front = self.stage.front();
@@ -392,14 +388,12 @@ impl eframe::App for HonuApp {
                         // Only the front bubble's content takes input, so a bubble lying
                         // on top of another's content can still be grabbed.
                         let interactive = Some(i) == front && !dragging;
-                        let cx = (&mut effects, &mut self.api_key);
+                        let cx = (&mut effects, &mut self.services);
                         content_ui(ui, bubble, interactive, &mut self.apps, cx);
                     }
                 }
                 self.apply(effects);
-                if self.api_key != key_before {
-                    remember_api_key(frame, self.api_key.as_deref());
-                }
+                self.services.store(frame.storage_mut());
                 self.octopus.paint(&painter, time);
                 self.turtle.paint(&painter);
                 let chosen = self
@@ -456,41 +450,6 @@ fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu, apps: &Registry) -
     area.inner
 }
 
-/// The desktop version takes the key from `ANTHROPIC_API_KEY`, which may be
-/// set in a `.env` file in or above the working directory.
-#[cfg(not(target_arch = "wasm32"))]
-fn initial_api_key(_storage: Option<&dyn eframe::Storage>) -> Option<String> {
-    dotenvy::dotenv().ok();
-    std::env::var("ANTHROPIC_API_KEY")
-        .ok()
-        .filter(|key| !key.trim().is_empty())
-}
-
-/// The web version uses the key pasted into an Ask bubble earlier, kept in
-/// the browser's local storage.
-#[cfg(target_arch = "wasm32")]
-fn initial_api_key(storage: Option<&dyn eframe::Storage>) -> Option<String> {
-    storage.and_then(|storage| storage.get_string(API_KEY_KEY))
-}
-
-/// Saves a key just pasted into an Ask bubble, or forgets one the API
-/// refused. Only the web version keeps it; the desktop version forgets it on
-/// quit, so it never lands in a file.
-#[cfg(target_arch = "wasm32")]
-fn remember_api_key(frame: &mut eframe::Frame, key: Option<&str>) {
-    let Some(storage) = frame.storage_mut() else {
-        return;
-    };
-    match key {
-        Some(key) => storage.set_string(API_KEY_KEY, key.to_owned()),
-        None => storage.remove_string(API_KEY_KEY),
-    }
-    storage.flush();
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn remember_api_key(_frame: &mut eframe::Frame, _key: Option<&str>) {}
-
 /// Storage key for where the turtle rests, kept apart for the desktop and
 /// for `--windowed`, whose windows differ in size.
 fn turtle_key(floating: bool) -> &'static str {
@@ -519,7 +478,7 @@ fn content_ui(
     bubble: &mut Bubble,
     interactive: bool,
     apps: &mut Registry,
-    (effects, api_key): (&mut Vec<Effect>, &mut Option<String>),
+    (effects, services): (&mut Vec<Effect>, &mut Services),
 ) {
     let ViewTarget { app, item } = bubble.target;
     let Some(microapp) = apps.get_mut(app) else {
@@ -533,7 +492,7 @@ fn content_ui(
         interactive,
         state: bubble.state.as_mut(),
     };
-    let mut cx = Context::new(app, effects, api_key);
+    let mut cx = Context::new(app, effects, services);
     if let Some(height) = microapp.ui(item, ui, view, &mut cx) {
         bubble.set_panel_height(height);
     }
