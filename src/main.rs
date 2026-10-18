@@ -6,6 +6,7 @@ mod microapp;
 mod octopus;
 mod physics;
 mod render;
+mod stage;
 mod turtle;
 
 use apps::ask::{self, AskApp};
@@ -14,6 +15,7 @@ use bubble::{Bubble, Gesture};
 use eframe::egui::{self, CursorIcon, Pos2, Sense, ViewportCommand};
 use microapp::{Appearance, ViewTarget};
 use octopus::Octopus;
+use stage::Stage;
 use turtle::Turtle;
 
 /// Size of the window in `--windowed` mode. The app starts out laid out for it
@@ -22,10 +24,6 @@ const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 /// How far a bubble must be dragged before the octopus comes up, so nudging
 /// a bubble into place does not call it.
 const SUMMON_DISTANCE: f32 = 40.0;
-/// How far a new panel steps aside from one already in its place.
-const CASCADE_STEP: f32 = 28.0;
-/// Most steps aside a new panel takes before landing where it is.
-const CASCADE_LIMIT: usize = 10;
 /// Storage key for the Claude API key the web version asks for. The desktop
 /// version reads `ANTHROPIC_API_KEY` from `.env` instead and stores nothing.
 #[cfg(target_arch = "wasm32")]
@@ -103,19 +101,13 @@ impl TurtleMenu {
 }
 
 struct HonuApp {
-    /// Bubbles in back-to-front paint order; the last one is on top. Each
-    /// shows an item of one of the microapps below.
-    bubbles: Vec<Bubble>,
+    /// The bubbles, each showing an item of one of the microapps below.
+    stage: Stage,
     notes: NotesApp,
     asks: AskApp,
     turtle: Turtle,
     /// Deletes the bubbles dropped on it.
     octopus: Octopus,
-    /// True while the top bubble is being dragged.
-    dragging: bool,
-    /// Where the bubble being dragged was picked up, to return it there if the
-    /// octopus has to spit it back.
-    drag_home: Pos2,
     /// True while the turtle is being dragged.
     dragging_turtle: bool,
     /// Set when pressing the turtle closed its menu, so the click that press
@@ -144,13 +136,11 @@ impl HonuApp {
             turtle.set_offset_from((WINDOWED_SIZE / 2.0).to_pos2(), offset);
         }
         Self {
-            bubbles: Vec::new(),
+            stage: Stage::new(),
             notes: NotesApp::new(),
             asks: AskApp::new(),
             turtle,
             octopus: Octopus::new(),
-            dragging: false,
-            drag_home: Pos2::ZERO,
             dragging_turtle: false,
             menu_dismissed: false,
             menu: None,
@@ -168,9 +158,7 @@ impl HonuApp {
         if self.turtle.contains(p) || self.octopus.contains(p) {
             return None;
         }
-        self.bubbles
-            .iter()
-            .rposition(|b| b.contains(p) && !b.is_spawning())
+        self.stage.hit_test(p)
     }
 
     /// Lets clicks through to the apps below unless the mouse is on a bubble
@@ -186,7 +174,7 @@ impl HonuApp {
         // An open menu takes every click, like a native menu: a click outside
         // it only closes it.
         let on_bubble = self.menu.is_some()
-            || self.dragging
+            || self.stage.is_dragging()
             || self.dragging_turtle
             || self.hit_test(p).is_some()
             || self.turtle.contains(p)
@@ -196,12 +184,6 @@ impl HonuApp {
             ui.ctx()
                 .send_viewport_cmd(ViewportCommand::MousePassthrough(self.passthrough));
         }
-    }
-
-    /// Puts a new bubble on top, below a bubble being dragged, which must stay on top.
-    fn add_bubble(&mut self, bubble: Bubble) {
-        let index = self.bubbles.len() - usize::from(self.dragging);
-        self.bubbles.insert(index, bubble);
     }
 
     /// Starts a new note, whose bubble opens for writing.
@@ -230,50 +212,24 @@ impl HonuApp {
     /// its panel when it lands next to the turtle.
     fn spit_panel(&mut self, target: ViewTarget, look: Appearance, canvas: egui::Rect, time: f64) {
         let mouth = self.turtle.spit(time);
-        let mut bubble =
-            Bubble::new(target, Pos2::ZERO, look.radius, look.color, look.glass).open_on_landing();
+        let mut bubble = Bubble::new(target, Pos2::ZERO, look.radius, look.color, look.glass);
         if let Some(height) = look.panel_height {
             bubble = bubble.with_panel_height(height);
         }
         bubble.label = title(&self.notes, &self.asks, target);
-        // Drift out of step with the other bubbles once closed.
-        bubble.phase = (time % 100.0) as f32;
-        // Land up and to the right of the mouth, with the whole panel on screen.
-        let half = bubble.panel_target() / 2.0;
-        let margin = egui::Vec2::splat(16.0);
-        let lo = canvas.min + half + margin;
-        let hi = (canvas.max - half - margin).max(lo);
-        let mut place = (mouth + egui::vec2(half.x + 40.0, -half.y - 20.0)).clamp(lo, hi);
-        // Open panels don't push each other aside, so step down and to the
-        // right of any panel already landing there, as windows cascade.
-        for _ in 0..CASCADE_LIMIT {
-            let taken = self.bubbles.iter().any(|b| {
-                b.is_or_will_be_open() && (b.destination() - place).length() < CASCADE_STEP
-            });
-            if !taken {
-                break;
-            }
-            place = (place + egui::Vec2::splat(CASCADE_STEP)).clamp(lo, hi);
-        }
-        bubble.center = place;
-        bubble.spawn_from(mouth);
-        self.add_bubble(bubble);
+        self.stage.spit_panel(bubble, mouth, canvas, time);
     }
 
     /// Has the octopus spit back the bubble it swallowed last, if it still can.
     fn undo_delete(&mut self, time: f64) {
         if let Some(bubble) = self.octopus.spit_back(time) {
-            self.add_bubble(bubble);
+            self.stage.add(bubble);
         }
     }
 
     /// Deletes an item for good once no bubble shows it anymore.
     fn delete_if_unseen(&mut self, target: ViewTarget) {
-        let seen = self
-            .bubbles
-            .iter()
-            .chain(self.octopus.contents())
-            .any(|b| b.target == target);
+        let seen = self.stage.shows(target) || self.octopus.contents().any(|b| b.target == target);
         if seen {
             return;
         }
@@ -295,12 +251,6 @@ impl HonuApp {
                 format!("{} {}", offset.x, offset.y),
             );
         }
-    }
-
-    /// Moves bubble `i` to the top of the stack.
-    fn raise(&mut self, i: usize) {
-        let bubble = self.bubbles.remove(i);
-        self.bubbles.push(bubble);
     }
 }
 
@@ -342,20 +292,17 @@ impl eframe::App for HonuApp {
                     .map_or((WINDOWED_SIZE / 2.0).to_pos2(), |rect| rect.center());
                 let offset = canvas.center() - last_center;
                 if offset != egui::Vec2::ZERO {
-                    for bubble in &mut self.bubbles {
-                        bubble.translate(offset);
-                    }
+                    self.stage.translate(offset);
                     self.turtle.translate(offset);
                     self.octopus.translate(offset);
-                    self.drag_home += offset;
                 }
                 self.last_canvas = Some(canvas);
                 self.turtle.place(canvas, time);
                 // The octopus comes up once a bubble has been dragged a little way.
-                let summoned = self.dragging
-                    && self.bubbles.last().is_some_and(|top| {
-                        (top.center - self.drag_home).length() > SUMMON_DISTANCE
-                    });
+                let summoned = self
+                    .stage
+                    .drag_distance()
+                    .is_some_and(|distance| distance > SUMMON_DISTANCE);
                 self.octopus.summon(summoned);
                 for gone in self.octopus.update(canvas, self.turtle.center(), time, dt) {
                     self.delete_if_unseen(gone.target);
@@ -397,7 +344,7 @@ impl eframe::App for HonuApp {
                     })
                     .filter(|&p| !on_menu(p));
                 if let Some(i) = pressed_at.and_then(|p| self.hit_test(p)) {
-                    self.raise(i);
+                    self.stage.raise(i);
                 }
 
                 let pointer = ui.input(|i| i.pointer.latest_pos());
@@ -407,9 +354,7 @@ impl eframe::App for HonuApp {
                     if origin.is_some_and(|p| self.turtle.contains(p)) {
                         self.dragging_turtle = true;
                     } else if let Some(i) = origin.and_then(|p| self.hit_test(p)) {
-                        self.raise(i);
-                        self.dragging = true;
-                        self.drag_home = self.bubbles[self.bubbles.len() - 1].center;
+                        self.stage.start_drag(i);
                     }
                 }
                 if self.dragging_turtle {
@@ -426,23 +371,19 @@ impl eframe::App for HonuApp {
                         }
                     }
                 }
-                if self.dragging {
+                if self.stage.is_dragging() {
                     // Holding a bubble over the octopus shrinks it, and letting go
                     // there deletes it. Where the pointer is decides, not where a
                     // thrown bubble ends up, so only a deliberate drop deletes.
                     let over_octopus = pointer.is_some_and(|p| self.octopus.in_reach(p));
                     self.octopus.set_eager(over_octopus);
-                    if let Some(top) = self.bubbles.last_mut() {
-                        top.center += response.drag_delta();
-                        // Remember the throw so the bubble keeps gliding when released.
-                        top.velocity = ui.input(|i| i.pointer.velocity());
-                        top.set_doomed(over_octopus);
-                    }
+                    let velocity = ui.input(|i| i.pointer.velocity());
+                    self.stage
+                        .drag(response.drag_delta(), velocity, over_octopus);
                     if response.drag_stopped() {
-                        self.dragging = false;
                         self.octopus.set_eager(false);
-                        if over_octopus && let Some(top) = self.bubbles.pop() {
-                            self.octopus.swallow(top, self.drag_home);
+                        if let Some((bubble, home)) = self.stage.end_drag(over_octopus) {
+                            self.octopus.swallow(bubble, home);
                         }
                     }
                 }
@@ -476,13 +417,11 @@ impl eframe::App for HonuApp {
                 if response.double_clicked() {
                     let pos = response.interact_pointer_pos();
                     if let Some(i) = pos.and_then(|p| self.hit_test(p)) {
-                        let bubble = &mut self.bubbles[i];
-                        bubble.open = !bubble.open;
+                        self.stage.toggle_open(i);
                     }
                 }
 
-                let held = self.dragging.then(|| self.bubbles.len() - 1);
-                for bubble in &mut self.bubbles {
+                for bubble in self.stage.bubbles_mut() {
                     bubble.label = title(&self.notes, &self.asks, bubble.target);
                     // Show what an Ask bubble is doing: it breathes while Claude
                     // works, floats up when the answer is in, and wobbles when
@@ -497,14 +436,13 @@ impl eframe::App for HonuApp {
                             None => {}
                         }
                     }
-                    bubble.animate(dt);
                 }
-                physics::step(&mut self.bubbles, canvas, held, time, dt);
+                self.stage.step(canvas, time, dt);
                 // Bubbles are always drifting, so keep animating.
                 ui.ctx().request_repaint();
 
                 let hovered = response.hover_pos().and_then(|p| self.hit_test(p));
-                if self.dragging || self.dragging_turtle {
+                if self.stage.is_dragging() || self.dragging_turtle {
                     ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
                 } else if hovered.is_some() {
                     ui.ctx().set_cursor_icon(CursorIcon::Grab);
@@ -518,13 +456,15 @@ impl eframe::App for HonuApp {
                     render::paint_background(&painter, canvas);
                 }
                 let key_before = self.api_key.clone();
-                let top = self.bubbles.len().saturating_sub(1);
-                for (i, bubble) in self.bubbles.iter_mut().enumerate() {
+                let dragging = self.stage.is_dragging();
+                let bubbles = self.stage.bubbles_mut();
+                let top = bubbles.len().saturating_sub(1);
+                for (i, bubble) in bubbles.iter_mut().enumerate() {
                     render::paint_bubble(&painter, bubble);
                     if bubble.is_fully_open() {
                         // Only the front bubble's content takes input, so a bubble lying
                         // on top of another's content can still be grabbed.
-                        let interactive = i == top && !self.dragging;
+                        let interactive = i == top && !dragging;
                         let apps = (&mut self.notes, &mut self.asks);
                         content_ui(ui, bubble, interactive, apps, &mut self.api_key);
                     }
