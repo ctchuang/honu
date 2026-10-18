@@ -53,15 +53,16 @@ struct HonuApp {
 impl HonuApp {
     fn new(floating: bool) -> Self {
         let rgb = Color32::from_rgb;
+        // A soft, slightly warm white for the opaque bubbles.
+        let white = rgb(250, 249, 246);
         let notes = Content::Notes(
             "Double-click a bubble to open it, and double-click its edge or title to close it."
                 .to_owned(),
         );
         let mut bubbles = vec![
-            Bubble::new("Notes", pos2(250.0, 260.0), 95.0, rgb(240, 110, 100), false)
-                .with_content(notes),
-            Bubble::new("Files", pos2(820.0, 520.0), 85.0, rgb(90, 200, 150), false),
-            Bubble::new("Photos", pos2(560.0, 560.0), 75.0, rgb(245, 185, 70), false),
+            Bubble::new("Notes", pos2(250.0, 260.0), 95.0, white, false).with_content(notes),
+            Bubble::new("Files", pos2(820.0, 520.0), 85.0, white, false),
+            Bubble::new("Photos", pos2(560.0, 560.0), 75.0, white, false),
             Bubble::new("Music", pos2(420.0, 360.0), 120.0, rgb(70, 190, 210), true),
             Bubble::new("Mail", pos2(720.0, 260.0), 105.0, rgb(150, 110, 230), true),
             Bubble::new("Clock", pos2(300.0, 540.0), 70.0, rgb(110, 160, 250), true),

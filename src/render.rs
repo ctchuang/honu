@@ -78,7 +78,7 @@ pub fn paint_bubble(painter: &Painter, bubble: &Bubble) {
     let openness = bubble.openness();
 
     // Soft drop shadow, offset away from the light.
-    let shadow_alpha = if bubble.glass { 0.18 } else { 0.32 };
+    let shadow_alpha = if bubble.glass { 0.18 } else { 0.14 };
     let shadow_rgb = if bubble.glass {
         base.map(|c| c * 0.4)
     } else {
@@ -123,27 +123,28 @@ pub fn paint_bubble(painter: &Painter, bubble: &Bubble) {
 
 /// Color for text drawn on top of a bubble.
 pub fn text_color(bubble: &Bubble) -> Color32 {
-    if bubble.glass {
+    let [r, g, b] = to_rgb(bubble.color);
+    let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if bubble.glass || luminance > 0.6 {
         Color32::from_rgba_unmultiplied(30, 40, 60, 220)
     } else {
         Color32::from_white_alpha(235)
     }
 }
 
-/// Opaque, glossy ball.
+/// Opaque, nearly flat tile. The face keeps its true color; the narrow rim
+/// only dims slightly as it turns away from the light, and a faint darker edge
+/// keeps the outline crisp against light backgrounds.
 fn shade_solid(base: [f32; 3], x: f32, y: f32) -> Rgba {
-    let (n, z) = normal(x, y);
-    let diffuse = dot(n, normalize(LIGHT)).max(0.0);
-    let half = half_vector();
-    let n_dot_h = dot(n, half).max(0.0);
+    let (n, _) = normal(x, y);
+    let light = normalize(LIGHT);
+    // Positive where the rim faces the light more than the flat face does.
+    let tilt = dot(n, light).max(0.0) - light[2];
+    let mut c = base.map(|b| (b * (1.0 + 0.07 * tilt)).min(1.0));
 
-    let mut c = base.map(|b| b * (0.38 + 0.75 * diffuse));
-    // Light bounced back from the floor brightens the lower rim a little.
-    let bounce = (0.3 * x + 0.9 * y).max(0.0) * (1.0 - z).powi(2) * 0.35;
-    c = mix(c, base.map(|b| (b * 1.3).min(1.0)), bounce);
-
-    let spec = n_dot_h.powi(60) * 0.9 + n_dot_h.powi(8) * 0.12;
-    c = mix(c, [1.0; 3], spec.min(1.0));
+    let r = (x * x + y * y).sqrt();
+    let edge = ((r - 0.92) / 0.08).clamp(0.0, 1.0);
+    c = mix(c, base.map(|b| b * 0.9), edge * 0.5);
     [c[0], c[1], c[2], 1.0]
 }
 
