@@ -6,10 +6,10 @@ use eframe::egui::{self, CursorIcon, Pos2, Sense, ViewportCommand};
 
 use crate::apps::ask::AskApp;
 use crate::apps::notes::NotesApp;
-use crate::creatures::octopus::Octopus;
-use crate::creatures::turtle::Turtle;
 use crate::desktop;
 use crate::microapp::{AppId, Context, Effect, Registry, View, ViewTarget};
+use crate::sprite::octopus::Octopus;
+use crate::sprite::turtle::Turtle;
 use crate::stage::Stage;
 use crate::view::bubble::Bubble;
 use crate::view::render;

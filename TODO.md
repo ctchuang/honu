@@ -43,7 +43,7 @@ The guiding idea: Claude should work with the bubbles on the desktop, not live i
 chat window. Done so far: the turtle's menu has **Ask AI**, which spits out a bubble
 whose answer streams in while the panel grows to fit it (`src/apps/ask.rs`, `src/claude.rs`).
 Its **Add Note** makes plain note bubbles to write in (`src/apps/notes.rs`), and the octopus
-deletes bubbles (`src/creatures/octopus.rs`).
+deletes bubbles (`src/sprite/octopus.rs`).
 
 - **Spit out several bubbles at once**: give Claude a `create_bubble` tool,
   so "give me five weekend ideas" becomes five bubbles the turtle spits out one by one.

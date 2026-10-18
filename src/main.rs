@@ -1,9 +1,9 @@
 mod apps;
 mod claude;
-mod creatures;
 mod desktop;
 mod microapp;
 mod shell;
+mod sprite;
 mod stage;
 mod view;
 
