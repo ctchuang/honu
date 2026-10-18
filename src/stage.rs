@@ -1,11 +1,12 @@
-//! The stage: the bubbles on the desktop in paint order, and how they are
-//! picked up, dragged, opened, and set moving. It knows nothing of what a
-//! bubble shows; that is up to the microapps.
+//! The stage: every bubble in paint order, and how they are picked up,
+//! dragged, opened, and set moving. Bubbles swallowed by the octopus stay
+//! here too, out of sight, until it forgets them. The stage knows nothing of
+//! what a bubble shows; that is up to the microapps.
 
 use eframe::egui::{Pos2, Rect, Vec2, vec2};
 
 use crate::microapp::ViewTarget;
-use crate::view::bubble::{Bubble, Gesture};
+use crate::view::bubble::{Bubble, BubbleId, Gesture};
 use crate::view::physics;
 
 /// How far a new panel steps aside from one already in its place.
@@ -18,6 +19,8 @@ pub struct Stage {
     bubbles: Vec<Bubble>,
     /// Where the bubble being dragged, always the top one, was picked up.
     drag_home: Option<Pos2>,
+    /// The id the next bubble added gets.
+    next_id: u64,
 }
 
 impl Stage {
@@ -25,6 +28,7 @@ impl Stage {
         Self {
             bubbles: Vec::new(),
             drag_home: None,
+            next_id: 1,
         }
     }
 
@@ -38,7 +42,8 @@ impl Stage {
         &mut self.bubbles
     }
 
-    /// Whether any bubble shows `target`.
+    /// Whether any bubble shows `target`, counting swallowed bubbles that
+    /// can still be brought back.
     pub fn shows(&self, target: ViewTarget) -> bool {
         self.bubbles.iter().any(|b| b.target == target)
     }
@@ -52,12 +57,18 @@ impl Stage {
         }
     }
 
-    /// Index of the topmost bubble under `p`, if any. Bubbles still flying
-    /// out of the turtle cannot be grabbed.
+    /// Index of the topmost bubble under `p`, if any. Bubbles flying out of
+    /// the turtle or into the octopus cannot be grabbed.
     pub fn hit_test(&self, p: Pos2) -> Option<usize> {
         self.bubbles
             .iter()
-            .rposition(|b| b.contains(p) && !b.is_spawning())
+            .rposition(|b| b.contains(p) && !b.is_in_flight())
+    }
+
+    /// Index of the front bubble that is not swallowed, whose content alone
+    /// takes input.
+    pub fn front(&self) -> Option<usize> {
+        self.bubbles.iter().rposition(|b| !b.is_swallowing())
     }
 
     /// Moves bubble `i` to the top.
@@ -71,10 +82,45 @@ impl Stage {
         bubble.open = !bubble.open;
     }
 
-    /// Puts a new bubble on top, below a bubble being dragged, which must stay on top.
-    pub fn add(&mut self, bubble: Bubble) {
+    /// Puts a new bubble on top, giving it its id.
+    pub fn add(&mut self, mut bubble: Bubble) -> BubbleId {
+        let id = BubbleId(self.next_id);
+        self.next_id += 1;
+        bubble.id = id;
+        self.put_on_top(bubble);
+        id
+    }
+
+    /// Puts `bubble` on top, below a bubble being dragged, which must stay on top.
+    fn put_on_top(&mut self, bubble: Bubble) {
         let index = self.bubbles.len() - usize::from(self.is_dragging());
         self.bubbles.insert(index, bubble);
+    }
+
+    fn index_of(&self, id: BubbleId) -> Option<usize> {
+        self.bubbles.iter().position(|b| b.id == id)
+    }
+
+    /// Sends bubble `id` into the octopus's `mouth`.
+    pub fn swallow(&mut self, id: BubbleId, mouth: Pos2) {
+        if let Some(i) = self.index_of(id) {
+            self.bubbles[i].swallow_into(mouth);
+        }
+    }
+
+    /// Brings swallowed bubble `id` back on top: it pops out of `mouth` and
+    /// flies back to `home`.
+    pub fn spit_back(&mut self, id: BubbleId, mouth: Pos2, home: Pos2) {
+        if let Some(i) = self.index_of(id) {
+            let mut bubble = self.bubbles.remove(i);
+            bubble.spit_back(mouth, home);
+            self.put_on_top(bubble);
+        }
+    }
+
+    /// Takes bubble `id` off the stage for good.
+    pub fn remove(&mut self, id: BubbleId) -> Option<Bubble> {
+        self.index_of(id).map(|i| self.bubbles.remove(i))
     }
 
     /// Adds `bubble`, popping out of `mouth` at `time` and flying to a place up
@@ -145,15 +191,10 @@ impl Stage {
         }
     }
 
-    /// Lets go of the dragged bubble. If `take` is set, it is taken off the
-    /// stage and returned with where it was picked up.
-    pub fn end_drag(&mut self, take: bool) -> Option<(Bubble, Pos2)> {
+    /// Lets go of the dragged bubble, returning it and where it was picked up.
+    pub fn end_drag(&mut self) -> Option<(BubbleId, Pos2)> {
         let home = self.drag_home.take()?;
-        if take {
-            self.bubbles.pop().map(|bubble| (bubble, home))
-        } else {
-            None
-        }
+        self.bubbles.last().map(|bubble| (bubble.id, home))
     }
 
     /// Advances every bubble's animations and motion by `dt` seconds. A
@@ -183,26 +224,61 @@ mod tests {
     }
 
     #[test]
-    fn dragged_bubble_stays_on_top_and_can_be_taken() {
+    fn dragged_bubble_stays_on_top() {
         let mut stage = Stage::new();
-        stage.add(bubble(100.0));
-        stage.add(bubble(400.0));
-        let first = stage.hit_test(pos2(100.0, 300.0)).unwrap();
-        stage.start_drag(first);
-        assert_eq!(stage.bubbles().last().unwrap().center.x, 100.0);
+        let first = stage.add(bubble(100.0));
+        let second = stage.add(bubble(400.0));
+        assert_ne!(first, second);
+        let i = stage.hit_test(pos2(100.0, 300.0)).unwrap();
+        stage.start_drag(i);
+        assert_eq!(stage.bubbles().last().unwrap().id, first);
         stage.add(bubble(700.0));
         assert_eq!(
-            stage.bubbles().last().unwrap().center.x,
-            100.0,
+            stage.bubbles().last().unwrap().id,
+            first,
             "new bubble went on top"
         );
 
         stage.drag(vec2(50.0, 0.0), Vec2::ZERO, false);
         assert_eq!(stage.drag_distance(), Some(50.0));
-        let (taken, home) = stage.end_drag(true).unwrap();
-        assert_eq!((taken.center.x, home.x), (150.0, 100.0));
+        assert_eq!(stage.end_drag(), Some((first, pos2(100.0, 300.0))));
         assert!(!stage.is_dragging());
-        assert_eq!(stage.bubbles().len(), 2);
+        assert_eq!(stage.bubbles().len(), 3);
+    }
+
+    #[test]
+    fn swallowed_bubble_stays_out_of_reach_until_spat_back_or_removed() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+        let mut stage = Stage::new();
+        let below = stage.add(bubble(100.0));
+        let eaten = stage.add(bubble(400.0));
+        let mouth = pos2(1100.0, 750.0);
+        stage.swallow(eaten, mouth);
+        for frame in 0..60 {
+            stage.step(canvas, f64::from(frame) / 60.0, 1.0 / 60.0);
+        }
+        assert!(stage.shows(ViewTarget::TEST));
+        assert_eq!(
+            stage.hit_test(mouth),
+            None,
+            "swallowed bubble can be grabbed"
+        );
+        assert_eq!(stage.front().map(|i| stage.bubbles()[i].id), Some(below));
+
+        let home = pos2(400.0, 300.0);
+        stage.spit_back(eaten, mouth, home);
+        assert_eq!(stage.front().map(|i| stage.bubbles()[i].id), Some(eaten));
+        for frame in 0..200 {
+            stage.step(canvas, f64::from(frame) / 60.0, 1.0 / 60.0);
+        }
+        assert_eq!(
+            stage.hit_test(home).map(|i| stage.bubbles()[i].id),
+            Some(eaten)
+        );
+
+        assert_eq!(stage.remove(eaten).map(|b| b.id), Some(eaten));
+        assert_eq!(stage.remove(eaten).map(|b| b.id), None);
+        assert_eq!(stage.bubbles().len(), 1);
     }
 
     #[test]

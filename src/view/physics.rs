@@ -1,7 +1,8 @@
 //! Bubble motion: momentum after a throw, an idle float, soft pushing between
 //! crowded bubbles, and bounces off the window edges. Opened bubbles act like
-//! windows: they can still be thrown, but they neither float nor push. New
-//! bubbles flying to their place follow their own path and are left alone.
+//! windows: they can still be thrown, but they neither float nor push.
+//! Bubbles flying out of the turtle or into the octopus follow their own
+//! path and are left alone.
 
 use eframe::egui::{Rect, Vec2, vec2};
 
@@ -32,7 +33,7 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
     let mut accel: Vec<Vec2> = bubbles
         .iter()
         .map(|b| {
-            if b.is_closed() && !b.is_spawning() {
+            if b.is_closed() && !b.is_in_flight() {
                 float_accel(b, time)
             } else {
                 Vec2::ZERO
@@ -43,7 +44,7 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
     for i in 0..bubbles.len() {
         for j in i + 1..bubbles.len() {
             let (a, b) = (&bubbles[i], &bubbles[j]);
-            if !a.is_closed() || !b.is_closed() || a.is_spawning() || b.is_spawning() {
+            if !a.is_closed() || !b.is_closed() || a.is_in_flight() || b.is_in_flight() {
                 continue;
             }
             let delta = b.center - a.center;
@@ -64,7 +65,7 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
     }
 
     for (i, (bubble, accel)) in bubbles.iter_mut().zip(accel).enumerate() {
-        if Some(i) != held && !bubble.is_spawning() {
+        if Some(i) != held && !bubble.is_in_flight() {
             bubble.velocity += accel * dt;
             bubble.velocity *= (-FRICTION * dt).exp();
             let speed = bubble.velocity.length();
@@ -73,7 +74,10 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
             }
             bubble.center += bubble.velocity * dt;
         }
-        confine(bubble, bounds);
+        // A bubble going into the octopus may dip below the edge with it.
+        if !bubble.is_swallowing() {
+            confine(bubble, bounds);
+        }
     }
 }
 

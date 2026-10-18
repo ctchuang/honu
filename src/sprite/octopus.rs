@@ -9,7 +9,7 @@ use eframe::egui::{Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, V
 
 use super::{Grid, PIXEL};
 
-use crate::view::bubble::Bubble;
+use crate::view::bubble::{BubbleId, SWALLOW_SECONDS};
 
 /// The head and body, one character per pixel: Outline, Body, White
 /// highlight, Eye (also the mouth), Pink cheek, and `.` for transparent.
@@ -61,10 +61,13 @@ const GULP_SECONDS: f64 = 0.3;
 const SWAY_RATE: f64 = 2.0;
 const EAGER_SWAY_RATE: f64 = 6.0;
 
-/// A swallowed bubble and where it was picked up, to return it there.
+/// A bubble the octopus swallowed, and where it was picked up, to return
+/// it there. The bubble itself stays on the stage, out of sight.
 struct Swallowed {
-    bubble: Bubble,
+    bubble: BubbleId,
     home: Pos2,
+    /// When it was dropped on the octopus, in seconds of app time.
+    at: f64,
 }
 
 pub struct Octopus {
@@ -78,12 +81,12 @@ pub struct Octopus {
     summoned: bool,
     /// Whether a bubble is held over it, ready to be dropped.
     eager: bool,
-    /// When it last gulped down or spat out a bubble, in seconds of app time.
-    gulped_at: f64,
+    /// The app time of the last `update`.
+    now: f64,
+    /// When it last spat out a bubble, in seconds of app time.
+    spat_at: f64,
     /// Until when swallowed bubbles can be brought back.
     undo_until: f64,
-    /// Bubbles on their way into the mouth.
-    swallowing: Vec<Swallowed>,
     /// Bubbles swallowed recently enough to be brought back, the latest last.
     stomach: Vec<Swallowed>,
     /// Where the "Click to undo" hint was drawn last frame. It takes clicks
@@ -99,9 +102,9 @@ impl Octopus {
             shown: 0.0,
             summoned: false,
             eager: false,
-            gulped_at: f64::NEG_INFINITY,
+            now: 0.0,
+            spat_at: f64::NEG_INFINITY,
             undo_until: f64::NEG_INFINITY,
-            swallowing: Vec::new(),
             stomach: Vec::new(),
             hint: None,
         }
@@ -131,14 +134,20 @@ impl Octopus {
             return true;
         }
         GRID.pixel_at(self.origin, p)
-            .and_then(|(x, y)| self.pixel(x, y, 0.0))
+            .and_then(|(x, y)| self.pixel(x, y, self.now))
             .is_some_and(|c| c != '.')
     }
 
-    /// Swallows `bubble`, which was picked up at `home`.
-    pub fn swallow(&mut self, mut bubble: Bubble, home: Pos2) {
-        bubble.swallow_into(self.mouth());
-        self.swallowing.push(Swallowed { bubble, home });
+    /// Swallows `bubble`, which was picked up at `home`, at `time`. Returns
+    /// where the bubble should go: into the mouth.
+    pub fn swallow(&mut self, bubble: BubbleId, home: Pos2, time: f64) -> Pos2 {
+        self.stomach.push(Swallowed {
+            bubble,
+            home,
+            at: time,
+        });
+        self.undo_until = time + f64::from(SWALLOW_SECONDS) + UNDO_SECONDS;
+        self.mouth()
     }
 
     /// Whether a swallowed bubble can still be brought back.
@@ -146,55 +155,35 @@ impl Octopus {
         !self.stomach.is_empty()
     }
 
-    /// Spits the latest swallowed bubble back towards where it was picked up.
-    pub fn spit_back(&mut self, time: f64) -> Option<Bubble> {
-        let Swallowed { mut bubble, home } = self.stomach.pop()?;
-        bubble.spit_back(self.mouth(), home);
-        self.gulped_at = time;
+    /// Spits out the latest swallowed bubble at `time`, returning it and
+    /// where it was picked up; it should fly back there from `mouth`.
+    pub fn spit_back(&mut self, time: f64) -> Option<(BubbleId, Pos2)> {
+        let swallowed = self.stomach.pop()?;
+        self.spat_at = time;
         // Leave time to bring back the one swallowed before it, too.
         self.undo_until = time + UNDO_SECONDS;
-        Some(bubble)
+        Some((swallowed.bubble, swallowed.home))
     }
 
-    /// Bubbles on their way into the mouth, to be painted below the octopus.
-    pub fn swallowing(&self) -> impl Iterator<Item = &Bubble> {
-        self.swallowing.iter().map(|s| &s.bubble)
+    /// Where swallowed bubbles go in and spat-out ones come out.
+    pub fn mouth(&self) -> Pos2 {
+        self.origin + MOUTH * PIXEL
     }
 
-    /// Every bubble inside: those being swallowed and those that can still
-    /// be brought back.
-    pub fn contents(&self) -> impl Iterator<Item = &Bubble> {
-        self.swallowing
-            .iter()
-            .chain(&self.stomach)
-            .map(|s| &s.bubble)
-    }
-
-    /// Moves the bubbles inside along with the others when the window changes size.
+    /// Moves where swallowed bubbles return to along with the bubbles when
+    /// the window changes size.
     pub fn translate(&mut self, offset: Vec2) {
-        for swallowed in self.swallowing.iter_mut().chain(&mut self.stomach) {
-            swallowed.bubble.translate(offset);
+        for swallowed in &mut self.stomach {
             swallowed.home += offset;
         }
     }
 
-    /// Advances swallowing, forgets bubbles too old to bring back, and rises
-    /// or sinks in the bottom corner of `canvas` farther from `turtle`. Call
-    /// once per frame before hit-testing or painting. Returns the bubbles
-    /// forgotten this frame, which are now deleted for good.
-    pub fn update(&mut self, canvas: Rect, turtle: Pos2, time: f64, dt: f32) -> Vec<Bubble> {
-        for swallowed in &mut self.swallowing {
-            swallowed.bubble.animate(dt);
-        }
-        let (done, going): (Vec<_>, Vec<_>) = std::mem::take(&mut self.swallowing)
-            .into_iter()
-            .partition(|s| s.bubble.is_swallowed());
-        self.swallowing = going;
-        if !done.is_empty() {
-            self.stomach.extend(done);
-            self.gulped_at = time;
-            self.undo_until = time + UNDO_SECONDS;
-        }
+    /// Forgets bubbles too old to bring back, and rises or sinks in the
+    /// bottom corner of `canvas` farther from `turtle`. Call once per frame
+    /// before hit-testing or painting. Returns the bubbles forgotten this
+    /// frame, which are now deleted for good.
+    pub fn update(&mut self, canvas: Rect, turtle: Pos2, time: f64, dt: f32) -> Vec<BubbleId> {
+        self.now = time;
         let gone = if time >= self.undo_until {
             std::mem::take(&mut self.stomach)
                 .into_iter()
@@ -204,7 +193,7 @@ impl Octopus {
             Vec::new()
         };
 
-        let wanted = self.summoned || !self.swallowing.is_empty() || self.can_undo();
+        let wanted = self.summoned || self.can_undo();
         let target = if wanted { 1.0 } else { 0.0 };
         self.shown += (target - self.shown) * (1.0 - (-SHOW_RATE * dt).exp());
         if (self.shown - target).abs() < 0.01 {
@@ -223,14 +212,27 @@ impl Octopus {
         };
         // Rise from below the bottom edge, slowing as it arrives.
         let hidden = (1.0 - self.shown).powi(2) * (size.y + MARGIN);
-        let gulp = (time - self.gulped_at) / GULP_SECONDS;
-        let lift = if (0.0..1.0).contains(&gulp) || self.eager {
+        let lift = if self.is_gulping() || self.eager {
             PIXEL
         } else {
             0.0
         };
         self.origin = pos2(x, canvas.bottom() - MARGIN - size.y + hidden - lift).round();
         gone
+    }
+
+    /// Whether a bubble is still on its way into the mouth.
+    fn is_swallowing(&self) -> bool {
+        let seconds = f64::from(SWALLOW_SECONDS);
+        self.stomach.iter().any(|s| self.now - s.at < seconds)
+    }
+
+    /// Whether it is gulping: just after a bubble went down, or after
+    /// spitting one out.
+    fn is_gulping(&self) -> bool {
+        let gulp = |since: f64| (0.0..GULP_SECONDS).contains(&(self.now - since));
+        let swallowed = |s: &Swallowed| s.at + f64::from(SWALLOW_SECONDS);
+        gulp(self.spat_at) || self.stomach.iter().any(|s| gulp(swallowed(s)))
     }
 
     pub fn paint(&mut self, painter: &Painter, time: f64) {
@@ -268,7 +270,7 @@ impl Octopus {
     /// The sprite pixel at (`x`, `y`) at `time`, with the tentacles swaying
     /// and the mouth open while eager or swallowing.
     fn pixel(&self, x: usize, y: usize, time: f64) -> Option<char> {
-        let mouth_open = self.eager || !self.swallowing.is_empty();
+        let mouth_open = self.eager || self.is_swallowing();
         if mouth_open && OPEN_MOUTH.contains(&(x, y)) {
             return Some('E');
         }
@@ -289,10 +291,6 @@ impl Octopus {
 
     fn middle(&self) -> Pos2 {
         self.origin + sprite_size() / 2.0
-    }
-
-    fn mouth(&self) -> Pos2 {
-        self.origin + MOUTH * PIXEL
     }
 }
 
@@ -315,7 +313,6 @@ fn color(c: char) -> Option<Color32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::microapp::ViewTarget;
 
     const DT: f32 = 1.0 / 60.0;
 
@@ -323,9 +320,9 @@ mod tests {
         Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 700.0))
     }
 
-    /// Runs the octopus and any bubbles it swallowed for `seconds` from
-    /// `start`. Returns the time reached and the bubbles deleted for good.
-    fn run(octopus: &mut Octopus, turtle: Pos2, start: f64, seconds: f64) -> (f64, Vec<Bubble>) {
+    /// Runs the octopus for `seconds` from `start`. Returns the time reached
+    /// and the bubbles deleted for good.
+    fn run(octopus: &mut Octopus, turtle: Pos2, start: f64, seconds: f64) -> (f64, Vec<BubbleId>) {
         let mut time = start;
         let mut gone = Vec::new();
         while time < start + seconds {
@@ -367,17 +364,10 @@ mod tests {
         octopus.summon(true);
         let (time, _) = run(&mut octopus, turtle, 0.0, 1.0);
         octopus.summon(false);
-        let home = pos2(400.0, 300.0);
-        let bubble = Bubble::new(
-            ViewTarget::TEST,
-            octopus.middle(),
-            80.0,
-            Color32::WHITE,
-            false,
-        );
-        octopus.swallow(bubble, home);
-        let (time, _) = run(&mut octopus, turtle, time, 1.0);
-        assert!(octopus.can_undo());
+        let (bubble, home) = (BubbleId(7), pos2(400.0, 300.0));
+        assert_eq!(octopus.swallow(bubble, home, time), octopus.mouth());
+        let (time, gone) = run(&mut octopus, turtle, time, 1.0);
+        assert!(gone.is_empty() && octopus.can_undo());
         assert!(
             octopus.in_reach(octopus.middle()),
             "hid while it could undo"
@@ -388,22 +378,17 @@ mod tests {
         octopus.hint = Some(hint);
         assert!(octopus.contains(hint.center()), "hint does not take clicks");
 
-        let mut bubble = octopus.spit_back(time).expect("nothing to spit back");
+        assert_eq!(octopus.spit_back(time), Some((bubble, home)));
         assert!(
             !octopus.contains(hint.center()),
             "hint takes clicks with nothing to undo"
         );
         assert!(!octopus.can_undo());
-        for _ in 0..200 {
-            bubble.animate(DT);
-        }
-        assert_eq!(bubble.center, home);
 
-        octopus.swallow(bubble, home);
+        octopus.swallow(bubble, home, time);
         let (_, gone) = run(&mut octopus, turtle, time, UNDO_SECONDS + 1.0);
         assert!(!octopus.can_undo(), "kept the bubble too long");
-        assert_eq!(gone.len(), 1, "did not report the deleted bubble");
-        assert_eq!(octopus.contents().count(), 0);
+        assert_eq!(gone, vec![bubble], "did not report the deleted bubble");
         assert!(octopus.spit_back(time).is_none());
     }
 }

@@ -44,7 +44,7 @@ const DOOMED_SCALE: f32 = 0.6;
 /// How quickly a bubble shrinks over the octopus and grows back (1/s).
 const SHRINK_RATE: f32 = 14.0;
 /// Seconds a swallowed bubble takes to disappear into the octopus's mouth.
-const SWALLOW_SECONDS: f32 = 0.3;
+pub const SWALLOW_SECONDS: f32 = 0.3;
 
 /// A short motion that marks a change in what the bubble is doing.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -84,6 +84,10 @@ struct Spawn {
     progress: f32,
 }
 
+/// Tells a bubble apart from every other bubble.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct BubbleId(pub u64);
+
 /// A bubble's last trip, from where it was dropped into the octopus's mouth.
 struct Swallow {
     from: Pos2,
@@ -97,6 +101,8 @@ struct Swallow {
 /// A draggable, window-like bubble on the desktop: a view of one item of a
 /// microapp, which keeps the item's data.
 pub struct Bubble {
+    /// Tells this bubble apart from every other; the stage hands it out.
+    pub id: BubbleId,
     /// The item this bubble shows.
     pub target: ViewTarget,
     pub label: String,
@@ -141,6 +147,7 @@ pub struct Bubble {
 impl Bubble {
     pub fn new(target: ViewTarget, center: Pos2, radius: f32, color: Color32, glass: bool) -> Self {
         Self {
+            id: BubbleId::default(),
             target,
             label: String::new(),
             center,
@@ -258,6 +265,18 @@ impl Bubble {
     /// Whether the bubble is open or will open as soon as it lands.
     pub fn is_or_will_be_open(&self) -> bool {
         self.open || self.open_on_landing
+    }
+
+    /// True from when the bubble is dropped on the octopus until it is spat
+    /// back, including while it is out of sight in the octopus's stomach.
+    pub fn is_swallowing(&self) -> bool {
+        self.swallow.is_some()
+    }
+
+    /// True while the bubble follows a path of its own, flying out of the
+    /// turtle or into the octopus, rather than the physics or the pointer.
+    pub fn is_in_flight(&self) -> bool {
+        self.is_spawning() || self.is_swallowing()
     }
 
     /// True while the bubble is flying to its place after popping out.

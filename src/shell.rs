@@ -143,15 +143,14 @@ impl HonuApp {
 
     /// Has the octopus spit back the bubble it swallowed last, if it still can.
     fn undo_delete(&mut self, time: f64) {
-        if let Some(bubble) = self.octopus.spit_back(time) {
-            self.stage.add(bubble);
+        if let Some((bubble, home)) = self.octopus.spit_back(time) {
+            self.stage.spit_back(bubble, self.octopus.mouth(), home);
         }
     }
 
     /// Deletes an item for good once no bubble shows it anymore.
     fn delete_if_unseen(&mut self, target: ViewTarget) {
-        let seen = self.stage.shows(target) || self.octopus.contents().any(|b| b.target == target);
-        if !seen {
+        if !self.stage.shows(target) {
             self.apps.remove(target);
         }
     }
@@ -230,7 +229,9 @@ impl eframe::App for HonuApp {
                     .is_some_and(|distance| distance > SUMMON_DISTANCE);
                 self.octopus.summon(summoned);
                 for gone in self.octopus.update(canvas, self.turtle.center(), time, dt) {
-                    self.delete_if_unseen(gone.target);
+                    if let Some(bubble) = self.stage.remove(gone) {
+                        self.delete_if_unseen(bubble.target);
+                    }
                 }
                 if self.floating {
                     self.update_passthrough(ui);
@@ -307,8 +308,11 @@ impl eframe::App for HonuApp {
                         .drag(response.drag_delta(), velocity, over_octopus);
                     if response.drag_stopped() {
                         self.octopus.set_eager(false);
-                        if let Some((bubble, home)) = self.stage.end_drag(over_octopus) {
-                            self.octopus.swallow(bubble, home);
+                        if let Some((bubble, home)) = self.stage.end_drag()
+                            && over_octopus
+                        {
+                            let mouth = self.octopus.swallow(bubble, home, time);
+                            self.stage.swallow(bubble, mouth);
                         }
                     }
                 }
@@ -376,14 +380,17 @@ impl eframe::App for HonuApp {
                 let key_before = self.api_key.clone();
                 let mut effects = Vec::new();
                 let dragging = self.stage.is_dragging();
-                let bubbles = self.stage.bubbles_mut();
-                let top = bubbles.len().saturating_sub(1);
-                for (i, bubble) in bubbles.iter_mut().enumerate() {
+                let front = self.stage.front();
+                for (i, bubble) in self.stage.bubbles_mut().iter_mut().enumerate() {
+                    if bubble.is_swallowed() {
+                        // Out of sight in the octopus's stomach.
+                        continue;
+                    }
                     render::paint_bubble(&painter, bubble);
                     if bubble.is_fully_open() {
                         // Only the front bubble's content takes input, so a bubble lying
                         // on top of another's content can still be grabbed.
-                        let interactive = i == top && !dragging;
+                        let interactive = Some(i) == front && !dragging;
                         let cx = (&mut effects, &mut self.api_key);
                         content_ui(ui, bubble, interactive, &mut self.apps, cx);
                     }
@@ -391,9 +398,6 @@ impl eframe::App for HonuApp {
                 self.apply(effects);
                 if self.api_key != key_before {
                     remember_api_key(frame, self.api_key.as_deref());
-                }
-                for bubble in self.octopus.swallowing() {
-                    render::paint_bubble(&painter, bubble);
                 }
                 self.octopus.paint(&painter, time);
                 self.turtle.paint(&painter);
