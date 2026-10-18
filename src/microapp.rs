@@ -278,7 +278,7 @@ mod tests {
         );
 
         let mut effects = Vec::new();
-        apps.update(&mut effects, &mut Services::with_api_key(None));
+        apps.update(&mut effects, &mut Services::fake(None, Default::default()));
         let rise = Effect::Gesture {
             target,
             gesture: Gesture::Rise,

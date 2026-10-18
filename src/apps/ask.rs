@@ -9,7 +9,7 @@ use eframe::egui::{self, Color32, FontId, RichText};
 
 use crate::claude;
 use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState};
-use crate::services::ApiKey;
+use crate::services::{ApiKey, Services};
 use crate::view::bubble::{Gesture, short_label};
 
 const ID: AppId = AppId("ask");
@@ -222,7 +222,7 @@ impl MicroApp for AskApp {
             .max_rect(view.rect);
         let (color, interactive) = (view.text_color, view.interactive);
         let response = ui.scope_builder(builder, |ui| {
-            chat.ui(state, ui, color, interactive, &mut cx.services.api_key)
+            chat.ui(state, ui, color, interactive, cx.services)
         });
         Some(response.inner)
     }
@@ -312,8 +312,9 @@ impl Chat {
         ui: &mut egui::Ui,
         color: Color32,
         interactive: bool,
-        api_key: &mut ApiKey,
+        services: &mut Services,
     ) -> f32 {
+        let Services { api_key, claude } = services;
         if let Some(message) = self.key_rejected.take() {
             api_key.clear();
             view.key_error = Some(message);
@@ -331,7 +332,9 @@ impl Chat {
             .show(ui, |ui| match api_key.get() {
                 None => view.key_ui(ui, color, interactive, api_key),
                 Some(key) if matches!(self.status, Status::Typing { .. }) => {
-                    self.question_ui(view, ui, color, interactive, key);
+                    if self.question_ui(view, ui, color, interactive) {
+                        self.ask(claude.as_ref(), key);
+                    }
                 }
                 Some(_) => self.answer_ui(ui, color),
             })
@@ -340,14 +343,14 @@ impl Chat {
         (content_height + CHROME_HEIGHT).clamp(START_HEIGHT, MAX_HEIGHT)
     }
 
+    /// Asks for a question. Returns whether one was just entered.
     fn question_ui(
         &mut self,
         view: &mut ChatView,
         ui: &mut egui::Ui,
         color: Color32,
         interactive: bool,
-        api_key: &str,
-    ) {
+    ) -> bool {
         if let Status::Typing { error: Some(error) } = &self.status {
             ui.add(egui::Label::new(error_text(error)).wrap());
         }
@@ -360,11 +363,13 @@ impl Chat {
                 .interactive(interactive),
         );
         view.take_focus(&response, interactive);
+        submitted(ui, &response) && !self.question.trim().is_empty()
+    }
+
+    /// Sends the question to Claude.
+    fn ask(&mut self, claude: &dyn claude::Client, api_key: &str) {
         let question = self.question.trim();
-        if !submitted(ui, &response) || question.is_empty() {
-            return;
-        }
-        self.stream = Some(claude::ask(api_key, question));
+        self.stream = Some(claude.ask(api_key, question));
         self.status = Status::Thinking;
         self.title = Some(short_label(question));
     }
@@ -416,9 +421,18 @@ mod tests {
     /// Runs `update` on `asks` and returns what it asked of the bubbles.
     fn update(asks: &mut AskApp) -> Vec<Effect> {
         let mut effects = Vec::new();
-        let mut services = Services::with_api_key(None);
+        let mut services = Services::fake(None, claude::Fake::default());
         asks.update(&mut Context::new(ID, &mut effects, &mut services));
         effects
+    }
+
+    /// A new chat in `asks` that has asked `question` through `claude`.
+    fn ask(asks: &mut AskApp, claude: &claude::Fake, question: &str) -> ItemId {
+        let item = asks.create();
+        let chat = asks.chats.get_mut(&item).unwrap();
+        chat.question = question.to_owned();
+        chat.ask(claude, "sk-ant-test");
+        item
     }
 
     #[test]
@@ -442,16 +456,15 @@ mod tests {
     #[test]
     fn finished_answers_and_failures_reach_the_bubbles() {
         let mut asks = AskApp::new();
-        let item = asks.create();
-        let (tx, rx) = mpsc::channel();
-        let chat = asks.chats.get_mut(&item).unwrap();
-        chat.stream = Some(rx);
-        chat.status = Status::Thinking;
+        let claude = claude::Fake::default();
+        let item = ask(&mut asks, &claude, "  Why is the sea salty? ");
+        assert_eq!(claude.asked(), ["Why is the sea salty?"]);
+        assert_eq!(asks.title(item), "Why is the sea salty?");
         assert!(asks.is_busy(item));
 
-        tx.send(claude::Event::Text("Salt.".to_owned())).unwrap();
+        claude.answer(0, claude::Event::Text("Salt.".to_owned()));
         assert!(update(&mut asks).is_empty());
-        tx.send(claude::Event::Done).unwrap();
+        claude.answer(0, claude::Event::Done);
         let target = ViewTarget { app: ID, item };
         let rise = Effect::Gesture {
             target,
@@ -461,10 +474,8 @@ mod tests {
         assert!(!asks.is_busy(item));
 
         // A chat whose stream breaks off before any answer needs the user.
-        let other = asks.create();
-        let (tx, rx) = mpsc::channel::<claude::Event>();
-        asks.chats.get_mut(&other).unwrap().stream = Some(rx);
-        drop(tx);
+        let other = ask(&mut asks, &claude, "And why is it wet?");
+        claude.hang_up(1);
         let target = ViewTarget {
             app: ID,
             item: other,

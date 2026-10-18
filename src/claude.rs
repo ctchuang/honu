@@ -1,7 +1,8 @@
-//! Asking Claude a question through the Messages API and streaming the
-//! answer back. There is no official Rust SDK, so this is raw HTTP over
-//! `ehttp`, which streams both natively (on a background thread) and in the
-//! browser (with `fetch`).
+//! Asking Claude a question and streaming the answer back. Microapps ask
+//! through a `Client`: `Api`, the Messages API, or a stand-in in tests.
+//! There is no official Rust SDK, so `Api` is raw HTTP over `ehttp`, which
+//! streams both natively (on a background thread) and in the browser (with
+//! `fetch`).
 
 use std::ops::ControlFlow;
 use std::sync::{Mutex, mpsc};
@@ -26,9 +27,73 @@ pub enum Event {
     KeyRejected(String),
 }
 
-/// Starts streaming Claude's answer to `question`. Events arrive on the
-/// returned channel; poll it every frame.
-pub fn ask(api_key: &str, question: &str) -> mpsc::Receiver<Event> {
+/// Asks Claude questions.
+pub trait Client {
+    /// Starts streaming Claude's answer to `question`. Events arrive on the
+    /// returned channel; poll it every frame.
+    fn ask(&self, api_key: &str, question: &str) -> mpsc::Receiver<Event>;
+}
+
+/// The Messages API.
+pub struct Api;
+
+impl Client for Api {
+    fn ask(&self, api_key: &str, question: &str) -> mpsc::Receiver<Event> {
+        ask(api_key, question)
+    }
+}
+
+/// A stand-in for the API in tests. It records the questions asked and
+/// keeps the sending end of each answer stream, for the test to answer;
+/// clones share them.
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub struct Fake {
+    streams: std::rc::Rc<std::cell::RefCell<Vec<FakeStream>>>,
+}
+
+/// A question asked of the `Fake`, and the sending end of its answer stream
+/// until hung up.
+#[cfg(test)]
+type FakeStream = (String, Option<mpsc::Sender<Event>>);
+
+#[cfg(test)]
+impl Fake {
+    /// The questions asked so far, in order.
+    pub fn asked(&self) -> Vec<String> {
+        self.streams
+            .borrow()
+            .iter()
+            .map(|(q, _)| q.clone())
+            .collect()
+    }
+
+    /// Sends `event` down the answer stream of the `i`th question.
+    pub fn answer(&self, i: usize, event: Event) {
+        let streams = self.streams.borrow();
+        let tx = streams[i].1.as_ref().expect("that stream was hung up");
+        tx.send(event).expect("nobody listens to that stream");
+    }
+
+    /// Breaks off the answer stream of the `i`th question.
+    pub fn hang_up(&self, i: usize) {
+        self.streams.borrow_mut()[i].1 = None;
+    }
+}
+
+#[cfg(test)]
+impl Client for Fake {
+    fn ask(&self, _api_key: &str, question: &str) -> mpsc::Receiver<Event> {
+        let (tx, rx) = mpsc::channel();
+        self.streams
+            .borrow_mut()
+            .push((question.to_owned(), Some(tx)));
+        rx
+    }
+}
+
+/// Starts streaming Claude's answer to `question` from the Messages API.
+fn ask(api_key: &str, question: &str) -> mpsc::Receiver<Event> {
     let (tx, rx) = mpsc::channel();
     let body = serde_json::json!({
         "model": MODEL,

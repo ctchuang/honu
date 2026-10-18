@@ -1,5 +1,7 @@
-//! The services microapps share, handed to them in their `Context`: for now,
-//! the key for asking Claude.
+//! The services microapps share, handed to them in their `Context`: the
+//! key for asking Claude, and the client that asks.
+
+use crate::claude;
 
 /// Storage key for the Claude API key the web version asks for. The desktop
 /// version reads `ANTHROPIC_API_KEY` from `.env` instead and stores nothing.
@@ -8,6 +10,7 @@ const API_KEY_KEY: &str = "anthropic_api_key";
 
 pub struct Services {
     pub api_key: ApiKey,
+    pub claude: Box<dyn claude::Client>,
 }
 
 impl Services {
@@ -16,14 +19,16 @@ impl Services {
     pub fn load(storage: Option<&dyn eframe::Storage>) -> Self {
         Self {
             api_key: ApiKey::new(initial_api_key(storage)),
+            claude: Box::new(claude::Api),
         }
     }
 
-    /// Services with just `key`, for tests.
+    /// Services for tests, with `key` and a stand-in for the API.
     #[cfg(test)]
-    pub fn with_api_key(key: Option<&str>) -> Self {
+    pub fn fake(key: Option<&str>, claude: claude::Fake) -> Self {
         Self {
             api_key: ApiKey::new(key.map(str::to_owned)),
+            claude: Box::new(claude),
         }
     }
 
