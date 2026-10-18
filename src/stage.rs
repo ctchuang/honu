@@ -4,7 +4,7 @@
 
 use eframe::egui::{Pos2, Rect, Vec2, vec2};
 
-use crate::bubble::Bubble;
+use crate::bubble::{Bubble, Gesture};
 use crate::microapp::ViewTarget;
 use crate::physics;
 
@@ -41,6 +41,15 @@ impl Stage {
     /// Whether any bubble shows `target`.
     pub fn shows(&self, target: ViewTarget) -> bool {
         self.bubbles.iter().any(|b| b.target == target)
+    }
+
+    /// Has every bubble showing `target` play `gesture`.
+    pub fn play(&mut self, target: ViewTarget, gesture: Gesture) {
+        for bubble in &mut self.bubbles {
+            if bubble.target == target {
+                bubble.play(gesture);
+            }
+        }
     }
 
     /// Index of the topmost bubble under `p`, if any. Bubbles still flying

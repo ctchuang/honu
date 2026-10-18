@@ -11,9 +11,9 @@ mod turtle;
 
 use apps::ask::{self, AskApp};
 use apps::notes::{self, NotesApp};
-use bubble::{Bubble, Gesture};
+use bubble::Bubble;
 use eframe::egui::{self, CursorIcon, Pos2, Sense, ViewportCommand};
-use microapp::{Appearance, ViewTarget};
+use microapp::{Appearance, Context, Effect, View, ViewTarget};
 use octopus::Octopus;
 use stage::Stage;
 use turtle::Turtle;
@@ -240,6 +240,15 @@ impl HonuApp {
         }
     }
 
+    /// Carries out what the microapps asked of their bubbles.
+    fn apply(&mut self, effects: Vec<Effect>) {
+        for effect in effects {
+            match effect {
+                Effect::Gesture { target, gesture } => self.stage.play(target, gesture),
+            }
+        }
+    }
+
     /// Records where the turtle rests, if it has been dragged.
     fn store_turtle(&self, storage: &mut dyn eframe::Storage) {
         let offset = self
@@ -421,22 +430,17 @@ impl eframe::App for HonuApp {
                     }
                 }
 
+                // Let the microapps catch up, then show on each bubble what its
+                // item is doing: an Ask bubble breathes while Claude works.
+                let mut effects = Vec::new();
+                self.asks
+                    .update(&mut Context::new(ask::ID, &mut effects, &mut self.api_key));
                 for bubble in self.stage.bubbles_mut() {
+                    let ViewTarget { app, item } = bubble.target;
                     bubble.label = title(&self.notes, &self.asks, bubble.target);
-                    // Show what an Ask bubble is doing: it breathes while Claude
-                    // works, floats up when the answer is in, and wobbles when
-                    // something needs the user.
-                    if bubble.target.app == ask::ID {
-                        let item = bubble.target.item;
-                        let outcome = self.asks.poll(item);
-                        bubble.set_busy(self.asks.is_busy(item));
-                        match outcome {
-                            Some(ask::Outcome::Answered) => bubble.play(Gesture::Rise),
-                            Some(ask::Outcome::NeedsAttention) => bubble.play(Gesture::Wobble),
-                            None => {}
-                        }
-                    }
+                    bubble.set_busy(app == ask::ID && self.asks.is_busy(item));
                 }
+                self.apply(effects);
                 self.stage.step(canvas, time, dt);
                 // Bubbles are always drifting, so keep animating.
                 ui.ctx().request_repaint();
@@ -456,6 +460,7 @@ impl eframe::App for HonuApp {
                     render::paint_background(&painter, canvas);
                 }
                 let key_before = self.api_key.clone();
+                let mut effects = Vec::new();
                 let dragging = self.stage.is_dragging();
                 let bubbles = self.stage.bubbles_mut();
                 let top = bubbles.len().saturating_sub(1);
@@ -466,9 +471,11 @@ impl eframe::App for HonuApp {
                         // on top of another's content can still be grabbed.
                         let interactive = i == top && !dragging;
                         let apps = (&mut self.notes, &mut self.asks);
-                        content_ui(ui, bubble, interactive, apps, &mut self.api_key);
+                        let cx = (&mut effects, &mut self.api_key);
+                        content_ui(ui, bubble, interactive, apps, cx);
                     }
                 }
+                self.apply(effects);
                 if self.api_key != key_before {
                     remember_api_key(frame, self.api_key.as_deref());
                 }
@@ -598,22 +605,26 @@ fn title(notes: &NotesApp, asks: &AskApp, target: ViewTarget) -> String {
 }
 
 /// Draws an opened bubble's content inside its panel, below the title, from
-/// the microapp that keeps it.
+/// the microapp that keeps it. What the microapp asks for goes into `effects`.
 fn content_ui(
     ui: &mut egui::Ui,
     bubble: &mut Bubble,
     interactive: bool,
     (notes, asks): (&mut NotesApp, &mut AskApp),
-    api_key: &mut Option<String>,
+    (effects, api_key): (&mut Vec<Effect>, &mut Option<String>),
 ) {
     let body = bubble.shape().rect().shrink(22.0);
-    let body = body.with_min_y(body.top() + 34.0);
-    let color = render::text_color(bubble);
-    let item = bubble.target.item;
-    match bubble.target.app {
-        notes::ID => notes.ui(item, ui, body, color, interactive),
+    let view = View {
+        rect: body.with_min_y(body.top() + 34.0),
+        text_color: render::text_color(bubble),
+        interactive,
+    };
+    let ViewTarget { app, item } = bubble.target;
+    let mut cx = Context::new(app, effects, api_key);
+    match app {
+        notes::ID => notes.ui(item, ui, &view, &mut cx),
         ask::ID => {
-            if let Some(height) = asks.ui(item, ui, body, color, interactive, api_key) {
+            if let Some(height) = asks.ui(item, ui, &view, &mut cx) {
                 bubble.set_panel_height(height);
             }
         }

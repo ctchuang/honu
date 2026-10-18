@@ -7,9 +7,9 @@ use std::sync::mpsc;
 
 use eframe::egui::{self, Color32, FontId, Rect, RichText};
 
-use crate::bubble::short_label;
+use crate::bubble::{Gesture, short_label};
 use crate::claude;
-use crate::microapp::{AppId, Appearance, ItemId, ItemIds};
+use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, View};
 
 pub const ID: AppId = AppId("ask");
 /// A soft, slightly warm white, like paper.
@@ -62,7 +62,7 @@ struct Chat {
 
 /// How an asked question came to an end, for the bubble to show.
 #[derive(Debug, PartialEq)]
-pub enum Outcome {
+enum Outcome {
     /// The whole answer arrived.
     Answered,
     /// The request failed or the key was refused; the user has to act.
@@ -111,26 +111,32 @@ impl AskApp {
         self.chats.get(&item).is_some_and(Chat::is_busy)
     }
 
-    /// Takes in whatever a chat's answer stream has delivered, and reports how
-    /// the question ended if it just did. Call every frame.
-    pub fn poll(&mut self, item: ItemId) -> Option<Outcome> {
-        self.chats.get_mut(&item).and_then(Chat::poll)
+    /// Takes in whatever the answer streams have delivered. A chat's bubbles
+    /// float up when its answer is in, and wobble when something needs the
+    /// user. Call every frame.
+    pub fn update(&mut self, cx: &mut Context) {
+        for (&item, chat) in &mut self.chats {
+            match chat.poll() {
+                Some(Outcome::Answered) => cx.play(item, Gesture::Rise),
+                Some(Outcome::NeedsAttention) => cx.play(item, Gesture::Wobble),
+                None => {}
+            }
+        }
     }
 
-    /// Shows a chat in `rect` and returns the panel height that fits it.
-    /// Without an `api_key` it first asks for one and stores it there; a key
-    /// the API refused is cleared from it.
+    /// Shows a chat and returns the panel height that fits it. Without an
+    /// API key it first asks for one and stores it in `cx`; a key the API
+    /// refused is cleared from it.
     pub fn ui(
         &mut self,
         item: ItemId,
         ui: &mut egui::Ui,
-        rect: Rect,
-        color: Color32,
-        interactive: bool,
-        api_key: &mut Option<String>,
+        view: &View,
+        cx: &mut Context,
     ) -> Option<f32> {
         let chat = self.chats.get_mut(&item)?;
-        Some(chat.ui(ui, item, rect, color, interactive, api_key))
+        let (rect, color, interactive) = (view.rect, view.text_color, view.interactive);
+        Some(chat.ui(ui, item, rect, color, interactive, cx.api_key))
     }
 
     /// Forgets a chat, which also stops its answer from streaming in.
@@ -355,4 +361,54 @@ fn error_text(message: &str) -> RichText {
 /// Whether Enter was pressed in the single-line field of `response`.
 fn submitted(ui: &egui::Ui, response: &egui::Response) -> bool {
     response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::microapp::{Effect, ViewTarget};
+
+    /// Runs `update` on `asks` and returns what it asked of the bubbles.
+    fn update(asks: &mut AskApp) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        asks.update(&mut Context::new(ID, &mut effects, &mut None));
+        effects
+    }
+
+    #[test]
+    fn finished_answers_and_failures_reach_the_bubbles() {
+        let mut asks = AskApp::new();
+        let item = asks.create();
+        let (tx, rx) = mpsc::channel();
+        let chat = asks.chats.get_mut(&item).unwrap();
+        chat.stream = Some(rx);
+        chat.status = Status::Thinking;
+        assert!(asks.is_busy(item));
+
+        tx.send(claude::Event::Text("Salt.".to_owned())).unwrap();
+        assert!(update(&mut asks).is_empty());
+        tx.send(claude::Event::Done).unwrap();
+        let target = ViewTarget { app: ID, item };
+        let rise = Effect::Gesture {
+            target,
+            gesture: Gesture::Rise,
+        };
+        assert_eq!(update(&mut asks), vec![rise]);
+        assert!(!asks.is_busy(item));
+
+        // A chat whose stream breaks off before any answer needs the user.
+        let other = asks.create();
+        let (tx, rx) = mpsc::channel::<claude::Event>();
+        asks.chats.get_mut(&other).unwrap().stream = Some(rx);
+        drop(tx);
+        let target = ViewTarget {
+            app: ID,
+            item: other,
+        };
+        let wobble = Effect::Gesture {
+            target,
+            gesture: Gesture::Wobble,
+        };
+        assert_eq!(update(&mut asks), vec![wobble]);
+    }
 }

@@ -4,10 +4,10 @@
 
 use std::collections::BTreeMap;
 
-use eframe::egui::{self, Color32, FontId, Rect};
+use eframe::egui::{self, Color32, FontId};
 
 use crate::bubble::short_label;
-use crate::microapp::{AppId, Appearance, ItemId, ItemIds};
+use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, View};
 
 pub const ID: AppId = AppId("notes");
 /// The label of a note with nothing written in it yet.
@@ -63,18 +63,12 @@ impl NotesApp {
             .map_or_else(|| EMPTY_LABEL.to_owned(), short_label)
     }
 
-    /// Shows a note's text for editing in `rect`.
-    pub fn ui(
-        &mut self,
-        item: ItemId,
-        ui: &mut egui::Ui,
-        rect: Rect,
-        color: Color32,
-        interactive: bool,
-    ) {
+    /// Shows a note's text for editing.
+    pub fn ui(&mut self, item: ItemId, ui: &mut egui::Ui, view: &View, _cx: &mut Context) {
         let Some(note) = self.notes.get_mut(&item) else {
             return;
         };
+        let (rect, color, interactive) = (view.rect, view.text_color, view.interactive);
         ui.scope_builder(
             egui::UiBuilder::new().id_salt((ID, item)).max_rect(rect),
             |ui| {
