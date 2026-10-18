@@ -1,19 +1,38 @@
 mod bubble;
+mod desktop;
 mod physics;
 mod render;
 
 use bubble::{Bubble, Content};
-use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, pos2};
+use eframe::egui::{
+    self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand, WindowLevel, pos2,
+};
+
+/// Size of the window in `--windowed` mode, which the starting layout is designed for.
+const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 
 fn main() -> eframe::Result {
+    // By default the bubbles float on the real desktop; `--windowed` shows them in
+    // an ordinary window with its own wallpaper instead.
+    let floating = !std::env::args().any(|arg| arg == "--windowed");
+    let viewport = if floating {
+        egui::ViewportBuilder::default()
+            .with_transparent(true)
+            .with_decorations(false)
+            .with_has_shadow(false)
+            .with_window_level(WindowLevel::AlwaysOnTop)
+            .with_inner_size(WINDOWED_SIZE)
+    } else {
+        egui::ViewportBuilder::default().with_inner_size(WINDOWED_SIZE)
+    };
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1100.0, 750.0]),
+        viewport,
         ..Default::default()
     };
     eframe::run_native(
         "Honu",
         options,
-        Box::new(|_cc| Ok(Box::<HonuApp>::default())),
+        Box::new(move |_cc| Ok(Box::new(HonuApp::new(floating)))),
     )
 }
 
@@ -22,10 +41,17 @@ struct HonuApp {
     bubbles: Vec<Bubble>,
     /// True while the top bubble is being dragged.
     dragging: bool,
+    /// Whether the window floats on the real desktop rather than showing a wallpaper.
+    floating: bool,
+    /// Whether clicks currently pass through the window to the apps below.
+    passthrough: bool,
+    /// The canvas in the previous frame, used to keep the bubbles centered when
+    /// the window changes size.
+    last_canvas: Option<egui::Rect>,
 }
 
-impl Default for HonuApp {
-    fn default() -> Self {
+impl HonuApp {
+    fn new(floating: bool) -> Self {
         let rgb = Color32::from_rgb;
         let notes = Content::Notes(
             "Double-click a bubble to open it, and double-click its edge or title to close it."
@@ -46,14 +72,31 @@ impl Default for HonuApp {
         Self {
             bubbles,
             dragging: false,
+            floating,
+            passthrough: false,
+            last_canvas: None,
         }
     }
-}
 
-impl HonuApp {
     /// Index of the topmost bubble under `p`, if any.
     fn hit_test(&self, p: Pos2) -> Option<usize> {
         self.bubbles.iter().rposition(|b| b.contains(p))
+    }
+
+    /// Lets clicks through to the apps below unless the mouse is on a bubble.
+    fn update_passthrough(&mut self, ui: &egui::Ui) {
+        let Some(window) = ui.input(|i| i.viewport().inner_rect) else {
+            return;
+        };
+        let Some(cursor) = desktop::global_cursor() else {
+            return;
+        };
+        let on_bubble = self.dragging || self.hit_test(cursor - window.min.to_vec2()).is_some();
+        if self.passthrough == on_bubble {
+            self.passthrough = !on_bubble;
+            ui.ctx()
+                .send_viewport_cmd(ViewportCommand::MousePassthrough(self.passthrough));
+        }
     }
 
     /// Moves bubble `i` to the top of the stack.
@@ -64,6 +107,14 @@ impl HonuApp {
 }
 
 impl eframe::App for HonuApp {
+    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        if self.floating {
+            [0.0; 4]
+        } else {
+            visuals.panel_fill.to_normalized_gamma_f32()
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
@@ -71,6 +122,31 @@ impl eframe::App for HonuApp {
                 let (response, painter) =
                     ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
                 let canvas = response.rect;
+
+                if self.last_canvas.is_none() && self.floating {
+                    // Fill the screen except the menu bar and Dock. Asking for this when
+                    // the window is created has no effect on a borderless window on macOS.
+                    ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
+                }
+                // Keep the bubbles centered when the window changes size. The starting
+                // layout is designed for the windowed size.
+                let last_center = self
+                    .last_canvas
+                    .map_or((WINDOWED_SIZE / 2.0).to_pos2(), |rect| rect.center());
+                let offset = canvas.center() - last_center;
+                if offset != egui::Vec2::ZERO {
+                    for bubble in &mut self.bubbles {
+                        bubble.center += offset;
+                    }
+                }
+                self.last_canvas = Some(canvas);
+                if self.floating {
+                    self.update_passthrough(ui);
+                    // A borderless window has no close button, so handle ⌘Q ourselves.
+                    if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Q)) {
+                        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+                    }
+                }
 
                 // Any press on a bubble brings it to the front, including presses on
                 // an opened bubble's content, which the canvas response never sees.
@@ -126,7 +202,9 @@ impl eframe::App for HonuApp {
                     ui.ctx().set_cursor_icon(CursorIcon::Grab);
                 }
 
-                render::paint_background(&painter, canvas);
+                if !self.floating {
+                    render::paint_background(&painter, canvas);
+                }
                 let top = self.bubbles.len() - 1;
                 for (i, bubble) in self.bubbles.iter_mut().enumerate() {
                     render::paint_bubble(&painter, bubble);
