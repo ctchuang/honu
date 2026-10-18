@@ -16,8 +16,6 @@ use turtle::Turtle;
 /// Size of the window in `--windowed` mode. The app starts out laid out for it
 /// and recenters on the real window in the first frame.
 const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
-/// Seconds the turtle must be held, without dragging, to open its menu.
-const LONG_PRESS_SECONDS: f64 = 0.5;
 /// How far a bubble must be dragged before the octopus comes up, so nudging
 /// a bubble into place does not call it.
 const SUMMON_DISTANCE: f32 = 40.0;
@@ -93,7 +91,7 @@ fn main() {
     });
 }
 
-/// The turtle's menu, opened by a right-click or a long press on it.
+/// The turtle's menu, opened by clicking it with either button.
 struct TurtleMenu {
     /// Top-left corner, where the pointer was when it opened.
     pos: Pos2,
@@ -120,12 +118,9 @@ struct HonuApp {
     drag_home: Pos2,
     /// True while the turtle is being dragged.
     dragging_turtle: bool,
-    /// When the primary button went down on the turtle, while it is still
-    /// held and could become a long press.
-    turtle_pressed_at: Option<f64>,
-    /// Set when a long press opened the menu, so releasing the button does not
-    /// also count as a click on the turtle.
-    long_pressed: bool,
+    /// Set when pressing the turtle closed its menu, so the click that press
+    /// ends in does not open the menu again.
+    menu_dismissed: bool,
     /// The turtle's menu, while open.
     menu: Option<TurtleMenu>,
     /// The key for asking Claude, once known.
@@ -155,8 +150,7 @@ impl HonuApp {
             dragging: false,
             drag_home: Pos2::ZERO,
             dragging_turtle: false,
-            turtle_pressed_at: None,
-            long_pressed: false,
+            menu_dismissed: false,
             menu: None,
             api_key: initial_api_key(storage),
             floating,
@@ -352,6 +346,9 @@ impl eframe::App for HonuApp {
                     let outside = any_pressed_at.is_some_and(|p| !menu.contains(p));
                     if outside || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                         self.menu = None;
+                        // Clicking the turtle again closes the menu, like a toggle.
+                        self.menu_dismissed =
+                            any_pressed_at.is_some_and(|p| self.turtle.contains(p));
                     }
                 }
                 let on_menu = |p: Pos2| self.menu.as_ref().is_some_and(|menu| menu.contains(p));
@@ -370,30 +367,7 @@ impl eframe::App for HonuApp {
                     self.raise(i);
                 }
 
-                // Right-clicking or long-pressing the turtle opens its menu.
-                if pressed_at.is_some_and(|p| self.turtle.contains(p)) {
-                    self.turtle_pressed_at = Some(time);
-                }
-                let (down, pointer) =
-                    ui.input(|i| (i.pointer.primary_down(), i.pointer.latest_pos()));
-                if let Some(start) = self.turtle_pressed_at {
-                    if !down || self.dragging_turtle {
-                        self.turtle_pressed_at = None;
-                    } else if time - start >= LONG_PRESS_SECONDS {
-                        self.turtle_pressed_at = None;
-                        self.long_pressed = true;
-                        if let Some(pos) = pointer {
-                            self.menu = Some(TurtleMenu { pos, rect: None });
-                        }
-                    }
-                }
-                let right_clicked_at = response
-                    .secondary_clicked()
-                    .then(|| response.interact_pointer_pos())
-                    .flatten();
-                if let Some(pos) = right_clicked_at.filter(|&p| self.turtle.contains(p)) {
-                    self.menu = Some(TurtleMenu { pos, rect: None });
-                }
+                let pointer = ui.input(|i| i.pointer.latest_pos());
 
                 if response.drag_started() {
                     let origin = ui.input(|i| i.pointer.press_origin());
@@ -440,10 +414,12 @@ impl eframe::App for HonuApp {
                     }
                 }
 
-                let clicked_turtle = response.clicked()
-                    && response
-                        .interact_pointer_pos()
-                        .is_some_and(|p| self.turtle.contains(p));
+                // Clicking the turtle with either button opens its menu where the
+                // pointer is. A tap counts too, so it works on touch screens.
+                let turtle_clicked_at = (response.clicked() || response.secondary_clicked())
+                    .then(|| response.interact_pointer_pos())
+                    .flatten()
+                    .filter(|&p| self.turtle.contains(p));
                 let clicked_octopus = response.clicked()
                     && response
                         .interact_pointer_pos()
@@ -454,11 +430,14 @@ impl eframe::App for HonuApp {
                 if clicked_octopus || undo_key {
                     self.undo_delete(time);
                 }
-                if clicked_turtle && !self.long_pressed {
+                if let Some(pos) = turtle_clicked_at
+                    && !self.menu_dismissed
+                {
                     self.turtle.hop(time);
+                    self.menu = Some(TurtleMenu { pos, rect: None });
                 }
-                if ui.input(|i| i.pointer.primary_released()) {
-                    self.long_pressed = false;
+                if ui.input(|i| i.pointer.any_released()) {
+                    self.menu_dismissed = false;
                 }
 
                 if response.double_clicked() {
@@ -563,7 +542,7 @@ fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) -> Option<MenuItem
                     if ui.add(item("Add Note")).clicked() {
                         chosen = Some(MenuItem::AddNote);
                     }
-                    if ui.add(item("Ask…")).clicked() {
+                    if ui.add(item("Ask AI")).clicked() {
                         chosen = Some(MenuItem::Ask);
                     }
                     #[cfg(not(target_arch = "wasm32"))]

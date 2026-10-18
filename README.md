@@ -41,7 +41,7 @@ in the [Claude Console](https://console.anthropic.com/settings/keys). Never comm
 `.env` or put your key anywhere else in the repository; only the empty template
 `.env.example` is tracked.
 
-The **Ask…** item in the turtle's menu uses it. Without one, the Ask bubble asks you to
+The **Ask AI** item in the turtle's menu uses it. Without one, the Ask bubble asks you to
 paste a key, which the desktop app keeps only until it quits. The web version keeps a
 pasted key in that browser's local storage, since a web page cannot read `.env`.
 
@@ -65,8 +65,8 @@ handy during development.
 
 - Honu starts with just a little pixel turtle in the bottom-left corner. **Drag** it to
   move it anywhere. It stays where you leave it, even after you quit and reopen Honu.
-- **Right-click** or **long-press** the turtle for its menu: **Add Note** makes it spit out
-  a note to write in, **Ask…** a bubble where you can ask Claude a question, and **Exit**
+- **Click** or **right-click** the turtle for its menu: **Add Note** makes it spit out
+  a note to write in, **Ask AI** a bubble where you can ask Claude a question, and **Exit**
   quits Honu. A closed note shows its first line.
 - **Drag** a bubble to move it, and **throw** it to let it glide.
 - To delete a bubble, drag it to the pixel octopus that comes up in a bottom corner
