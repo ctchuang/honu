@@ -29,4 +29,4 @@ Note that egui 0.37's `App` trait uses `fn ui(&mut self, ui: &mut egui::Ui, fram
 
 ## Conventions
 
-- All user-facing UI text must be in English.
+- Everything in the repository must be in English: identifiers, comments, UI strings, docs, and commit messages — even when the conversation is in Chinese.
