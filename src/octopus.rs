@@ -87,6 +87,9 @@ pub struct Octopus {
     swallowing: Vec<Swallowed>,
     /// Bubbles swallowed recently enough to be brought back, the latest last.
     stomach: Vec<Swallowed>,
+    /// Where the "Click to undo" hint was drawn last frame. It takes clicks
+    /// like the octopus itself, since it looks like a button.
+    hint: Option<Rect>,
 }
 
 impl Octopus {
@@ -101,6 +104,7 @@ impl Octopus {
             undo_until: f64::NEG_INFINITY,
             swallowing: Vec::new(),
             stomach: Vec::new(),
+            hint: None,
         }
     }
 
@@ -119,10 +123,13 @@ impl Octopus {
         self.shown > 0.5 && (p - self.middle()).length() < REACH
     }
 
-    /// Whether `p` is on one of the octopus's visible pixels.
+    /// Whether `p` is on one of the octopus's visible pixels or on its undo hint.
     pub fn contains(&self, p: Pos2) -> bool {
         if self.shown == 0.0 {
             return false;
+        }
+        if self.can_undo() && self.hint.is_some_and(|hint| hint.contains(p)) {
+            return true;
         }
         let rel = (p - self.origin) / PIXEL;
         if rel.x < 0.0 || rel.y < 0.0 {
@@ -215,7 +222,8 @@ impl Octopus {
         self.origin = pos2(x, canvas.bottom() - MARGIN - size.y + hidden - lift).round();
     }
 
-    pub fn paint(&self, painter: &Painter, time: f64) {
+    pub fn paint(&mut self, painter: &Painter, time: f64) {
+        self.hint = None;
         if self.shown == 0.0 {
             return;
         }
@@ -243,6 +251,7 @@ impl Octopus {
             let pill = Rect::from_center_size(center, text.size() + vec2(16.0, 8.0));
             let fill = Color32::from_rgba_unmultiplied(40, 20, 34, 200).gamma_multiply(fade);
             painter.rect_filled(pill, CornerRadius::same(255), fill);
+            self.hint = Some(pill);
             painter.galley(
                 Align2::CENTER_CENTER
                     .align_size_within_rect(text.size(), pill)
@@ -365,7 +374,16 @@ mod tests {
             "hid while it could undo"
         );
 
+        // The hint above it takes clicks too, but only while it applies.
+        let hint = Rect::from_center_size(octopus.origin - vec2(0.0, 18.0), vec2(90.0, 24.0));
+        octopus.hint = Some(hint);
+        assert!(octopus.contains(hint.center()), "hint does not take clicks");
+
         let mut bubble = octopus.spit_back(time).expect("nothing to spit back");
+        assert!(
+            !octopus.contains(hint.center()),
+            "hint takes clicks with nothing to undo"
+        );
         assert!(!octopus.can_undo());
         for _ in 0..200 {
             bubble.animate(DT);
