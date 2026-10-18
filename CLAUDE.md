@@ -34,3 +34,4 @@ Note that egui 0.37's `App` trait uses `fn ui(&mut self, ui: &mut egui::Ui, fram
 
 - Everything in the repository must be in English: identifiers, comments, UI strings, docs, and commit messages — even when the conversation is in Chinese.
 - After changing Rust code, run `cargo clippy --all-targets` and `cargo fmt --check` before reporting the work as done, and fix any warnings they raise.
+- The Claude API key lives in `.env` at the repository root as `ANTHROPIC_API_KEY` (the name the Anthropic SDKs read). `.env` and `.env.*` are git-ignored; only the empty template `.env.example` is committed. Never read, print, or commit `.env`, and never put a key anywhere else in the repository.
