@@ -64,6 +64,8 @@ handy during development.
 - Honu starts with just a little pixel turtle in the bottom-left corner. **Click** it to
   release the bubbles, and **drag** it to move it anywhere. It stays where you leave it,
   even after you quit and reopen Honu.
+- **Right-click** or **long-press** the turtle for its menu, which has **Exit** to quit
+  Honu.
 - **Drag** a bubble to move it, and **throw** it to let it glide.
 - **Double-click** a bubble to open it into a panel; double-click its title or edge to
   close it again.

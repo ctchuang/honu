@@ -12,6 +12,8 @@ use turtle::Turtle;
 
 /// Size of the window in `--windowed` mode, which the starting layout is designed for.
 const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
+/// Seconds the turtle must be held, without dragging, to open its menu.
+const LONG_PRESS_SECONDS: f64 = 0.5;
 /// Seconds between bubbles coming out of the turtle's mouth.
 const RELEASE_INTERVAL: f64 = 0.5;
 
@@ -44,6 +46,20 @@ fn main() -> eframe::Result {
     )
 }
 
+/// The turtle's menu, opened by a right-click or a long press on it.
+struct TurtleMenu {
+    /// Top-left corner, where the pointer was when it opened.
+    pos: Pos2,
+    /// Where it was drawn last frame, for telling presses on it from presses outside.
+    rect: Option<egui::Rect>,
+}
+
+impl TurtleMenu {
+    fn contains(&self, p: Pos2) -> bool {
+        self.rect.is_some_and(|rect| rect.contains(p))
+    }
+}
+
 struct HonuApp {
     /// Bubbles in back-to-front paint order; the last one is on top.
     bubbles: Vec<Bubble>,
@@ -57,6 +73,14 @@ struct HonuApp {
     dragging: bool,
     /// True while the turtle is being dragged.
     dragging_turtle: bool,
+    /// When the primary button went down on the turtle, while it is still
+    /// held and could become a long press.
+    turtle_pressed_at: Option<f64>,
+    /// Set when a long press opened the menu, so releasing the button does not
+    /// also count as a click on the turtle.
+    long_pressed: bool,
+    /// The turtle's menu, while open.
+    menu: Option<TurtleMenu>,
     /// Whether the window floats on the real desktop rather than showing a wallpaper.
     floating: bool,
     /// Whether clicks currently pass through the window to the apps below.
@@ -101,6 +125,9 @@ impl HonuApp {
             turtle,
             dragging: false,
             dragging_turtle: false,
+            turtle_pressed_at: None,
+            long_pressed: false,
+            menu: None,
             floating,
             passthrough: false,
             last_canvas: None,
@@ -128,7 +155,10 @@ impl HonuApp {
             return;
         };
         let p = cursor - window.min.to_vec2();
-        let on_bubble = self.dragging
+        // An open menu takes every click, like a native menu: a click outside
+        // it only closes it.
+        let on_bubble = self.menu.is_some()
+            || self.dragging
             || self.dragging_turtle
             || self.hit_test(p).is_some()
             || self.turtle.contains(p);
@@ -225,16 +255,58 @@ impl eframe::App for HonuApp {
                     }
                 }
 
-                // Any press on a bubble brings it to the front, including presses on
-                // an opened bubble's content, which the canvas response never sees.
-                let pressed_at = ui.input(|i| {
+                // Pressing anywhere outside the menu, or Escape, closes it.
+                let any_pressed_at = ui.input(|i| {
                     i.pointer
-                        .primary_pressed()
+                        .any_pressed()
                         .then(|| i.pointer.interact_pos())
                         .flatten()
                 });
+                if let Some(menu) = &self.menu {
+                    let outside = any_pressed_at.is_some_and(|p| !menu.contains(p));
+                    if outside || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        self.menu = None;
+                    }
+                }
+                let on_menu = |p: Pos2| self.menu.as_ref().is_some_and(|menu| menu.contains(p));
+
+                // Any press on a bubble brings it to the front, including presses on
+                // an opened bubble's content, which the canvas response never sees.
+                let pressed_at = ui
+                    .input(|i| {
+                        i.pointer
+                            .primary_pressed()
+                            .then(|| i.pointer.interact_pos())
+                            .flatten()
+                    })
+                    .filter(|&p| !on_menu(p));
                 if let Some(i) = pressed_at.and_then(|p| self.hit_test(p)) {
                     self.raise(i);
+                }
+
+                // Right-clicking or long-pressing the turtle opens its menu.
+                if pressed_at.is_some_and(|p| self.turtle.contains(p)) {
+                    self.turtle_pressed_at = Some(time);
+                }
+                let (down, pointer) =
+                    ui.input(|i| (i.pointer.primary_down(), i.pointer.latest_pos()));
+                if let Some(start) = self.turtle_pressed_at {
+                    if !down || self.dragging_turtle {
+                        self.turtle_pressed_at = None;
+                    } else if time - start >= LONG_PRESS_SECONDS {
+                        self.turtle_pressed_at = None;
+                        self.long_pressed = true;
+                        if let Some(pos) = pointer {
+                            self.menu = Some(TurtleMenu { pos, rect: None });
+                        }
+                    }
+                }
+                let right_clicked_at = response
+                    .secondary_clicked()
+                    .then(|| response.interact_pointer_pos())
+                    .flatten();
+                if let Some(pos) = right_clicked_at.filter(|&p| self.turtle.contains(p)) {
+                    self.menu = Some(TurtleMenu { pos, rect: None });
                 }
 
                 if response.drag_started() {
@@ -275,11 +347,14 @@ impl eframe::App for HonuApp {
                     && response
                         .interact_pointer_pos()
                         .is_some_and(|p| self.turtle.contains(p));
-                if clicked_turtle {
+                if clicked_turtle && !self.long_pressed {
                     self.turtle.hop(time);
                     if self.next_release.is_none() && !self.pending.is_empty() {
                         self.next_release = Some(time);
                     }
+                }
+                if ui.input(|i| i.pointer.primary_released()) {
+                    self.long_pressed = false;
                 }
                 self.release_due(time);
 
@@ -325,7 +400,30 @@ impl eframe::App for HonuApp {
                     }
                 }
                 self.turtle.paint(&painter);
+                if let Some(menu) = &mut self.menu {
+                    turtle_menu_ui(ui.ctx(), menu);
+                }
             });
+    }
+}
+
+/// Shows the turtle's menu and carries out the chosen item.
+fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) {
+    let area = egui::Area::new(egui::Id::unique("turtle_menu"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(menu.pos)
+        .show(ctx, |ui| {
+            egui::Frame::menu(ui.style())
+                .show(ui, |ui| {
+                    // As wide as its text, with no button frame until hovered.
+                    let item = |text| egui::Button::new(text).frame_when_inactive(false);
+                    ui.add(item("Exit")).clicked()
+                })
+                .inner
+        });
+    menu.rect = Some(area.response.rect);
+    if area.inner {
+        ctx.send_viewport_cmd(ViewportCommand::Close);
     }
 }
 
