@@ -3,9 +3,11 @@
 //! the desktop are only views: each one shows one item of one microapp and
 //! points at it by id, so a microapp can have any number of bubbles.
 
+use std::any::Any;
+
 use eframe::egui::{self, Color32, Rect};
 
-use crate::view::bubble::Gesture;
+use crate::view::bubble::{BubbleId, Gesture};
 
 /// Names a microapp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -55,13 +57,23 @@ impl ItemIds {
     }
 }
 
+/// What one bubble keeps for itself about the item it shows, such as a draft
+/// or whether its text field still has to take the focus, apart from the
+/// item's data. Each microapp makes its own kind (`MicroApp::new_view`).
+pub type ViewState = Box<dyn Any>;
+
 /// Where and how an item's content is drawn in an open bubble.
-pub struct View {
+pub struct View<'a> {
+    /// The bubble drawn in; salting widget ids with it keeps the widgets of
+    /// two bubbles apart even when they show the same item.
+    pub bubble: BubbleId,
     /// The panel's body, below its title.
     pub rect: Rect,
     pub text_color: Color32,
     /// Whether the content takes input; only the front bubble's does.
     pub interactive: bool,
+    /// The bubble's own state, made by the microapp's `new_view`.
+    pub state: &'a mut dyn Any,
 }
 
 /// Something a microapp asks of the bubbles showing its items.
@@ -116,6 +128,11 @@ pub trait MicroApp {
 
     fn appearance(&self, item: ItemId) -> Appearance;
 
+    /// The state a new bubble showing `item` starts with.
+    fn new_view(&self, _item: ItemId) -> ViewState {
+        Box::new(())
+    }
+
     /// The label of the bubbles showing `item`.
     fn title(&self, item: ItemId) -> String;
 
@@ -129,8 +146,7 @@ pub trait MicroApp {
 
     /// Draws `item` in an open bubble. Returns the panel height that fits it,
     /// for a microapp that sizes its panels to their content.
-    fn ui(&mut self, item: ItemId, ui: &mut egui::Ui, view: &View, cx: &mut Context)
-    -> Option<f32>;
+    fn ui(&mut self, item: ItemId, ui: &mut egui::Ui, view: View, cx: &mut Context) -> Option<f32>;
 
     /// Deletes `item` for good.
     fn remove(&mut self, item: ItemId);
@@ -239,7 +255,7 @@ mod tests {
             }
         }
 
-        fn ui(&mut self, _: ItemId, _: &mut egui::Ui, _: &View, _: &mut Context) -> Option<f32> {
+        fn ui(&mut self, _: ItemId, _: &mut egui::Ui, _: View, _: &mut Context) -> Option<f32> {
             None
         }
 

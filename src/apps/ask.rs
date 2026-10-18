@@ -5,10 +5,10 @@
 use std::collections::BTreeMap;
 use std::sync::mpsc;
 
-use eframe::egui::{self, Color32, FontId, Rect, RichText};
+use eframe::egui::{self, Color32, FontId, RichText};
 
 use crate::claude;
-use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View};
+use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState};
 use crate::view::bubble::{Gesture, short_label};
 
 const ID: AppId = AppId("ask");
@@ -42,7 +42,7 @@ enum Status {
     Failed(String),
 }
 
-/// One question for Claude and its answer.
+/// One question for Claude and its answer: the model.
 struct Chat {
     question: String,
     /// The bubble's label, once a question has been asked.
@@ -50,14 +50,86 @@ struct Chat {
     answer: String,
     status: Status,
     stream: Option<mpsc::Receiver<claude::Event>>,
+    /// Why the API refused the key, until a view of the chat shows it.
+    key_rejected: Option<String>,
+    /// Counts the times the chat needed the user to type again, after a
+    /// failure or a refused key, so its views know to take the focus.
+    focus_requests: u32,
+}
+
+/// What one bubble showing a chat keeps for itself: the view state.
+struct ChatView {
     /// What is typed into the key field before it is saved.
     key_draft: String,
-    /// Why the API refused the key, until the panel next shows and drops it.
-    key_rejected: Option<String>,
     /// Shown in the key field's place after a key was refused.
     key_error: Option<String>,
     /// Whether the next text field shown should take the keyboard focus.
     focus_pending: bool,
+    /// The chat's `focus_requests` this view has answered.
+    focus_requests_seen: u32,
+}
+
+impl ChatView {
+    fn new() -> Self {
+        Self {
+            key_draft: String::new(),
+            key_error: None,
+            // A new chat is for asking, so start with the cursor in it.
+            focus_pending: true,
+            focus_requests_seen: 0,
+        }
+    }
+
+    /// Notes any new request of the chat for the focus.
+    fn catch_up(&mut self, focus_requests: u32) {
+        if self.focus_requests_seen != focus_requests {
+            self.focus_requests_seen = focus_requests;
+            self.focus_pending = true;
+        }
+    }
+
+    fn take_focus(&mut self, response: &egui::Response, interactive: bool) {
+        if interactive && std::mem::take(&mut self.focus_pending) {
+            response.request_focus();
+        }
+    }
+
+    /// Asks for an API key and stores it in `api_key` once entered.
+    fn key_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        color: Color32,
+        interactive: bool,
+        api_key: &mut Option<String>,
+    ) {
+        match &self.key_error {
+            Some(error) => {
+                ui.add(
+                    egui::Label::new(error_text(&format!("That key didn't work: {error}"))).wrap(),
+                );
+            }
+            None => {
+                ui.label(RichText::new("Paste a Claude API key to ask questions.").color(color));
+            }
+        }
+        let response = ui.add(
+            egui::TextEdit::singleline(&mut self.key_draft)
+                .password(true)
+                .hint_text("sk-ant-…")
+                .desired_width(f32::INFINITY)
+                .interactive(interactive),
+        );
+        self.take_focus(&response, interactive);
+        ui.add(egui::Label::new(RichText::new(KEY_NOTE).color(color.gamma_multiply(0.6))).wrap());
+        let key = self.key_draft.trim();
+        if submitted(ui, &response) && !key.is_empty() {
+            *api_key = Some(key.to_owned());
+            self.key_draft.clear();
+            self.key_error = None;
+            // Move straight on to the question field.
+            self.focus_pending = true;
+        }
+    }
 }
 
 /// How an asked question came to an end, for the bubble to show.
@@ -134,19 +206,24 @@ impl MicroApp for AskApp {
         }
     }
 
+    fn new_view(&self, _item: ItemId) -> ViewState {
+        Box::new(ChatView::new())
+    }
+
     /// Shows a chat and returns the panel height that fits it. Without an
     /// API key it first asks for one and stores it in `cx`; a key the API
     /// refused is cleared from it.
-    fn ui(
-        &mut self,
-        item: ItemId,
-        ui: &mut egui::Ui,
-        view: &View,
-        cx: &mut Context,
-    ) -> Option<f32> {
+    fn ui(&mut self, item: ItemId, ui: &mut egui::Ui, view: View, cx: &mut Context) -> Option<f32> {
         let chat = self.chats.get_mut(&item)?;
-        let (rect, color, interactive) = (view.rect, view.text_color, view.interactive);
-        Some(chat.ui(ui, item, rect, color, interactive, cx.api_key))
+        let state = view.state.downcast_mut::<ChatView>()?;
+        let builder = egui::UiBuilder::new()
+            .id_salt(view.bubble)
+            .max_rect(view.rect);
+        let (color, interactive) = (view.text_color, view.interactive);
+        let response = ui.scope_builder(builder, |ui| {
+            chat.ui(state, ui, color, interactive, cx.api_key)
+        });
+        Some(response.inner)
     }
 
     /// Forgets a chat, which also stops its answer from streaming in.
@@ -163,10 +240,8 @@ impl Chat {
             answer: String::new(),
             status: Status::Typing { error: None },
             stream: None,
-            key_draft: String::new(),
             key_rejected: None,
-            key_error: None,
-            focus_pending: true,
+            focus_requests: 0,
         }
     }
 
@@ -202,7 +277,7 @@ impl Chat {
                     self.key_rejected = Some(message);
                     self.status = Status::Typing { error: None };
                     self.stream = None;
-                    self.focus_pending = true;
+                    self.focus_requests += 1;
                     return Some(Outcome::NeedsAttention);
                 }
                 Err(mpsc::TryRecvError::Empty) => return None,
@@ -222,92 +297,56 @@ impl Chat {
             self.status = Status::Typing {
                 error: Some(message),
             };
-            self.focus_pending = true;
+            self.focus_requests += 1;
         } else {
             self.status = Status::Failed(message);
         }
     }
 
-    /// Shows the panel's content in `rect` and returns the panel height that
-    /// fits it. `item` keeps the widget ids apart from other chats'.
+    /// Shows the panel's content as seen by `view`, and returns the panel
+    /// height that fits it.
     fn ui(
         &mut self,
+        view: &mut ChatView,
         ui: &mut egui::Ui,
-        item: ItemId,
-        rect: Rect,
         color: Color32,
         interactive: bool,
         api_key: &mut Option<String>,
     ) -> f32 {
         if let Some(message) = self.key_rejected.take() {
             *api_key = None;
-            self.key_error = Some(message);
+            view.key_error = Some(message);
         }
-        let content_height = ui
-            .scope_builder(
-                egui::UiBuilder::new().id_salt((ID, item)).max_rect(rect),
-                |ui| {
-                    // No drag-to-scroll, so dragging the panel body moves the bubble.
-                    let scroll_source = egui::scroll_area::ScrollSource {
-                        scroll_bar: true,
-                        mouse_wheel: true,
-                        ..egui::scroll_area::ScrollSource::NONE
-                    };
-                    egui::ScrollArea::vertical()
-                        .scroll_source(scroll_source)
-                        .stick_to_bottom(true)
-                        .show(ui, |ui| match api_key {
-                            None => self.key_ui(ui, color, interactive, api_key),
-                            Some(key) if matches!(self.status, Status::Typing { .. }) => {
-                                self.question_ui(ui, color, interactive, key);
-                            }
-                            Some(_) => self.answer_ui(ui, color),
-                        })
-                        .content_size
-                        .y
-                },
-            )
-            .inner;
+        view.catch_up(self.focus_requests);
+        // No drag-to-scroll, so dragging the panel body moves the bubble.
+        let scroll_source = egui::scroll_area::ScrollSource {
+            scroll_bar: true,
+            mouse_wheel: true,
+            ..egui::scroll_area::ScrollSource::NONE
+        };
+        let content_height = egui::ScrollArea::vertical()
+            .scroll_source(scroll_source)
+            .stick_to_bottom(true)
+            .show(ui, |ui| match api_key {
+                None => view.key_ui(ui, color, interactive, api_key),
+                Some(key) if matches!(self.status, Status::Typing { .. }) => {
+                    self.question_ui(view, ui, color, interactive, key);
+                }
+                Some(_) => self.answer_ui(ui, color),
+            })
+            .content_size
+            .y;
         (content_height + CHROME_HEIGHT).clamp(START_HEIGHT, MAX_HEIGHT)
     }
 
-    fn key_ui(
+    fn question_ui(
         &mut self,
+        view: &mut ChatView,
         ui: &mut egui::Ui,
         color: Color32,
         interactive: bool,
-        api_key: &mut Option<String>,
+        api_key: &str,
     ) {
-        match &self.key_error {
-            Some(error) => {
-                ui.add(
-                    egui::Label::new(error_text(&format!("That key didn't work: {error}"))).wrap(),
-                );
-            }
-            None => {
-                ui.label(RichText::new("Paste a Claude API key to ask questions.").color(color));
-            }
-        }
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut self.key_draft)
-                .password(true)
-                .hint_text("sk-ant-…")
-                .desired_width(f32::INFINITY)
-                .interactive(interactive),
-        );
-        self.take_focus(&response, interactive);
-        ui.add(egui::Label::new(RichText::new(KEY_NOTE).color(color.gamma_multiply(0.6))).wrap());
-        let key = self.key_draft.trim();
-        if submitted(ui, &response) && !key.is_empty() {
-            *api_key = Some(key.to_owned());
-            self.key_draft.clear();
-            self.key_error = None;
-            // Move straight on to the question field.
-            self.focus_pending = true;
-        }
-    }
-
-    fn question_ui(&mut self, ui: &mut egui::Ui, color: Color32, interactive: bool, api_key: &str) {
         if let Status::Typing { error: Some(error) } = &self.status {
             ui.add(egui::Label::new(error_text(error)).wrap());
         }
@@ -319,7 +358,7 @@ impl Chat {
                 .desired_width(f32::INFINITY)
                 .interactive(interactive),
         );
-        self.take_focus(&response, interactive);
+        view.take_focus(&response, interactive);
         let question = self.question.trim();
         if !submitted(ui, &response) || question.is_empty() {
             return;
@@ -356,12 +395,6 @@ impl Chat {
             Status::Typing { .. } | Status::Answering | Status::Done => {}
         }
     }
-
-    fn take_focus(&mut self, response: &egui::Response, interactive: bool) {
-        if interactive && std::mem::take(&mut self.focus_pending) {
-            response.request_focus();
-        }
-    }
 }
 
 fn error_text(message: &str) -> RichText {
@@ -383,6 +416,24 @@ mod tests {
         let mut effects = Vec::new();
         asks.update(&mut Context::new(ID, &mut effects, &mut None));
         effects
+    }
+
+    #[test]
+    fn every_view_takes_the_focus_once_per_request() {
+        let mut chat = Chat::new();
+        let (mut a, mut b) = (ChatView::new(), ChatView::new());
+        a.focus_pending = false;
+        b.focus_pending = false;
+        a.catch_up(chat.focus_requests);
+        assert!(!a.focus_pending, "took the focus with nothing new");
+
+        chat.fail("Overloaded".to_owned());
+        a.catch_up(chat.focus_requests);
+        b.catch_up(chat.focus_requests);
+        assert!(a.focus_pending && b.focus_pending);
+        a.focus_pending = false;
+        a.catch_up(chat.focus_requests);
+        assert!(!a.focus_pending, "took the focus twice for one request");
     }
 
     #[test]

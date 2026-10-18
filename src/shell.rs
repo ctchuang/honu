@@ -137,6 +137,7 @@ impl HonuApp {
             bubble = bubble.with_panel_height(height);
         }
         bubble.label = app.title(item);
+        bubble.state = app.new_view(item);
         let mouth = self.turtle.spit(time);
         self.stage.spit_panel(bubble, mouth, canvas, time);
     }
@@ -520,18 +521,20 @@ fn content_ui(
     apps: &mut Registry,
     (effects, api_key): (&mut Vec<Effect>, &mut Option<String>),
 ) {
-    let body = bubble.shape().rect().shrink(22.0);
-    let view = View {
-        rect: body.with_min_y(body.top() + 34.0),
-        text_color: render::text_color(bubble),
-        interactive,
-    };
     let ViewTarget { app, item } = bubble.target;
     let Some(microapp) = apps.get_mut(app) else {
         return;
     };
+    let body = bubble.shape().rect().shrink(22.0);
+    let view = View {
+        bubble: bubble.id,
+        rect: body.with_min_y(body.top() + 34.0),
+        text_color: render::text_color(bubble),
+        interactive,
+        state: bubble.state.as_mut(),
+    };
     let mut cx = Context::new(app, effects, api_key);
-    if let Some(height) = microapp.ui(item, ui, &view, &mut cx) {
+    if let Some(height) = microapp.ui(item, ui, view, &mut cx) {
         bubble.set_panel_height(height);
     }
 }

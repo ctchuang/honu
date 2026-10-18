@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use eframe::egui::{self, Color32, FontId};
 
-use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View};
+use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View, ViewState};
 use crate::view::bubble::short_label;
 
 const ID: AppId = AppId("notes");
@@ -16,8 +16,13 @@ const EMPTY_LABEL: &str = "Note";
 const NOTE_YELLOW: Color32 = Color32::from_rgb(255, 236, 150);
 
 /// One note.
+/// One note: the model.
 struct Note {
     text: String,
+}
+
+/// What one bubble showing a note keeps for itself: the view state.
+struct NoteView {
     /// Whether the text field should take the keyboard focus when next shown.
     focus_pending: bool,
 }
@@ -45,14 +50,14 @@ impl MicroApp for NotesApp {
         "Add Note"
     }
 
-    /// Starts an empty note, which takes the focus when it first shows.
     fn create(&mut self) -> ItemId {
         let id = self.ids.next();
-        let note = Note {
-            text: String::new(),
-            focus_pending: true,
-        };
-        self.notes.insert(id, note);
+        self.notes.insert(
+            id,
+            Note {
+                text: String::new(),
+            },
+        );
         id
     }
 
@@ -63,6 +68,13 @@ impl MicroApp for NotesApp {
             radius: 60.0,
             panel_height: None,
         }
+    }
+
+    /// A note is for writing in, so a new bubble starts with the cursor in it.
+    fn new_view(&self, _item: ItemId) -> ViewState {
+        Box::new(NoteView {
+            focus_pending: true,
+        })
     }
 
     /// A short label for a note's bubble: its first line with anything on it.
@@ -78,13 +90,14 @@ impl MicroApp for NotesApp {
         &mut self,
         item: ItemId,
         ui: &mut egui::Ui,
-        view: &View,
+        view: View,
         _cx: &mut Context,
     ) -> Option<f32> {
         let note = self.notes.get_mut(&item)?;
+        let state = view.state.downcast_mut::<NoteView>()?;
         let (rect, color, interactive) = (view.rect, view.text_color, view.interactive);
         ui.scope_builder(
-            egui::UiBuilder::new().id_salt((ID, item)).max_rect(rect),
+            egui::UiBuilder::new().id_salt(view.bubble).max_rect(rect),
             |ui| {
                 // No drag-to-scroll, so dragging the panel body moves the bubble.
                 let scroll_source = egui::scroll_area::ScrollSource {
@@ -104,8 +117,7 @@ impl MicroApp for NotesApp {
                                 .desired_width(f32::INFINITY)
                                 .interactive(interactive),
                         );
-                        // A new note is for writing in, so start with the cursor in it.
-                        if interactive && std::mem::take(&mut note.focus_pending) {
+                        if interactive && std::mem::take(&mut state.focus_pending) {
                             response.request_focus();
                         }
                     });

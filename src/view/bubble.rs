@@ -8,7 +8,7 @@
 
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
-use crate::microapp::ViewTarget;
+use crate::microapp::{ViewState, ViewTarget};
 
 /// Corner radius of a closed bubble, as a fraction of its radius.
 const CLOSED_CORNER: f32 = 0.28;
@@ -105,6 +105,8 @@ pub struct Bubble {
     pub id: BubbleId,
     /// The item this bubble shows.
     pub target: ViewTarget,
+    /// What this bubble keeps for itself about the item, apart from its data.
+    pub state: ViewState,
     pub label: String,
     pub center: Pos2,
     /// Half the side of the closed square.
@@ -149,6 +151,7 @@ impl Bubble {
         Self {
             id: BubbleId::default(),
             target,
+            state: Box::new(()),
             label: String::new(),
             center,
             radius,
