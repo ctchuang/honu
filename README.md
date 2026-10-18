@@ -54,7 +54,7 @@ cargo build --release    # optimized build
 ```
 
 By default the bubbles float directly on your desktop, above other windows. Clicks
-pass through to the apps below everywhere except on a bubble or the turtle. The window
+pass through to the apps below everywhere except on a bubble, the turtle, or the octopus. The window
 has no close button: click a bubble or the turtle to focus Honu, then press
 <kbd>⌘</kbd><kbd>Q</kbd> to quit (or quit it from the Dock).
 
@@ -69,6 +69,9 @@ handy during development.
 - **Right-click** or **long-press** the turtle for its menu: **Ask…** makes it spit out a
   bubble where you can ask Claude a question, and **Exit** quits Honu.
 - **Drag** a bubble to move it, and **throw** it to let it glide.
+- To delete a bubble, drag it to the pixel octopus that comes up in a bottom corner
+  while you drag, and let go. Changed your mind? For a few seconds afterwards,
+  **click** the octopus (or press <kbd>⌘</kbd><kbd>Z</kbd>) and it spits the bubble back.
 - **Double-click** a bubble to open it into a panel; double-click its title or edge to
   close it again.
 

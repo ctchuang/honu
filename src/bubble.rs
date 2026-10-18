@@ -3,6 +3,8 @@
 //! when opened. A new bubble pops out small and grows as it flies to its place.
 //! Bubbles also show what they are doing through motion: a busy bubble
 //! breathes, and a short gesture marks a finished task or a call for attention.
+//! A bubble held over the octopus shrinks, and one dropped there is swallowed:
+//! it shrinks away into the octopus's mouth.
 
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
@@ -35,6 +37,12 @@ const BREATH_POINTS: f32 = 4.0;
 const BREATH_RATE: f32 = 0.8;
 /// How quickly breathing fades in and out (1/s), so it never starts or stops abruptly.
 const BREATH_FADE_RATE: f32 = 3.0;
+/// Size, relative to full size, of a bubble held over the octopus.
+const DOOMED_SCALE: f32 = 0.6;
+/// How quickly a bubble shrinks over the octopus and grows back (1/s).
+const SHRINK_RATE: f32 = 14.0;
+/// Seconds a swallowed bubble takes to disappear into the octopus's mouth.
+const SWALLOW_SECONDS: f32 = 0.3;
 
 /// A short motion that marks a change in what the bubble is doing.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -82,6 +90,16 @@ struct Spawn {
     progress: f32,
 }
 
+/// A bubble's last trip, from where it was dropped into the octopus's mouth.
+struct Swallow {
+    from: Pos2,
+    to: Pos2,
+    /// How shrunk the bubble already was when dropped.
+    from_shrink: f32,
+    /// Linear progress of the trip, from 0 to 1.
+    progress: f32,
+}
+
 /// A draggable, window-like bubble on the desktop.
 pub struct Bubble {
     pub label: String,
@@ -115,6 +133,13 @@ pub struct Bubble {
     breath_time: f32,
     /// The gesture being played and how many seconds into it.
     gesture: Option<(Gesture, f32)>,
+    /// Whether the bubble is held over the octopus, which makes it shrink.
+    doomed: bool,
+    /// Size relative to full size, shrinking over the octopus and to nothing
+    /// when swallowed.
+    shrink: f32,
+    /// Set once the bubble has been dropped on the octopus.
+    swallow: Option<Swallow>,
 }
 
 impl Bubble {
@@ -138,7 +163,48 @@ impl Bubble {
             breath: 0.0,
             breath_time: 0.0,
             gesture: None,
+            doomed: false,
+            shrink: 1.0,
+            swallow: None,
         }
+    }
+
+    /// Shrinks the bubble while `doomed`, to show that letting go deletes it.
+    pub fn set_doomed(&mut self, doomed: bool) {
+        self.doomed = doomed;
+    }
+
+    /// Makes the bubble shrink away into `mouth`.
+    pub fn swallow_into(&mut self, mouth: Pos2) {
+        self.swallow = Some(Swallow {
+            from: self.center,
+            to: mouth,
+            from_shrink: self.shrink,
+            progress: 0.0,
+        });
+        self.velocity = Vec2::ZERO;
+    }
+
+    /// True once a swallowed bubble has disappeared.
+    pub fn is_swallowed(&self) -> bool {
+        self.swallow.as_ref().is_some_and(|s| s.progress == 1.0)
+    }
+
+    /// Brings a swallowed bubble back: it pops out of `from` and flies back to
+    /// `home`, and reopens on landing if it was open.
+    pub fn spit_back(&mut self, from: Pos2, home: Pos2) {
+        self.swallow = None;
+        self.doomed = false;
+        self.shrink = 1.0;
+        self.gesture = None;
+        if self.open {
+            // Fly back closed, like any new bubble, and open where it lands.
+            self.open = false;
+            self.progress = 0.0;
+            self.open_on_landing = true;
+        }
+        self.center = home;
+        self.spawn_from(from);
     }
 
     /// Makes the bubble breathe while `busy`, fading in and out.
@@ -218,6 +284,19 @@ impl Bubble {
 
     /// Advances the spawn flight and the open/close morph by `dt` seconds.
     pub fn animate(&mut self, dt: f32) {
+        if let Some(swallow) = &mut self.swallow {
+            swallow.progress = (swallow.progress + dt / SWALLOW_SECONDS).min(1.0);
+            let t = swallow.progress * swallow.progress;
+            self.center = swallow.from.lerp(swallow.to, t);
+            self.shrink = swallow.from_shrink * (1.0 - t);
+        } else {
+            let target = if self.doomed { DOOMED_SCALE } else { 1.0 };
+            self.shrink += (target - self.shrink) * (1.0 - (-SHRINK_RATE * dt).exp());
+            if (self.shrink - target).abs() < 0.001 {
+                // Settle exactly, so content shows again once full size.
+                self.shrink = target;
+            }
+        }
         if let Some(spawn) = &mut self.spawn {
             spawn.progress = (spawn.progress + dt / SPAWN_SECONDS).min(1.0);
             self.center = spawn.from.lerp(spawn.to, ease_out_quad(spawn.progress));
@@ -265,9 +344,9 @@ impl Bubble {
         self.progress == 0.0
     }
 
-    /// True when fully open and ready to show its content.
+    /// True when fully open, at full size, and ready to show its content.
     pub fn is_fully_open(&self) -> bool {
-        self.open && self.progress == 1.0
+        self.open && self.progress == 1.0 && self.shrink == 1.0
     }
 
     /// The bubble's outline, used for hit-testing, physics, and laying out its
@@ -278,13 +357,15 @@ impl Bubble {
             .map_or(Vec2::ZERO, |(gesture, t)| gesture.offset(t));
         let t = self.openness();
         let r = self.radius * self.scale();
-        let half = (Vec2::splat(r) + (self.panel / 2.0 - Vec2::splat(r)) * t).max(Vec2::splat(1.0));
+        let k = self.shrink;
+        let half = (Vec2::splat(r) + (self.panel / 2.0 - Vec2::splat(r)) * t) * k;
+        let half = half.max(Vec2::splat(1.0));
         let max_round = half.min_elem();
         Shape {
             center: self.center + gesture,
             half,
-            corner: lerp(CLOSED_CORNER * r, PANEL_CORNER, t).clamp(0.0, max_round),
-            bevel: lerp(CLOSED_BEVEL * r, PANEL_BEVEL, t).clamp(1.0, max_round),
+            corner: (lerp(CLOSED_CORNER * r, PANEL_CORNER, t) * k).clamp(0.0, max_round),
+            bevel: (lerp(CLOSED_BEVEL * r, PANEL_BEVEL, t) * k).clamp(1.0, max_round),
             exponent: CORNER_EXPONENT,
         }
     }
@@ -419,6 +500,36 @@ mod tests {
             assert_eq!(bubble.shape().center, rest, "{gesture:?} did not settle");
             assert_eq!(bubble.center, rest, "{gesture:?} moved the bubble itself");
         }
+    }
+
+    #[test]
+    fn swallowed_bubble_comes_back_whole() {
+        let mut bubble = bubble();
+        let home = bubble.center;
+        let full = bubble.shape().half;
+        bubble.open = true;
+        run(&mut bubble, 1.0, |_| {});
+        bubble.set_doomed(true);
+        run(&mut bubble, 0.5, |_| {});
+        assert!(!bubble.is_fully_open(), "content shows while shrunk");
+        let mouth = pos2(100.0, 900.0);
+        bubble.swallow_into(mouth);
+        run(&mut bubble, 1.0, |_| {});
+        assert!(bubble.is_swallowed());
+        assert_eq!(bubble.center, mouth);
+        assert!(
+            bubble.shape().half.x <= 1.0,
+            "still visible after swallowing"
+        );
+
+        bubble.spit_back(mouth, home);
+        assert!(bubble.is_spawning() && !bubble.is_swallowed());
+        run(&mut bubble, 3.0, |_| {});
+        assert_eq!(bubble.center, home);
+        assert!(bubble.is_fully_open(), "did not reopen on landing");
+        bubble.open = false;
+        run(&mut bubble, 1.0, |_| {});
+        assert_eq!(bubble.shape().half, full);
     }
 
     #[test]
