@@ -9,17 +9,15 @@ mod render;
 mod turtle;
 
 use bubble::{Bubble, Content, Gesture};
-use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand, pos2};
+use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand};
 use octopus::Octopus;
 use turtle::Turtle;
 
-/// Size of the window in `--windowed` mode, which the starting layout is designed for.
-/// The web version lays out for it too, then recenters on the page.
+/// Size of the window in `--windowed` mode. The app starts out laid out for it
+/// and recenters on the real window in the first frame.
 const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 /// Seconds the turtle must be held, without dragging, to open its menu.
 const LONG_PRESS_SECONDS: f64 = 0.5;
-/// Seconds between bubbles coming out of the turtle's mouth.
-const RELEASE_INTERVAL: f64 = 0.5;
 /// How far a bubble must be dragged before the octopus comes up, so nudging
 /// a bubble into place does not call it.
 const SUMMON_DISTANCE: f32 = 40.0;
@@ -112,11 +110,6 @@ impl TurtleMenu {
 struct HonuApp {
     /// Bubbles in back-to-front paint order; the last one is on top.
     bubbles: Vec<Bubble>,
-    /// Bubbles the turtle has yet to release, at their places, in reverse
-    /// order: the last one comes out next.
-    pending: Vec<Bubble>,
-    /// When the next pending bubble pops out, while the turtle is releasing them.
-    next_release: Option<f64>,
     turtle: Turtle,
     /// Deletes the bubbles dropped on it.
     octopus: Octopus,
@@ -148,34 +141,15 @@ struct HonuApp {
 
 impl HonuApp {
     fn new(floating: bool, storage: Option<&dyn eframe::Storage>) -> Self {
-        let rgb = Color32::from_rgb;
-        let white = PAPER;
-        let notes = Content::Note(note::Note::new().with_text(
-            "Double-click a bubble to open it, and double-click its edge or title to close it.",
-        ));
-        let mut pending = vec![
-            Bubble::new("Notes", pos2(250.0, 260.0), 95.0, white, false).with_content(notes),
-            Bubble::new("Files", pos2(820.0, 520.0), 85.0, white, false),
-            Bubble::new("Photos", pos2(560.0, 560.0), 75.0, white, false),
-            Bubble::new("Music", pos2(420.0, 360.0), 120.0, rgb(70, 190, 210), true),
-            Bubble::new("Mail", pos2(720.0, 260.0), 105.0, rgb(150, 110, 230), true),
-            Bubble::new("Clock", pos2(300.0, 540.0), 70.0, rgb(110, 160, 250), true),
-        ];
-        for (i, bubble) in pending.iter_mut().enumerate() {
-            bubble.phase = i as f32 * 1.7;
-        }
-        pending.reverse();
         let mut turtle = Turtle::new();
         let saved = storage.and_then(|storage| storage.get_string(turtle_key(floating)));
         if let Some(offset) = saved.as_deref().and_then(parse_offset) {
-            // Like the starting bubbles, start out laid out for the windowed size;
-            // the first frame moves everything to the real window.
+            // Start out laid out for the windowed size; the first frame moves
+            // the turtle to the real window.
             turtle.set_offset_from((WINDOWED_SIZE / 2.0).to_pos2(), offset);
         }
         Self {
             bubbles: Vec::new(),
-            pending,
-            next_release: None,
             turtle,
             octopus: Octopus::new(),
             dragging: false,
@@ -228,17 +202,6 @@ impl HonuApp {
         }
     }
 
-    /// Spits out the pending bubbles that are due by `time`, one at a time.
-    fn release_due(&mut self, time: f64) {
-        while let Some(at) = self.next_release.filter(|&at| time >= at) {
-            if let Some(mut bubble) = self.pending.pop() {
-                bubble.spawn_from(self.turtle.spit(time));
-                self.add_bubble(bubble);
-            }
-            self.next_release = (!self.pending.is_empty()).then_some(at + RELEASE_INTERVAL);
-        }
-    }
-
     /// Puts a new bubble on top, below a bubble being dragged, which must stay on top.
     fn add_bubble(&mut self, bubble: Bubble) {
         let index = self.bubbles.len() - usize::from(self.dragging);
@@ -265,6 +228,8 @@ impl HonuApp {
     fn spit_panel(&mut self, bubble: Bubble, canvas: egui::Rect, time: f64) {
         let mouth = self.turtle.spit(time);
         let mut bubble = bubble.open_on_landing();
+        // Drift out of step with the other bubbles once closed.
+        bubble.phase = (time % 100.0) as f32;
         // Land up and to the right of the mouth, with the whole panel on screen.
         let half = bubble.panel_target() / 2.0;
         let margin = egui::Vec2::splat(16.0);
@@ -345,14 +310,14 @@ impl eframe::App for HonuApp {
                     // the window is created has no effect on a borderless window on macOS.
                     ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
                 }
-                // Keep the bubbles centered when the window changes size. The starting
-                // layout is designed for the windowed size.
+                // Keep everything centered when the window changes size, starting
+                // from the windowed size the app is first laid out for.
                 let last_center = self
                     .last_canvas
                     .map_or((WINDOWED_SIZE / 2.0).to_pos2(), |rect| rect.center());
                 let offset = canvas.center() - last_center;
                 if offset != egui::Vec2::ZERO {
-                    for bubble in self.bubbles.iter_mut().chain(&mut self.pending) {
+                    for bubble in &mut self.bubbles {
                         bubble.translate(offset);
                     }
                     self.turtle.translate(offset);
@@ -491,14 +456,10 @@ impl eframe::App for HonuApp {
                 }
                 if clicked_turtle && !self.long_pressed {
                     self.turtle.hop(time);
-                    if self.next_release.is_none() && !self.pending.is_empty() {
-                        self.next_release = Some(time);
-                    }
                 }
                 if ui.input(|i| i.pointer.primary_released()) {
                     self.long_pressed = false;
                 }
-                self.release_due(time);
 
                 if response.double_clicked() {
                     let pos = response.interact_pointer_pos();

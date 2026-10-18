@@ -63,9 +63,8 @@ handy during development.
 
 ### Using the bubbles
 
-- Honu starts with just a little pixel turtle in the bottom-left corner. **Click** it to
-  release the bubbles, and **drag** it to move it anywhere. It stays where you leave it,
-  even after you quit and reopen Honu.
+- Honu starts with just a little pixel turtle in the bottom-left corner. **Drag** it to
+  move it anywhere. It stays where you leave it, even after you quit and reopen Honu.
 - **Right-click** or **long-press** the turtle for its menu: **Add Note** makes it spit out
   a note to write in, **Ask…** a bubble where you can ask Claude a question, and **Exit**
   quits Honu. A closed note shows its first line.

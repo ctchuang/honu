@@ -1,6 +1,6 @@
 //! The pixel-art sea turtle that starts in the bottom-left corner of the
-//! desktop and can be dragged anywhere. Clicking it makes it spit out the
-//! bubbles.
+//! desktop and can be dragged anywhere. It spits out the bubbles made from
+//! its menu.
 
 use eframe::egui::{Color32, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2};
 

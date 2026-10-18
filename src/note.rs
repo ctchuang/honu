@@ -28,11 +28,6 @@ impl Note {
         }
     }
 
-    pub fn with_text(mut self, text: &str) -> Self {
-        self.text = text.to_owned();
-        self
-    }
-
     /// A short label for the bubble: the first line with anything on it.
     pub fn label(&self) -> String {
         self.text
