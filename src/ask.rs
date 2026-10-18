@@ -6,6 +6,7 @@ use std::sync::mpsc;
 
 use eframe::egui::{self, Color32, FontId, Rect, RichText};
 
+use crate::bubble::short_label;
 use crate::claude;
 
 /// Panel height while asking for a key or a question.
@@ -14,8 +15,6 @@ pub const START_HEIGHT: f32 = 150.0;
 const MAX_HEIGHT: f32 = 560.0;
 /// Panel height not taken by the content: the title bar and the margins.
 const CHROME_HEIGHT: f32 = 78.0;
-/// Longest label a bubble gets from its question, in characters.
-const LABEL_CHARS: usize = 24;
 
 #[cfg(target_arch = "wasm32")]
 const KEY_NOTE: &str = "It is saved in this browser only and sent only to Anthropic.";
@@ -252,12 +251,12 @@ impl Ask {
         }
         self.stream = Some(claude::ask(api_key, question));
         self.status = Status::Thinking;
-        Some(label_for(question))
+        Some(short_label(question))
     }
 
     fn answer_ui(&self, ui: &mut egui::Ui, color: Color32) {
         // The title shows the question, unless it had to be shortened.
-        if label_for(&self.question) != self.question {
+        if short_label(&self.question) != self.question {
             let question = RichText::new(&self.question).color(color.gamma_multiply(0.6));
             ui.add(egui::Label::new(question).wrap());
             ui.add_space(6.0);
@@ -297,30 +296,4 @@ fn error_text(message: &str) -> RichText {
 /// Whether Enter was pressed in the single-line field of `response`.
 fn submitted(ui: &egui::Ui, response: &egui::Response) -> bool {
     response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
-}
-
-/// A short bubble label for `question`.
-fn label_for(question: &str) -> String {
-    let mut chars = question.chars();
-    let label: String = chars.by_ref().take(LABEL_CHARS).collect();
-    if chars.next().is_some() {
-        format!("{}…", label.trim_end())
-    } else {
-        label
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn long_questions_get_short_labels() {
-        assert_eq!(label_for("Why is the sea salty?"), "Why is the sea salty?");
-        let label = label_for("How far can a green sea turtle swim in one day?");
-        assert_eq!(label, "How far can a green sea…");
-        // Counted in characters, so multi-byte ones are never cut in half.
-        let turtles = "🐢".repeat(30);
-        assert_eq!(label_for(&turtles), format!("{}…", "🐢".repeat(24)));
-    }
 }

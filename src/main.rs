@@ -2,6 +2,7 @@ mod ask;
 mod bubble;
 mod claude;
 mod desktop;
+mod note;
 mod octopus;
 mod physics;
 mod render;
@@ -24,6 +25,14 @@ const RELEASE_INTERVAL: f64 = 0.5;
 const SUMMON_DISTANCE: f32 = 40.0;
 /// A soft, slightly warm white for the opaque bubbles.
 const PAPER: Color32 = Color32::from_rgb(250, 249, 246);
+/// The pale yellow of a sticky note, for Note bubbles.
+const NOTE_YELLOW: Color32 = Color32::from_rgb(255, 236, 150);
+/// Size of a closed bubble the turtle spits out from its menu.
+const SPAT_RADIUS: f32 = 60.0;
+/// How far a new panel steps aside from one already in its place.
+const CASCADE_STEP: f32 = 28.0;
+/// Most steps aside a new panel takes before landing where it is.
+const CASCADE_LIMIT: usize = 10;
 /// Storage key for the Claude API key the web version asks for. The desktop
 /// version reads `ANTHROPIC_API_KEY` from `.env` instead and stores nothing.
 #[cfg(target_arch = "wasm32")]
@@ -141,10 +150,9 @@ impl HonuApp {
     fn new(floating: bool, storage: Option<&dyn eframe::Storage>) -> Self {
         let rgb = Color32::from_rgb;
         let white = PAPER;
-        let notes = Content::Notes(
-            "Double-click a bubble to open it, and double-click its edge or title to close it."
-                .to_owned(),
-        );
+        let notes = Content::Note(note::Note::new().with_text(
+            "Double-click a bubble to open it, and double-click its edge or title to close it.",
+        ));
         let mut pending = vec![
             Bubble::new("Notes", pos2(250.0, 260.0), 95.0, white, false).with_content(notes),
             Bubble::new("Files", pos2(820.0, 520.0), 85.0, white, false),
@@ -237,20 +245,44 @@ impl HonuApp {
         self.bubbles.insert(index, bubble);
     }
 
-    /// Has the turtle spit out an Ask bubble, which opens into a panel for a
-    /// question when it lands next to the turtle.
+    /// Has the turtle spit out a new Note bubble, which opens for writing.
+    fn spit_note_bubble(&mut self, canvas: egui::Rect, time: f64) {
+        let bubble = Bubble::new("Note", Pos2::ZERO, SPAT_RADIUS, NOTE_YELLOW, false)
+            .with_content(Content::Note(note::Note::new()));
+        self.spit_panel(bubble, canvas, time);
+    }
+
+    /// Has the turtle spit out an Ask bubble, which opens into a panel for a question.
     fn spit_ask_bubble(&mut self, canvas: egui::Rect, time: f64) {
-        let mouth = self.turtle.spit(time);
-        let mut bubble = Bubble::new("Ask", mouth, 60.0, PAPER, false)
+        let bubble = Bubble::new("Ask", Pos2::ZERO, SPAT_RADIUS, PAPER, false)
             .with_content(Content::Ask(ask::Ask::new()))
-            .with_panel_height(ask::START_HEIGHT)
-            .open_on_landing();
+            .with_panel_height(ask::START_HEIGHT);
+        self.spit_panel(bubble, canvas, time);
+    }
+
+    /// Has the turtle spit out `bubble`, which opens into its panel when it
+    /// lands next to the turtle.
+    fn spit_panel(&mut self, bubble: Bubble, canvas: egui::Rect, time: f64) {
+        let mouth = self.turtle.spit(time);
+        let mut bubble = bubble.open_on_landing();
         // Land up and to the right of the mouth, with the whole panel on screen.
         let half = bubble.panel_target() / 2.0;
         let margin = egui::Vec2::splat(16.0);
         let lo = canvas.min + half + margin;
         let hi = (canvas.max - half - margin).max(lo);
-        bubble.center = (mouth + egui::vec2(half.x + 40.0, -half.y - 20.0)).clamp(lo, hi);
+        let mut place = (mouth + egui::vec2(half.x + 40.0, -half.y - 20.0)).clamp(lo, hi);
+        // Open panels don't push each other aside, so step down and to the
+        // right of any panel already landing there, as windows cascade.
+        for _ in 0..CASCADE_LIMIT {
+            let taken = self.bubbles.iter().any(|b| {
+                b.is_or_will_be_open() && (b.destination() - place).length() < CASCADE_STEP
+            });
+            if !taken {
+                break;
+            }
+            place = (place + egui::Vec2::splat(CASCADE_STEP)).clamp(lo, hi);
+        }
+        bubble.center = place;
         bubble.spawn_from(mouth);
         self.add_bubble(bubble);
     }
@@ -537,6 +569,7 @@ impl eframe::App for HonuApp {
                 if let Some(item) = chosen {
                     self.menu = None;
                     match item {
+                        MenuItem::AddNote => self.spit_note_bubble(canvas, time),
                         MenuItem::Ask => self.spit_ask_bubble(canvas, time),
                         #[cfg(not(target_arch = "wasm32"))]
                         MenuItem::Exit => ui.ctx().send_viewport_cmd(ViewportCommand::Close),
@@ -548,6 +581,7 @@ impl eframe::App for HonuApp {
 
 /// An item of the turtle's menu.
 enum MenuItem {
+    AddNote,
     Ask,
     /// Quitting means nothing in a web page.
     #[cfg(not(target_arch = "wasm32"))]
@@ -565,6 +599,9 @@ fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) -> Option<MenuItem
                     // As wide as its text, with no button frame until hovered.
                     let item = |text| egui::Button::new(text).frame_when_inactive(false);
                     let mut chosen = None;
+                    if ui.add(item("Add Note")).clicked() {
+                        chosen = Some(MenuItem::AddNote);
+                    }
                     if ui.add(item("Ask…")).clicked() {
                         chosen = Some(MenuItem::Ask);
                     }
@@ -647,28 +684,9 @@ fn content_ui(
     let body = body.with_min_y(body.top() + 34.0);
     let color = render::text_color(bubble);
     match &mut bubble.content {
-        Content::Notes(text) => {
-            ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                // No drag-to-scroll, so dragging the panel body moves the bubble.
-                let scroll_source = egui::scroll_area::ScrollSource {
-                    scroll_bar: true,
-                    mouse_wheel: true,
-                    ..egui::scroll_area::ScrollSource::NONE
-                };
-                egui::ScrollArea::vertical()
-                    .id_salt(&bubble.label)
-                    .scroll_source(scroll_source)
-                    .show(ui, |ui| {
-                        ui.add(
-                            egui::TextEdit::multiline(text)
-                                .frame(egui::Frame::NONE)
-                                .text_color(color)
-                                .font(FontId::proportional(16.0))
-                                .desired_width(f32::INFINITY)
-                                .interactive(interactive),
-                        );
-                    });
-            });
+        Content::Note(note) => {
+            note.ui(ui, body, color, interactive);
+            bubble.label = note.label();
         }
         Content::Ask(ask) => {
             let response = ask.ui(ui, body, color, interactive, api_key);

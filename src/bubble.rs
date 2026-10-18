@@ -9,6 +9,7 @@
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
 use crate::ask::Ask;
+use crate::note::Note;
 
 /// Corner radius of a closed bubble, as a fraction of its radius.
 const CLOSED_CORNER: f32 = 0.28;
@@ -19,6 +20,8 @@ const CLOSED_BEVEL: f32 = 0.2;
 /// Superellipse exponent of the corners. 2 would be circular arcs; higher
 /// values give the smoother, continuous-curvature corners of macOS shapes.
 const CORNER_EXPONENT: f32 = 4.0;
+/// Longest label a bubble gets from its content, in characters.
+const LABEL_CHARS: usize = 24;
 /// Size of an opened bubble, unless its content asks for another height.
 const PANEL_SIZE: Vec2 = vec2(380.0, 300.0);
 /// How quickly an opened panel follows a new height (1/s); higher is snappier.
@@ -76,7 +79,7 @@ impl Gesture {
 
 /// What an opened bubble shows.
 pub enum Content {
-    Notes(String),
+    Note(Note),
     /// A question for Claude and its answer.
     Ask(Ask),
     Empty,
@@ -256,6 +259,17 @@ impl Bubble {
         });
         self.center = from;
         self.velocity = Vec2::ZERO;
+    }
+
+    /// Where the bubble is going to rest: where a spawning bubble lands,
+    /// otherwise where it is.
+    pub fn destination(&self) -> Pos2 {
+        self.spawn.as_ref().map_or(self.center, |spawn| spawn.to)
+    }
+
+    /// Whether the bubble is open or will open as soon as it lands.
+    pub fn is_or_will_be_open(&self) -> bool {
+        self.open || self.open_on_landing
     }
 
     /// True while the bubble is flying to its place after popping out.
@@ -438,6 +452,18 @@ impl Shape {
     }
 }
 
+/// A bubble label short enough to fit: `text`, cut off with an ellipsis
+/// after `LABEL_CHARS` characters.
+pub fn short_label(text: &str) -> String {
+    let mut chars = text.chars();
+    let label: String = chars.by_ref().take(LABEL_CHARS).collect();
+    if chars.next().is_some() {
+        format!("{}…", label.trim_end())
+    } else {
+        label
+    }
+}
+
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
@@ -471,6 +497,19 @@ mod tests {
             bubble.animate(DT);
             watch(bubble);
         }
+    }
+
+    #[test]
+    fn long_text_gets_a_short_label() {
+        assert_eq!(
+            short_label("Why is the sea salty?"),
+            "Why is the sea salty?"
+        );
+        let label = short_label("How far can a green sea turtle swim in one day?");
+        assert_eq!(label, "How far can a green sea…");
+        // Counted in characters, so multi-byte ones are never cut in half.
+        let turtles = "🐢".repeat(30);
+        assert_eq!(short_label(&turtles), format!("{}…", "🐢".repeat(24)));
     }
 
     #[test]
