@@ -15,15 +15,17 @@ fn main() -> eframe::Result {
     // By default the bubbles float on the real desktop; `--windowed` shows them in
     // an ordinary window with its own wallpaper instead.
     let floating = !std::env::args().any(|arg| arg == "--windowed");
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+        .expect("the bundled app icon is a valid PNG");
+    let base = egui::ViewportBuilder::default().with_icon(icon);
     let viewport = if floating {
-        egui::ViewportBuilder::default()
-            .with_transparent(true)
+        base.with_transparent(true)
             .with_decorations(false)
             .with_has_shadow(false)
             .with_window_level(WindowLevel::AlwaysOnTop)
             .with_inner_size(WINDOWED_SIZE)
     } else {
-        egui::ViewportBuilder::default().with_inner_size(WINDOWED_SIZE)
+        base.with_inner_size(WINDOWED_SIZE)
     };
     let options = eframe::NativeOptions {
         viewport,

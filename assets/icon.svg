@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- App icon source. Regenerate assets/icon.png (512x512) from this file after editing it. -->
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b3eef5"/>
+      <stop offset="0.45" stop-color="#7fd0e2"/>
+      <stop offset="1" stop-color="#2f9cc0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square on the standard macOS icon grid (824 pt body, 100 pt margin) -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sea)"/>
+
+  <!-- The turtle from docs/images/honu.svg, scaled up -->
+  <g transform="translate(98 180) scale(3)">
+    <path d="M42 170 Q63 160 84 170 T126 170 T168 170 T210 170" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="4" stroke-linecap="round"/>
+
+    <g fill="#ffffff" fill-opacity="0.9" stroke="#e6f8fb" stroke-width="2">
+      <circle cx="238" cy="68" r="6"/>
+      <circle cx="228" cy="46" r="4"/>
+      <circle cx="240" cy="29" r="3"/>
+    </g>
+
+    <g stroke="#2f6f46" stroke-width="4" stroke-linejoin="round">
+      <path d="M58 126 L38 136 L60 138 Z" fill="#8fd6a0"/>
+      <ellipse cx="80" cy="150" rx="18" ry="9" transform="rotate(-28 80 150)" fill="#8fd6a0"/>
+      <ellipse cx="172" cy="154" rx="26" ry="11" transform="rotate(34 172 154)" fill="#8fd6a0"/>
+      <path d="M60 130 C60 80 95 54 125 54 C160 54 190 80 190 130 Z" fill="#5fb878"/>
+    </g>
+
+    <g fill="#7fcf93">
+      <ellipse cx="125" cy="92" rx="21" ry="17"/>
+      <ellipse cx="87" cy="111" rx="13" ry="11"/>
+      <ellipse cx="163" cy="111" rx="13" ry="11"/>
+      <ellipse cx="125" cy="66" rx="12" ry="5"/>
+    </g>
+    <path d="M84 84 Q98 66 118 62" fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="5" stroke-linecap="round"/>
+
+    <rect x="52" y="123" width="146" height="15" rx="7.5" fill="#f4dfa0" stroke="#2f6f46" stroke-width="4"/>
+
+    <circle cx="212" cy="106" r="26" fill="#8fd6a0" stroke="#2f6f46" stroke-width="4"/>
+    <ellipse cx="219" cy="100" rx="5.5" ry="7" fill="#1f3b2c"/>
+    <circle cx="221.5" cy="96.5" r="2.2" fill="#ffffff"/>
+    <ellipse cx="209" cy="115" rx="6" ry="3.5" fill="#ff9fb2" opacity="0.8"/>
+    <path d="M220 116 Q226 122 232 115" fill="none" stroke="#2f6f46" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>
