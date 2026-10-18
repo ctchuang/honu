@@ -1,5 +1,5 @@
 //! The pixel-art sea turtle that sits in the bottom-left corner of the
-//! desktop. Clicking it releases the bubbles.
+//! desktop. Clicking it makes it spit out the bubbles.
 
 use eframe::egui::{Color32, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2};
 
@@ -21,6 +21,12 @@ const SPRITE: [&str; 14] = [
     "...OKKO.........OKKKKO..",
     "....OO...........OOOO...",
 ];
+/// Pixels (column, row) that turn into the dark inside of the open mouth.
+const OPEN_MOUTH: [(usize, usize); 4] = [(22, 7), (23, 7), (22, 8), (23, 8)];
+/// Where bubbles come out, in sprite pixels: the front of the open mouth.
+const MOUTH: Vec2 = vec2(24.0, 8.0);
+/// Seconds the mouth stays open after spitting.
+const MOUTH_SECONDS: f64 = 0.3;
 /// Size of one sprite pixel, in points.
 const PIXEL: f32 = 5.0;
 /// Gap between the turtle and the corner of the window.
@@ -37,6 +43,10 @@ pub struct Turtle {
     origin: Pos2,
     /// When the last hop started, in seconds of app time.
     hopped_at: f64,
+    /// When the turtle last spat out a bubble, in seconds of app time.
+    spat_at: f64,
+    /// Whether the mouth is open this frame.
+    mouth_open: bool,
 }
 
 impl Turtle {
@@ -44,12 +54,22 @@ impl Turtle {
         Self {
             origin: Pos2::ZERO,
             hopped_at: f64::NEG_INFINITY,
+            spat_at: f64::NEG_INFINITY,
+            mouth_open: false,
         }
     }
 
     /// Starts a little hop at `time`.
     pub fn hop(&mut self, time: f64) {
         self.hopped_at = time;
+    }
+
+    /// Opens the mouth for a moment at `time` and returns where a bubble
+    /// should come out.
+    pub fn spit(&mut self, time: f64) -> Pos2 {
+        self.spat_at = time;
+        self.mouth_open = true;
+        self.origin + MOUTH * PIXEL
     }
 
     /// Places the turtle in the bottom-left corner of `canvas`, lifted by a hop
@@ -63,16 +83,13 @@ impl Turtle {
         };
         // Move in whole sprite pixels, as pixel art does.
         let lift = lift.round() as f32 * PIXEL;
+        self.mouth_open = time - self.spat_at < MOUTH_SECONDS;
         let size = sprite_size();
         self.origin = pos2(
             canvas.left() + MARGIN,
             canvas.bottom() - MARGIN - size.y - lift,
         )
         .round();
-    }
-
-    pub fn center(&self) -> Pos2 {
-        self.origin + sprite_size() / 2.0
     }
 
     /// Whether `p` is on one of the turtle's visible pixels.
@@ -92,6 +109,11 @@ impl Turtle {
         let mut mesh = Mesh::default();
         for (y, row) in SPRITE.iter().enumerate() {
             for (x, c) in row.chars().enumerate() {
+                let c = if self.mouth_open && OPEN_MOUTH.contains(&(x, y)) {
+                    'E'
+                } else {
+                    c
+                };
                 if let Some(color) = color(c) {
                     let min = self.origin + vec2(x as f32, y as f32) * PIXEL;
                     mesh.add_colored_rect(Rect::from_min_size(min, Vec2::splat(PIXEL)), color);
@@ -138,5 +160,12 @@ mod tests {
         assert!(turtle.contains(pixel(8.0, 4.0)), "shell");
         assert!(!turtle.contains(pixel(0.0, 0.0)), "empty corner");
         assert!(!turtle.contains(pixel(30.0, 4.0)), "outside the sprite");
+    }
+
+    #[test]
+    fn open_mouth_is_on_the_head() {
+        for (x, y) in OPEN_MOUTH {
+            assert!(matches!(SPRITE[y].as_bytes()[x], b'K' | b'O'), "({x}, {y})");
+        }
     }
 }

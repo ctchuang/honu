@@ -12,8 +12,8 @@ use turtle::Turtle;
 
 /// Size of the window in `--windowed` mode, which the starting layout is designed for.
 const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
-/// Seconds between bubbles popping out of the turtle.
-const RELEASE_INTERVAL: f64 = 0.25;
+/// Seconds between bubbles coming out of the turtle's mouth.
+const RELEASE_INTERVAL: f64 = 0.5;
 
 fn main() -> eframe::Result {
     // By default the bubbles float on the real desktop; `--windowed` shows them in
@@ -124,15 +124,14 @@ impl HonuApp {
         }
     }
 
-    /// Pops out the pending bubbles that are due by `time`, one at a time.
+    /// Spits out the pending bubbles that are due by `time`, one at a time.
     fn release_due(&mut self, time: f64) {
         while let Some(at) = self.next_release.filter(|&at| time >= at) {
             if let Some(mut bubble) = self.pending.pop() {
-                bubble.spawn_from(self.turtle.center());
+                bubble.spawn_from(self.turtle.spit(time));
                 // A dragged bubble must stay on top.
                 let index = self.bubbles.len() - usize::from(self.dragging);
                 self.bubbles.insert(index, bubble);
-                self.turtle.hop(time);
             }
             self.next_release = (!self.pending.is_empty()).then_some(at + RELEASE_INTERVAL);
         }

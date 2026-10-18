@@ -22,7 +22,7 @@ const PANEL_BEVEL: f32 = 14.0;
 /// Seconds to open or close a bubble.
 const MORPH_SECONDS: f32 = 0.35;
 /// Seconds a new bubble takes to fly to its place.
-const SPAWN_SECONDS: f32 = 0.6;
+const SPAWN_SECONDS: f32 = 1.6;
 
 /// What an opened bubble shows.
 pub enum Content {
@@ -102,9 +102,11 @@ impl Bubble {
     /// Size relative to full size: smaller (and briefly larger, overshooting)
     /// while spawning, otherwise 1.
     pub fn scale(&self) -> f32 {
+        // Squaring the progress keeps the bubble small for longer as it leaves,
+        // so it visibly grows on the way instead of all at once.
         self.spawn
             .as_ref()
-            .map_or(1.0, |spawn| ease_out_back(spawn.progress))
+            .map_or(1.0, |spawn| ease_out_back(spawn.progress.powi(2)))
     }
 
     /// Moves the bubble, including where it is flying to, by `offset`.
@@ -120,7 +122,7 @@ impl Bubble {
     pub fn animate(&mut self, dt: f32) {
         if let Some(spawn) = &mut self.spawn {
             spawn.progress = (spawn.progress + dt / SPAWN_SECONDS).min(1.0);
-            self.center = spawn.from.lerp(spawn.to, ease_out_cubic(spawn.progress));
+            self.center = spawn.from.lerp(spawn.to, ease_out_quad(spawn.progress));
             if spawn.progress == 1.0 {
                 self.spawn = None;
             }
@@ -230,9 +232,9 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-/// Starts fast and slows to a smooth stop.
-fn ease_out_cubic(t: f32) -> f32 {
-    1.0 - (1.0 - t).powi(3)
+/// Starts moving and slows to a smooth stop.
+fn ease_out_quad(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(2)
 }
 
 /// Eases out with a small overshoot, so bubbles pop open.
