@@ -2,12 +2,14 @@ mod ask;
 mod bubble;
 mod claude;
 mod desktop;
+mod octopus;
 mod physics;
 mod render;
 mod turtle;
 
 use bubble::{Bubble, Content, Gesture};
 use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand, pos2};
+use octopus::Octopus;
 use turtle::Turtle;
 
 /// Size of the window in `--windowed` mode, which the starting layout is designed for.
@@ -17,6 +19,9 @@ const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 const LONG_PRESS_SECONDS: f64 = 0.5;
 /// Seconds between bubbles coming out of the turtle's mouth.
 const RELEASE_INTERVAL: f64 = 0.5;
+/// How far a bubble must be dragged before the octopus comes up, so nudging
+/// a bubble into place does not call it.
+const SUMMON_DISTANCE: f32 = 40.0;
 /// A soft, slightly warm white for the opaque bubbles.
 const PAPER: Color32 = Color32::from_rgb(250, 249, 246);
 /// Storage key for the Claude API key the web version asks for. The desktop
@@ -104,8 +109,13 @@ struct HonuApp {
     /// When the next pending bubble pops out, while the turtle is releasing them.
     next_release: Option<f64>,
     turtle: Turtle,
+    /// Deletes the bubbles dropped on it.
+    octopus: Octopus,
     /// True while the top bubble is being dragged.
     dragging: bool,
+    /// Where the bubble being dragged was picked up, to return it there if the
+    /// octopus has to spit it back.
+    drag_home: Pos2,
     /// True while the turtle is being dragged.
     dragging_turtle: bool,
     /// When the primary button went down on the turtle, while it is still
@@ -159,7 +169,9 @@ impl HonuApp {
             pending,
             next_release: None,
             turtle,
+            octopus: Octopus::new(),
             dragging: false,
+            drag_home: Pos2::ZERO,
             dragging_turtle: false,
             turtle_pressed_at: None,
             long_pressed: false,
@@ -171,10 +183,11 @@ impl HonuApp {
         }
     }
 
-    /// Index of the topmost bubble under `p`, if any. The turtle sits above
-    /// all bubbles, and bubbles still flying out of it cannot be grabbed.
+    /// Index of the topmost bubble under `p`, if any. The turtle and the
+    /// octopus sit above all bubbles, and bubbles still flying out of the
+    /// turtle cannot be grabbed.
     fn hit_test(&self, p: Pos2) -> Option<usize> {
-        if self.turtle.contains(p) {
+        if self.turtle.contains(p) || self.octopus.contains(p) {
             return None;
         }
         self.bubbles
@@ -198,7 +211,8 @@ impl HonuApp {
             || self.dragging
             || self.dragging_turtle
             || self.hit_test(p).is_some()
-            || self.turtle.contains(p);
+            || self.turtle.contains(p)
+            || self.octopus.contains(p);
         if self.passthrough == on_bubble {
             self.passthrough = !on_bubble;
             ui.ctx()
@@ -239,6 +253,13 @@ impl HonuApp {
         bubble.center = (mouth + egui::vec2(half.x + 40.0, -half.y - 20.0)).clamp(lo, hi);
         bubble.spawn_from(mouth);
         self.add_bubble(bubble);
+    }
+
+    /// Has the octopus spit back the bubble it swallowed last, if it still can.
+    fn undo_delete(&mut self, time: f64) {
+        if let Some(bubble) = self.octopus.spit_back(time) {
+            self.add_bubble(bubble);
+        }
     }
 
     /// Records where the turtle rests, if it has been dragged.
@@ -303,9 +324,18 @@ impl eframe::App for HonuApp {
                         bubble.translate(offset);
                     }
                     self.turtle.translate(offset);
+                    self.octopus.translate(offset);
+                    self.drag_home += offset;
                 }
                 self.last_canvas = Some(canvas);
                 self.turtle.place(canvas, time);
+                // The octopus comes up once a bubble has been dragged a little way.
+                let summoned = self.dragging
+                    && self.bubbles.last().is_some_and(|top| {
+                        (top.center - self.drag_home).length() > SUMMON_DISTANCE
+                    });
+                self.octopus.summon(summoned);
+                self.octopus.update(canvas, self.turtle.center(), time, dt);
                 if self.floating {
                     self.update_passthrough(ui);
                     // A borderless window has no close button, so handle ⌘Q ourselves.
@@ -375,6 +405,7 @@ impl eframe::App for HonuApp {
                     } else if let Some(i) = origin.and_then(|p| self.hit_test(p)) {
                         self.raise(i);
                         self.dragging = true;
+                        self.drag_home = self.bubbles[self.bubbles.len() - 1].center;
                     }
                 }
                 if self.dragging_turtle {
@@ -392,13 +423,23 @@ impl eframe::App for HonuApp {
                     }
                 }
                 if self.dragging {
+                    // Holding a bubble over the octopus shrinks it, and letting go
+                    // there deletes it. Where the pointer is decides, not where a
+                    // thrown bubble ends up, so only a deliberate drop deletes.
+                    let over_octopus = pointer.is_some_and(|p| self.octopus.in_reach(p));
+                    self.octopus.set_eager(over_octopus);
                     if let Some(top) = self.bubbles.last_mut() {
                         top.center += response.drag_delta();
                         // Remember the throw so the bubble keeps gliding when released.
                         top.velocity = ui.input(|i| i.pointer.velocity());
+                        top.set_doomed(over_octopus);
                     }
                     if response.drag_stopped() {
                         self.dragging = false;
+                        self.octopus.set_eager(false);
+                        if over_octopus && let Some(top) = self.bubbles.pop() {
+                            self.octopus.swallow(top, self.drag_home);
+                        }
                     }
                 }
 
@@ -406,6 +447,16 @@ impl eframe::App for HonuApp {
                     && response
                         .interact_pointer_pos()
                         .is_some_and(|p| self.turtle.contains(p));
+                let clicked_octopus = response.clicked()
+                    && response
+                        .interact_pointer_pos()
+                        .is_some_and(|p| self.octopus.contains(p));
+                // ⌘Z (Ctrl+Z elsewhere) also undoes, unless a text field wants it.
+                let undo_key = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z))
+                    && ui.memory(|m| m.focused().is_none());
+                if clicked_octopus || undo_key {
+                    self.undo_delete(time);
+                }
                 if clicked_turtle && !self.long_pressed {
                     self.turtle.hop(time);
                     if self.next_release.is_none() && !self.pending.is_empty() {
@@ -451,10 +502,9 @@ impl eframe::App for HonuApp {
                     ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
                 } else if hovered.is_some() {
                     ui.ctx().set_cursor_icon(CursorIcon::Grab);
-                } else if response
-                    .hover_pos()
-                    .is_some_and(|p| self.turtle.contains(p))
-                {
+                } else if response.hover_pos().is_some_and(|p| {
+                    self.turtle.contains(p) || (self.octopus.can_undo() && self.octopus.contains(p))
+                }) {
                     ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
                 }
 
@@ -475,6 +525,10 @@ impl eframe::App for HonuApp {
                 if self.api_key != key_before {
                     remember_api_key(frame, self.api_key.as_deref());
                 }
+                for bubble in self.octopus.swallowing() {
+                    render::paint_bubble(&painter, bubble);
+                }
+                self.octopus.paint(&painter, time);
                 self.turtle.paint(&painter);
                 let chosen = self
                     .menu

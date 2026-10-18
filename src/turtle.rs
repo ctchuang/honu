@@ -80,6 +80,11 @@ impl Turtle {
         self.origin + MOUTH * PIXEL
     }
 
+    /// The middle of the sprite this frame.
+    pub fn center(&self) -> Pos2 {
+        self.origin + sprite_size() / 2.0
+    }
+
     /// Where the turtle rests relative to `center`, or `None` while it is
     /// still in its corner.
     pub fn offset_from(&self, center: Pos2) -> Option<Vec2> {
