@@ -80,6 +80,18 @@ impl Turtle {
         self.origin + MOUTH * PIXEL
     }
 
+    /// Where the turtle rests relative to `center`, or `None` while it is
+    /// still in its corner.
+    pub fn offset_from(&self, center: Pos2) -> Option<Vec2> {
+        self.moved.then(|| self.rest - center)
+    }
+
+    /// Puts the turtle at `offset` from `center`, as if it had been dragged there.
+    pub fn set_offset_from(&mut self, center: Pos2, offset: Vec2) {
+        self.rest = center + offset;
+        self.moved = true;
+    }
+
     /// Moves the turtle by `delta`, as when dragged.
     pub fn move_by(&mut self, delta: Vec2) {
         self.rest += delta;

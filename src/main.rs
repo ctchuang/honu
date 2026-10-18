@@ -33,12 +33,14 @@ fn main() -> eframe::Result {
     };
     let options = eframe::NativeOptions {
         viewport,
+        // Only the turtle's place is saved; the window is laid out on every launch.
+        persist_window: false,
         ..Default::default()
     };
     eframe::run_native(
         "Honu",
         options,
-        Box::new(move |_cc| Ok(Box::new(HonuApp::new(floating)))),
+        Box::new(move |cc| Ok(Box::new(HonuApp::new(floating, cc.storage)))),
     )
 }
 
@@ -65,7 +67,7 @@ struct HonuApp {
 }
 
 impl HonuApp {
-    fn new(floating: bool) -> Self {
+    fn new(floating: bool, storage: Option<&dyn eframe::Storage>) -> Self {
         let rgb = Color32::from_rgb;
         // A soft, slightly warm white for the opaque bubbles.
         let white = rgb(250, 249, 246);
@@ -85,11 +87,18 @@ impl HonuApp {
             bubble.phase = i as f32 * 1.7;
         }
         pending.reverse();
+        let mut turtle = Turtle::new();
+        let saved = storage.and_then(|storage| storage.get_string(turtle_key(floating)));
+        if let Some(offset) = saved.as_deref().and_then(parse_offset) {
+            // Like the starting bubbles, start out laid out for the windowed size;
+            // the first frame moves everything to the real window.
+            turtle.set_offset_from((WINDOWED_SIZE / 2.0).to_pos2(), offset);
+        }
         Self {
             bubbles: Vec::new(),
             pending,
             next_release: None,
-            turtle: Turtle::new(),
+            turtle,
             dragging: false,
             dragging_turtle: false,
             floating,
@@ -143,6 +152,19 @@ impl HonuApp {
         }
     }
 
+    /// Records where the turtle rests, if it has been dragged.
+    fn store_turtle(&self, storage: &mut dyn eframe::Storage) {
+        let offset = self
+            .last_canvas
+            .and_then(|canvas| self.turtle.offset_from(canvas.center()));
+        if let Some(offset) = offset {
+            storage.set_string(
+                turtle_key(self.floating),
+                format!("{} {}", offset.x, offset.y),
+            );
+        }
+    }
+
     /// Moves bubble `i` to the top of the stack.
     fn raise(&mut self, i: usize) {
         let bubble = self.bubbles.remove(i);
@@ -151,6 +173,14 @@ impl HonuApp {
 }
 
 impl eframe::App for HonuApp {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.store_turtle(storage);
+    }
+
+    fn persist_egui_memory(&self) -> bool {
+        false
+    }
+
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
         if self.floating {
             [0.0; 4]
@@ -159,7 +189,7 @@ impl eframe::App for HonuApp {
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
@@ -222,6 +252,12 @@ impl eframe::App for HonuApp {
                     self.turtle.place(canvas, time);
                     if response.drag_stopped() {
                         self.dragging_turtle = false;
+                        // Save right away: quitting with ⌘Q or from the Dock ends the
+                        // app without calling `save`.
+                        if let Some(storage) = frame.storage_mut() {
+                            self.store_turtle(storage);
+                            storage.flush();
+                        }
                     }
                 }
                 if self.dragging {
@@ -293,6 +329,27 @@ impl eframe::App for HonuApp {
     }
 }
 
+/// Storage key for where the turtle rests, kept apart for the desktop and
+/// for `--windowed`, whose windows differ in size.
+fn turtle_key(floating: bool) -> &'static str {
+    if floating {
+        "turtle_offset"
+    } else {
+        "turtle_offset_windowed"
+    }
+}
+
+/// Parses an offset saved as "x y".
+fn parse_offset(text: &str) -> Option<egui::Vec2> {
+    let mut parts = text.split_whitespace().map(str::parse::<f32>);
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(Ok(x)), Some(Ok(y)), None) if x.is_finite() && y.is_finite() => {
+            Some(egui::vec2(x, y))
+        }
+        _ => None,
+    }
+}
+
 /// Draws an opened bubble's content inside its panel, below the title.
 fn content_ui(ui: &mut egui::Ui, bubble: &mut Bubble, interactive: bool) {
     let body = bubble.shape().rect().shrink(22.0);
@@ -331,5 +388,20 @@ fn content_ui(ui: &mut egui::Ui, bubble: &mut Bubble, interactive: bool) {
                 color.gamma_multiply(0.7),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_offset_round_trips() {
+        let offset = egui::vec2(-412.5, 230.0);
+        let text = format!("{} {}", offset.x, offset.y);
+        assert_eq!(parse_offset(&text), Some(offset));
+        assert_eq!(parse_offset("1 2 3"), None);
+        assert_eq!(parse_offset("NaN 2"), None);
+        assert_eq!(parse_offset(""), None);
     }
 }
