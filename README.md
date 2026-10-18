@@ -1,12 +1,12 @@
 # Honu
 
-An experimental desktop GUI project written in Rust with [egui](https://github.com/emilk/egui) / eframe.
+An experimental desktop GUI and Human-Computer-Interface project written in Rust with [egui](https://github.com/emilk/egui) / eframe.
 
 > **Status:** experimental. This is a playground for trying out egui, not a finished application. Expect breaking changes.
 
 ## What it does
 
-Right now Honu is a minimal list app: type some text and press **Enter** or click **Add**, and it appears in a numbered, scrollable list. Items are kept in memory only and are lost when the window closes.
+Omitted for now.
 
 ## Getting started
 
