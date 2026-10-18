@@ -9,9 +9,9 @@ use eframe::egui::{self, Color32, FontId, Rect, RichText};
 
 use crate::bubble::{Gesture, short_label};
 use crate::claude;
-use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, View};
+use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View};
 
-pub const ID: AppId = AppId("ask");
+const ID: AppId = AppId("ask");
 /// A soft, slightly warm white, like paper.
 const PAPER: Color32 = Color32::from_rgb(250, 249, 246);
 /// The label of a chat with no question asked yet.
@@ -81,15 +81,25 @@ impl AskApp {
             ids: ItemIds::default(),
         }
     }
+}
+
+impl MicroApp for AskApp {
+    fn id(&self) -> AppId {
+        ID
+    }
+
+    fn menu_label(&self) -> &'static str {
+        "Ask AI"
+    }
 
     /// Starts a chat with no question yet.
-    pub fn create(&mut self) -> ItemId {
+    fn create(&mut self) -> ItemId {
         let id = self.ids.next();
         self.chats.insert(id, Chat::new());
         id
     }
 
-    pub fn appearance(&self, _item: ItemId) -> Appearance {
+    fn appearance(&self, _item: ItemId) -> Appearance {
         Appearance {
             color: PAPER,
             glass: false,
@@ -99,7 +109,7 @@ impl AskApp {
     }
 
     /// A short label for a chat's bubble: its question, once asked.
-    pub fn title(&self, item: ItemId) -> String {
+    fn title(&self, item: ItemId) -> String {
         self.chats
             .get(&item)
             .and_then(|chat| chat.title.clone())
@@ -107,14 +117,14 @@ impl AskApp {
     }
 
     /// Whether Claude is still working on a chat's answer.
-    pub fn is_busy(&self, item: ItemId) -> bool {
+    fn is_busy(&self, item: ItemId) -> bool {
         self.chats.get(&item).is_some_and(Chat::is_busy)
     }
 
     /// Takes in whatever the answer streams have delivered. A chat's bubbles
     /// float up when its answer is in, and wobble when something needs the
     /// user. Call every frame.
-    pub fn update(&mut self, cx: &mut Context) {
+    fn update(&mut self, cx: &mut Context) {
         for (&item, chat) in &mut self.chats {
             match chat.poll() {
                 Some(Outcome::Answered) => cx.play(item, Gesture::Rise),
@@ -127,7 +137,7 @@ impl AskApp {
     /// Shows a chat and returns the panel height that fits it. Without an
     /// API key it first asks for one and stores it in `cx`; a key the API
     /// refused is cleared from it.
-    pub fn ui(
+    fn ui(
         &mut self,
         item: ItemId,
         ui: &mut egui::Ui,
@@ -140,7 +150,7 @@ impl AskApp {
     }
 
     /// Forgets a chat, which also stops its answer from streaming in.
-    pub fn remove(&mut self, item: ItemId) {
+    fn remove(&mut self, item: ItemId) {
         self.chats.remove(&item);
     }
 }

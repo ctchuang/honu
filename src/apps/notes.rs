@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use eframe::egui::{self, Color32, FontId};
 
 use crate::bubble::short_label;
-use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, View};
+use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View};
 
-pub const ID: AppId = AppId("notes");
+const ID: AppId = AppId("notes");
 /// The label of a note with nothing written in it yet.
 const EMPTY_LABEL: &str = "Note";
 /// The pale yellow of a sticky note.
@@ -34,9 +34,19 @@ impl NotesApp {
             ids: ItemIds::default(),
         }
     }
+}
+
+impl MicroApp for NotesApp {
+    fn id(&self) -> AppId {
+        ID
+    }
+
+    fn menu_label(&self) -> &'static str {
+        "Add Note"
+    }
 
     /// Starts an empty note, which takes the focus when it first shows.
-    pub fn create(&mut self) -> ItemId {
+    fn create(&mut self) -> ItemId {
         let id = self.ids.next();
         let note = Note {
             text: String::new(),
@@ -46,7 +56,7 @@ impl NotesApp {
         id
     }
 
-    pub fn appearance(&self, _item: ItemId) -> Appearance {
+    fn appearance(&self, _item: ItemId) -> Appearance {
         Appearance {
             color: NOTE_YELLOW,
             glass: false,
@@ -56,7 +66,7 @@ impl NotesApp {
     }
 
     /// A short label for a note's bubble: its first line with anything on it.
-    pub fn title(&self, item: ItemId) -> String {
+    fn title(&self, item: ItemId) -> String {
         self.notes
             .get(&item)
             .and_then(|note| note.text.lines().map(str::trim).find(|l| !l.is_empty()))
@@ -64,10 +74,14 @@ impl NotesApp {
     }
 
     /// Shows a note's text for editing.
-    pub fn ui(&mut self, item: ItemId, ui: &mut egui::Ui, view: &View, _cx: &mut Context) {
-        let Some(note) = self.notes.get_mut(&item) else {
-            return;
-        };
+    fn ui(
+        &mut self,
+        item: ItemId,
+        ui: &mut egui::Ui,
+        view: &View,
+        _cx: &mut Context,
+    ) -> Option<f32> {
+        let note = self.notes.get_mut(&item)?;
         let (rect, color, interactive) = (view.rect, view.text_color, view.interactive);
         ui.scope_builder(
             egui::UiBuilder::new().id_salt((ID, item)).max_rect(rect),
@@ -97,9 +111,11 @@ impl NotesApp {
                     });
             },
         );
+        // Notes keep the usual panel size.
+        None
     }
 
-    pub fn remove(&mut self, item: ItemId) {
+    fn remove(&mut self, item: ItemId) {
         self.notes.remove(&item);
     }
 }

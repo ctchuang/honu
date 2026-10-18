@@ -9,11 +9,11 @@ mod render;
 mod stage;
 mod turtle;
 
-use apps::ask::{self, AskApp};
-use apps::notes::{self, NotesApp};
+use apps::ask::AskApp;
+use apps::notes::NotesApp;
 use bubble::Bubble;
 use eframe::egui::{self, CursorIcon, Pos2, Sense, ViewportCommand};
-use microapp::{Appearance, Context, Effect, View, ViewTarget};
+use microapp::{AppId, Context, Effect, Registry, View, ViewTarget};
 use octopus::Octopus;
 use stage::Stage;
 use turtle::Turtle;
@@ -103,8 +103,7 @@ impl TurtleMenu {
 struct HonuApp {
     /// The bubbles, each showing an item of one of the microapps below.
     stage: Stage,
-    notes: NotesApp,
-    asks: AskApp,
+    apps: Registry,
     turtle: Turtle,
     /// Deletes the bubbles dropped on it.
     octopus: Octopus,
@@ -137,8 +136,7 @@ impl HonuApp {
         }
         Self {
             stage: Stage::new(),
-            notes: NotesApp::new(),
-            asks: AskApp::new(),
+            apps: Registry::new(vec![Box::new(NotesApp::new()), Box::new(AskApp::new())]),
             turtle,
             octopus: Octopus::new(),
             dragging_turtle: false,
@@ -186,37 +184,21 @@ impl HonuApp {
         }
     }
 
-    /// Starts a new note, whose bubble opens for writing.
-    fn add_note(&mut self, canvas: egui::Rect, time: f64) {
-        let item = self.notes.create();
-        let look = self.notes.appearance(item);
-        self.spit_panel(
-            ViewTarget {
-                app: notes::ID,
-                item,
-            },
-            look,
-            canvas,
-            time,
-        );
-    }
-
-    /// Starts a new chat with Claude, whose bubble opens for a question.
-    fn ask_ai(&mut self, canvas: egui::Rect, time: f64) {
-        let item = self.asks.create();
-        let look = self.asks.appearance(item);
-        self.spit_panel(ViewTarget { app: ask::ID, item }, look, canvas, time);
-    }
-
-    /// Has the turtle spit out a bubble showing `target`, which opens into
-    /// its panel when it lands next to the turtle.
-    fn spit_panel(&mut self, target: ViewTarget, look: Appearance, canvas: egui::Rect, time: f64) {
-        let mouth = self.turtle.spit(time);
+    /// Starts a new item in microapp `id` and has the turtle spit out a
+    /// bubble showing it, which opens into its panel when it lands.
+    fn start(&mut self, id: AppId, canvas: egui::Rect, time: f64) {
+        let Some(app) = self.apps.get_mut(id) else {
+            return;
+        };
+        let item = app.create();
+        let look = app.appearance(item);
+        let target = ViewTarget { app: id, item };
         let mut bubble = Bubble::new(target, Pos2::ZERO, look.radius, look.color, look.glass);
         if let Some(height) = look.panel_height {
             bubble = bubble.with_panel_height(height);
         }
-        bubble.label = title(&self.notes, &self.asks, target);
+        bubble.label = app.title(item);
+        let mouth = self.turtle.spit(time);
         self.stage.spit_panel(bubble, mouth, canvas, time);
     }
 
@@ -230,13 +212,8 @@ impl HonuApp {
     /// Deletes an item for good once no bubble shows it anymore.
     fn delete_if_unseen(&mut self, target: ViewTarget) {
         let seen = self.stage.shows(target) || self.octopus.contents().any(|b| b.target == target);
-        if seen {
-            return;
-        }
-        match target.app {
-            notes::ID => self.notes.remove(target.item),
-            ask::ID => self.asks.remove(target.item),
-            _ => {}
+        if !seen {
+            self.apps.remove(target);
         }
     }
 
@@ -433,12 +410,10 @@ impl eframe::App for HonuApp {
                 // Let the microapps catch up, then show on each bubble what its
                 // item is doing: an Ask bubble breathes while Claude works.
                 let mut effects = Vec::new();
-                self.asks
-                    .update(&mut Context::new(ask::ID, &mut effects, &mut self.api_key));
+                self.apps.update(&mut effects, &mut self.api_key);
                 for bubble in self.stage.bubbles_mut() {
-                    let ViewTarget { app, item } = bubble.target;
-                    bubble.label = title(&self.notes, &self.asks, bubble.target);
-                    bubble.set_busy(app == ask::ID && self.asks.is_busy(item));
+                    bubble.label = self.apps.title(bubble.target);
+                    bubble.set_busy(self.apps.is_busy(bubble.target));
                 }
                 self.apply(effects);
                 self.stage.step(canvas, time, dt);
@@ -470,9 +445,8 @@ impl eframe::App for HonuApp {
                         // Only the front bubble's content takes input, so a bubble lying
                         // on top of another's content can still be grabbed.
                         let interactive = i == top && !dragging;
-                        let apps = (&mut self.notes, &mut self.asks);
                         let cx = (&mut effects, &mut self.api_key);
-                        content_ui(ui, bubble, interactive, apps, cx);
+                        content_ui(ui, bubble, interactive, &mut self.apps, cx);
                     }
                 }
                 self.apply(effects);
@@ -487,12 +461,11 @@ impl eframe::App for HonuApp {
                 let chosen = self
                     .menu
                     .as_mut()
-                    .and_then(|menu| turtle_menu_ui(ui.ctx(), menu));
+                    .and_then(|menu| turtle_menu_ui(ui.ctx(), menu, &self.apps));
                 if let Some(item) = chosen {
                     self.menu = None;
                     match item {
-                        MenuItem::AddNote => self.add_note(canvas, time),
-                        MenuItem::Ask => self.ask_ai(canvas, time),
+                        MenuItem::Start(id) => self.start(id, canvas, time),
                         #[cfg(not(target_arch = "wasm32"))]
                         MenuItem::Exit => ui.ctx().send_viewport_cmd(ViewportCommand::Close),
                     }
@@ -503,15 +476,16 @@ impl eframe::App for HonuApp {
 
 /// An item of the turtle's menu.
 enum MenuItem {
-    AddNote,
-    Ask,
+    /// Starts a new item in a microapp.
+    Start(AppId),
     /// Quitting means nothing in a web page.
     #[cfg(not(target_arch = "wasm32"))]
     Exit,
 }
 
 /// Shows the turtle's menu and returns the item chosen this frame, if any.
-fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) -> Option<MenuItem> {
+/// Each microapp in `apps` gets an item, and Exit comes last.
+fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu, apps: &Registry) -> Option<MenuItem> {
     let area = egui::Area::new(egui::Id::unique("turtle_menu"))
         .order(egui::Order::Foreground)
         .fixed_pos(menu.pos)
@@ -521,11 +495,10 @@ fn turtle_menu_ui(ctx: &egui::Context, menu: &mut TurtleMenu) -> Option<MenuItem
                     // As wide as its text, with no button frame until hovered.
                     let item = |text| egui::Button::new(text).frame_when_inactive(false);
                     let mut chosen = None;
-                    if ui.add(item("Add Note")).clicked() {
-                        chosen = Some(MenuItem::AddNote);
-                    }
-                    if ui.add(item("Ask AI")).clicked() {
-                        chosen = Some(MenuItem::Ask);
+                    for app in apps.iter() {
+                        if ui.add(item(app.menu_label())).clicked() {
+                            chosen = Some(MenuItem::Start(app.id()));
+                        }
                     }
                     #[cfg(not(target_arch = "wasm32"))]
                     if ui.add(item("Exit")).clicked() {
@@ -595,22 +568,13 @@ fn parse_offset(text: &str) -> Option<egui::Vec2> {
     }
 }
 
-/// The label for a bubble showing `target`, from the microapp that keeps it.
-fn title(notes: &NotesApp, asks: &AskApp, target: ViewTarget) -> String {
-    match target.app {
-        notes::ID => notes.title(target.item),
-        ask::ID => asks.title(target.item),
-        _ => String::new(),
-    }
-}
-
 /// Draws an opened bubble's content inside its panel, below the title, from
 /// the microapp that keeps it. What the microapp asks for goes into `effects`.
 fn content_ui(
     ui: &mut egui::Ui,
     bubble: &mut Bubble,
     interactive: bool,
-    (notes, asks): (&mut NotesApp, &mut AskApp),
+    apps: &mut Registry,
     (effects, api_key): (&mut Vec<Effect>, &mut Option<String>),
 ) {
     let body = bubble.shape().rect().shrink(22.0);
@@ -620,15 +584,12 @@ fn content_ui(
         interactive,
     };
     let ViewTarget { app, item } = bubble.target;
+    let Some(microapp) = apps.get_mut(app) else {
+        return;
+    };
     let mut cx = Context::new(app, effects, api_key);
-    match app {
-        notes::ID => notes.ui(item, ui, &view, &mut cx),
-        ask::ID => {
-            if let Some(height) = asks.ui(item, ui, &view, &mut cx) {
-                bubble.set_panel_height(height);
-            }
-        }
-        _ => {}
+    if let Some(height) = microapp.ui(item, ui, &view, &mut cx) {
+        bubble.set_panel_height(height);
     }
 }
 
