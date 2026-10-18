@@ -9,7 +9,7 @@ use eframe::egui::{
     Align2, Color32, CornerRadius, FontId, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2,
 };
 
-use crate::bubble::Bubble;
+use crate::view::bubble::Bubble;
 
 /// The head and body, one character per pixel: Outline, Body, White
 /// highlight, Eye (also the mouth), Pink cheek, and `.` for transparent.

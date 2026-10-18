@@ -41,9 +41,9 @@ Real Liquid Glass–style glass would blur, magnify, and distort whatever is beh
 
 The guiding idea: Claude should work with the bubbles on the desktop, not live in a
 chat window. Done so far: the turtle's menu has **Ask AI**, which spits out a bubble
-whose answer streams in while the panel grows to fit it (`src/ask.rs`, `src/claude.rs`).
-Its **Add Note** makes plain note bubbles to write in (`src/note.rs`), and the octopus
-deletes bubbles (`src/octopus.rs`).
+whose answer streams in while the panel grows to fit it (`src/apps/ask.rs`, `src/claude.rs`).
+Its **Add Note** makes plain note bubbles to write in (`src/apps/notes.rs`), and the octopus
+deletes bubbles (`src/creatures/octopus.rs`).
 
 - **Spit out several bubbles at once**: give Claude a `create_bubble` tool,
   so "give me five weekend ideas" becomes five bubbles the turtle spits out one by one.

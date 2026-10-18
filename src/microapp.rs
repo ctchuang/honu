@@ -5,7 +5,7 @@
 
 use eframe::egui::{self, Color32, Rect};
 
-use crate::bubble::Gesture;
+use crate::view::bubble::Gesture;
 
 /// Names a microapp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

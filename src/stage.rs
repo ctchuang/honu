@@ -4,9 +4,9 @@
 
 use eframe::egui::{Pos2, Rect, Vec2, vec2};
 
-use crate::bubble::{Bubble, Gesture};
 use crate::microapp::ViewTarget;
-use crate::physics;
+use crate::view::bubble::{Bubble, Gesture};
+use crate::view::physics;
 
 /// How far a new panel steps aside from one already in its place.
 const CASCADE_STEP: f32 = 28.0;

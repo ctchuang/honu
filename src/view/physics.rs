@@ -5,7 +5,7 @@
 
 use eframe::egui::{Rect, Vec2, vec2};
 
-use crate::bubble::Bubble;
+use crate::view::bubble::Bubble;
 
 /// Velocity decay rate (1/s); higher stops a thrown bubble sooner.
 const FRICTION: f32 = 4.0;

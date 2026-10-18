@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 
 use eframe::egui::{self, Color32, FontId};
 
-use crate::bubble::short_label;
 use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View};
+use crate::view::bubble::short_label;
 
 const ID: AppId = AppId("notes");
 /// The label of a note with nothing written in it yet.

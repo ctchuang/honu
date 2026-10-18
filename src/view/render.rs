@@ -8,7 +8,7 @@
 
 use eframe::egui::{Align2, Color32, FontId, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2};
 
-use crate::bubble::{Bubble, Shape};
+use crate::view::bubble::{Bubble, Shape};
 
 const RINGS: usize = 28;
 /// Points per quarter of an outline.

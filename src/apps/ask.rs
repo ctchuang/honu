@@ -7,9 +7,9 @@ use std::sync::mpsc;
 
 use eframe::egui::{self, Color32, FontId, Rect, RichText};
 
-use crate::bubble::{Gesture, short_label};
 use crate::claude;
 use crate::microapp::{AppId, Appearance, Context, ItemId, ItemIds, MicroApp, View};
+use crate::view::bubble::{Gesture, short_label};
 
 const ID: AppId = AppId("ask");
 /// A soft, slightly warm white, like paper.
