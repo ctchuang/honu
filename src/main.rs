@@ -5,18 +5,21 @@ mod render;
 mod turtle;
 
 use bubble::{Bubble, Content};
-use eframe::egui::{
-    self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand, WindowLevel, pos2,
-};
+use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Pos2, Sense, ViewportCommand, pos2};
 use turtle::Turtle;
 
 /// Size of the window in `--windowed` mode, which the starting layout is designed for.
+/// The web version lays out for it too, then recenters on the page.
 const WINDOWED_SIZE: egui::Vec2 = egui::vec2(1100.0, 750.0);
 /// Seconds the turtle must be held, without dragging, to open its menu.
 const LONG_PRESS_SECONDS: f64 = 0.5;
 /// Seconds between bubbles coming out of the turtle's mouth.
 const RELEASE_INTERVAL: f64 = 0.5;
+/// Whether the turtle has a menu. Its only item, Exit, means nothing in a web
+/// page, so the web version has none yet.
+const HAS_MENU: bool = !cfg!(target_arch = "wasm32");
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     // By default the bubbles float on the real desktop; `--windowed` shows them in
     // an ordinary window with its own wallpaper instead.
@@ -28,7 +31,7 @@ fn main() -> eframe::Result {
         base.with_transparent(true)
             .with_decorations(false)
             .with_has_shadow(false)
-            .with_window_level(WindowLevel::AlwaysOnTop)
+            .with_window_level(egui::WindowLevel::AlwaysOnTop)
             .with_inner_size(WINDOWED_SIZE)
     } else {
         base.with_inner_size(WINDOWED_SIZE)
@@ -44,6 +47,33 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| Ok(Box::new(HonuApp::new(floating, cc.storage)))),
     )
+}
+
+/// The web version runs in the `<canvas id="honu">` of `web/index.html`, like
+/// `--windowed`: it paints its own wallpaper and cannot float on the desktop.
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    use eframe::wasm_bindgen::JsCast as _;
+
+    wasm_bindgen_futures::spawn_local(async {
+        let canvas = eframe::web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id("honu"))
+            .and_then(|element| {
+                element
+                    .dyn_into::<eframe::web_sys::HtmlCanvasElement>()
+                    .ok()
+            })
+            .expect("web/index.html has a <canvas id=\"honu\">");
+        eframe::WebRunner::new()
+            .start(
+                canvas,
+                eframe::WebOptions::default(),
+                Box::new(|cc| Ok(Box::new(HonuApp::new(false, cc.storage)))),
+            )
+            .await
+            .expect("failed to start Honu");
+    });
 }
 
 /// The turtle's menu, opened by a right-click or a long press on it.
@@ -285,7 +315,7 @@ impl eframe::App for HonuApp {
                 }
 
                 // Right-clicking or long-pressing the turtle opens its menu.
-                if pressed_at.is_some_and(|p| self.turtle.contains(p)) {
+                if HAS_MENU && pressed_at.is_some_and(|p| self.turtle.contains(p)) {
                     self.turtle_pressed_at = Some(time);
                 }
                 let (down, pointer) =
@@ -305,7 +335,8 @@ impl eframe::App for HonuApp {
                     .secondary_clicked()
                     .then(|| response.interact_pointer_pos())
                     .flatten();
-                if let Some(pos) = right_clicked_at.filter(|&p| self.turtle.contains(p)) {
+                if let Some(pos) = right_clicked_at.filter(|&p| HAS_MENU && self.turtle.contains(p))
+                {
                     self.menu = Some(TurtleMenu { pos, rect: None });
                 }
 

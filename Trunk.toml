@@ -1,0 +1,11 @@
+# Web build settings for `trunk serve` / `trunk build`, run from the repository root.
+# Web-only files (the page, and later styles or other web assets) live in web/.
+
+[build]
+target = "web/index.html"
+dist = "dist"
+
+# The page lives in web/, so trunk would only watch web/ by default; also watch
+# the Rust code and the shared assets so `trunk serve` rebuilds on every change.
+[watch]
+watch = ["src", "assets", "web", "Cargo.toml"]

@@ -70,12 +70,29 @@ handy during development.
 - **Double-click** a bubble to open it into a panel; double-click its title or edge to
   close it again.
 
+### In a web browser
+
+Honu also runs as a web page, which is handy on an iPad or any machine without a
+Rust GUI. It shows the bubbles in the page like `--windowed`; floating on the desktop
+and the turtle's menu are desktop-only.
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install --locked trunk   # or: brew install trunk
+trunk serve                    # then open http://127.0.0.1:8080
+```
+
+On a remote machine (such as a cloud dev box you reach from an iPad), run
+`trunk serve --address 0.0.0.0` and open its port 8080 in the browser. `trunk build
+--release` writes a static site to `dist/` that any web server can host.
+
 ## Development
 
 ```sh
 cargo clippy --all-targets  # lint
 cargo fmt                   # format
 cargo test                  # run tests
+cargo clippy --target wasm32-unknown-unknown  # lint the web build
 ```
 
 ## License
