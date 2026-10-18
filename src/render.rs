@@ -72,7 +72,7 @@ pub fn paint_background(painter: &Painter, rect: Rect) {
 /// Paints a bubble's body and label. An opened bubble's content is drawn
 /// separately by the caller, on top of this.
 pub fn paint_bubble(painter: &Painter, bubble: &Bubble) {
-    let r = bubble.radius;
+    let r = bubble.radius * bubble.scale();
     let base = to_rgb(bubble.color);
     let shape = bubble.shape();
     let openness = bubble.openness();
@@ -116,7 +116,10 @@ pub fn paint_bubble(painter: &Painter, bubble: &Bubble) {
         label_pos,
         Align2::CENTER_CENTER,
         &bubble.label,
-        FontId::proportional(closed_size + (20.0 - closed_size) * openness),
+        // Shrinks with a spawning bubble, so the label fits while it grows.
+        FontId::proportional(
+            ((closed_size + (20.0 - closed_size) * openness) * bubble.scale()).max(1.0),
+        ),
         text_color(bubble),
     );
 }

@@ -1,0 +1,142 @@
+//! The pixel-art sea turtle that sits in the bottom-left corner of the
+//! desktop. Clicking it releases the bubbles.
+
+use eframe::egui::{Color32, Mesh, Painter, Pos2, Rect, Vec2, pos2, vec2};
+
+/// The sprite, one character per pixel: Outline, Shell, Light shell spot,
+/// sKin, Rim, Eye, White highlight, Pink cheek, and `.` for transparent.
+const SPRITE: [&str; 14] = [
+    "......OOOOOOO...........",
+    "....OOSSSSSSSOO.........",
+    "...OSSWWSSSSSSSO........",
+    "..OSWWSSLLLLSSSSO..OOOO.",
+    "..OSWSSLLLLLLSSSO.OKKKKO",
+    ".OSSSSSLLLLLLSSSSOKKEWKO",
+    ".OSLLSSSLLLLSSLLSOKKEEKO",
+    ".OSLLSSSSSSSSSLLSOKPKKKO",
+    "ORRRRRRRRRRRRRRRRROKKOKO",
+    ".ORRRRRRRRRRRRRRRROOOOO.",
+    "..OOOOOOOOOOOOOOOO......",
+    "...OKKKO.......OKKKKO...",
+    "...OKKO.........OKKKKO..",
+    "....OO...........OOOO...",
+];
+/// Size of one sprite pixel, in points.
+const PIXEL: f32 = 5.0;
+/// Gap between the turtle and the corner of the window.
+const MARGIN: f32 = 24.0;
+/// Seconds a hop lasts.
+const HOP_SECONDS: f64 = 0.35;
+/// Height of a hop, in sprite pixels.
+const HOP_PIXELS: f64 = 3.0;
+/// Idle bobs per second; the turtle rises one sprite pixel on every other one.
+const BOB_RATE: f64 = 1.5;
+
+pub struct Turtle {
+    /// Top-left corner of the sprite this frame.
+    origin: Pos2,
+    /// When the last hop started, in seconds of app time.
+    hopped_at: f64,
+}
+
+impl Turtle {
+    pub fn new() -> Self {
+        Self {
+            origin: Pos2::ZERO,
+            hopped_at: f64::NEG_INFINITY,
+        }
+    }
+
+    /// Starts a little hop at `time`.
+    pub fn hop(&mut self, time: f64) {
+        self.hopped_at = time;
+    }
+
+    /// Places the turtle in the bottom-left corner of `canvas`, lifted by a hop
+    /// or an idle bob. Call once per frame before hit-testing or painting.
+    pub fn place(&mut self, canvas: Rect, time: f64) {
+        let hop = (time - self.hopped_at) / HOP_SECONDS;
+        let lift = if (0.0..1.0).contains(&hop) {
+            (std::f64::consts::PI * hop).sin() * HOP_PIXELS
+        } else {
+            ((time * BOB_RATE) as i64 % 2) as f64
+        };
+        // Move in whole sprite pixels, as pixel art does.
+        let lift = lift.round() as f32 * PIXEL;
+        let size = sprite_size();
+        self.origin = pos2(
+            canvas.left() + MARGIN,
+            canvas.bottom() - MARGIN - size.y - lift,
+        )
+        .round();
+    }
+
+    pub fn center(&self) -> Pos2 {
+        self.origin + sprite_size() / 2.0
+    }
+
+    /// Whether `p` is on one of the turtle's visible pixels.
+    pub fn contains(&self, p: Pos2) -> bool {
+        let rel = (p - self.origin) / PIXEL;
+        if rel.x < 0.0 || rel.y < 0.0 {
+            return false;
+        }
+        SPRITE
+            .get(rel.y as usize)
+            .and_then(|row| row.as_bytes().get(rel.x as usize))
+            .is_some_and(|&c| c != b'.')
+    }
+
+    pub fn paint(&self, painter: &Painter) {
+        // One mesh of square, unblended pixels keeps the edges crisp.
+        let mut mesh = Mesh::default();
+        for (y, row) in SPRITE.iter().enumerate() {
+            for (x, c) in row.chars().enumerate() {
+                if let Some(color) = color(c) {
+                    let min = self.origin + vec2(x as f32, y as f32) * PIXEL;
+                    mesh.add_colored_rect(Rect::from_min_size(min, Vec2::splat(PIXEL)), color);
+                }
+            }
+        }
+        painter.add(mesh);
+    }
+}
+
+fn sprite_size() -> Vec2 {
+    vec2(SPRITE[0].len() as f32, SPRITE.len() as f32) * PIXEL
+}
+
+fn color(c: char) -> Option<Color32> {
+    let rgb = Color32::from_rgb;
+    Some(match c {
+        'O' => rgb(47, 111, 70),
+        'S' => rgb(95, 184, 120),
+        'L' => rgb(127, 207, 147),
+        'K' => rgb(143, 214, 160),
+        'R' => rgb(244, 223, 160),
+        'E' => rgb(31, 59, 44),
+        'W' => Color32::WHITE,
+        'P' => rgb(255, 159, 178),
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sprite_rows_have_equal_length() {
+        assert!(SPRITE.iter().all(|row| row.len() == SPRITE[0].len()));
+    }
+
+    #[test]
+    fn hit_test_ignores_transparent_pixels() {
+        let mut turtle = Turtle::new();
+        turtle.place(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), 0.0);
+        let pixel = |x: f32, y: f32| turtle.origin + vec2(x + 0.5, y + 0.5) * PIXEL;
+        assert!(turtle.contains(pixel(8.0, 4.0)), "shell");
+        assert!(!turtle.contains(pixel(0.0, 0.0)), "empty corner");
+        assert!(!turtle.contains(pixel(30.0, 4.0)), "outside the sprite");
+    }
+}

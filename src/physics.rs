@@ -1,6 +1,7 @@
 //! Bubble motion: momentum after a throw, an idle float, soft pushing between
 //! crowded bubbles, and bounces off the window edges. Opened bubbles act like
-//! windows: they can still be thrown, but they neither float nor push.
+//! windows: they can still be thrown, but they neither float nor push. New
+//! bubbles flying to their place follow their own path and are left alone.
 
 use eframe::egui::{Rect, Vec2, vec2};
 
@@ -31,7 +32,7 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
     let mut accel: Vec<Vec2> = bubbles
         .iter()
         .map(|b| {
-            if b.is_closed() {
+            if b.is_closed() && !b.is_spawning() {
                 float_accel(b, time)
             } else {
                 Vec2::ZERO
@@ -42,7 +43,7 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
     for i in 0..bubbles.len() {
         for j in i + 1..bubbles.len() {
             let (a, b) = (&bubbles[i], &bubbles[j]);
-            if !a.is_closed() || !b.is_closed() {
+            if !a.is_closed() || !b.is_closed() || a.is_spawning() || b.is_spawning() {
                 continue;
             }
             let delta = b.center - a.center;
@@ -63,7 +64,7 @@ pub fn step(bubbles: &mut [Bubble], bounds: Rect, held: Option<usize>, time: f64
     }
 
     for (i, (bubble, accel)) in bubbles.iter_mut().zip(accel).enumerate() {
-        if Some(i) != held {
+        if Some(i) != held && !bubble.is_spawning() {
             bubble.velocity += accel * dt;
             bubble.velocity *= (-FRICTION * dt).exp();
             let speed = bubble.velocity.length();
@@ -149,6 +150,23 @@ mod tests {
         eprintln!("closest: {closest:.0}px, knocked: {knocked:.0}px");
         assert!(closest > 100.0, "centers came within {closest:.0}px");
         assert!(knocked > 100.0, "only knocked {knocked:.0}px");
+    }
+
+    #[test]
+    fn spawned_bubble_lands_where_it_was_placed() {
+        let mut bubbles = [ball(500.0, 80.0), ball(900.0, 80.0)];
+        let place = bubbles[1].center;
+        bubbles[1].spawn_from(pos2(100.0, 900.0));
+        let bounds = Rect::from_min_max(Pos2::ZERO, pos2(4000.0, 1000.0));
+        let mut frame = 0;
+        while bubbles[1].is_spawning() {
+            bubbles[1].animate(DT);
+            step(&mut bubbles, bounds, None, f64::from(frame as f32 * DT), DT);
+            frame += 1;
+        }
+        let miss = (bubbles[1].center - place).length();
+        assert!(miss < 1.0, "landed {miss:.1}px away");
+        assert_eq!(bubbles[1].scale(), 1.0);
     }
 
     #[test]

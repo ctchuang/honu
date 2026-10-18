@@ -52,15 +52,17 @@ cargo build --release    # optimized build
 ```
 
 By default the bubbles float directly on your desktop, above other windows. Clicks
-pass through to the apps below everywhere except on a bubble. The window has no close
-button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd> to quit
-(or quit it from the Dock).
+pass through to the apps below everywhere except on a bubble or the turtle. The window
+has no close button: click a bubble or the turtle to focus Honu, then press
+<kbd>⌘</kbd><kbd>Q</kbd> to quit (or quit it from the Dock).
 
 `--windowed` shows the bubbles in a regular window with their own wallpaper, which is
 handy during development.
 
 ### Using the bubbles
 
+- Honu starts with just a little pixel turtle in the bottom-left corner. **Click** it to
+  release the bubbles.
 - **Drag** a bubble to move it, and **throw** it to let it glide.
 - **Double-click** a bubble to open it into a panel; double-click its title or edge to
   close it again.

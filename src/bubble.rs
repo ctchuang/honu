@@ -1,6 +1,6 @@
 //! Bubbles and their outline. A bubble is a rounded square, like a macOS app
 //! icon, when closed and morphs into a larger panel that shows its content
-//! when opened.
+//! when opened. A new bubble pops out small and grows as it flies to its place.
 
 use eframe::egui::{Color32, Pos2, Rect, Vec2, vec2};
 
@@ -21,11 +21,21 @@ const PANEL_CORNER: f32 = 22.0;
 const PANEL_BEVEL: f32 = 14.0;
 /// Seconds to open or close a bubble.
 const MORPH_SECONDS: f32 = 0.35;
+/// Seconds a new bubble takes to fly to its place.
+const SPAWN_SECONDS: f32 = 0.6;
 
 /// What an opened bubble shows.
 pub enum Content {
     Notes(String),
     Empty,
+}
+
+/// A new bubble's flight from where it popped out to its place.
+struct Spawn {
+    from: Pos2,
+    to: Pos2,
+    /// Linear progress of the flight, from 0 to 1.
+    progress: f32,
 }
 
 /// A draggable, window-like bubble on the desktop.
@@ -46,6 +56,8 @@ pub struct Bubble {
     pub open: bool,
     /// Linear progress of the open/close morph, from 0 (closed) to 1 (open).
     progress: f32,
+    /// Set while the bubble is still flying to its place after popping out.
+    spawn: Option<Spawn>,
 }
 
 impl Bubble {
@@ -61,6 +73,7 @@ impl Bubble {
             content: Content::Empty,
             open: false,
             progress: 0.0,
+            spawn: None,
         }
     }
 
@@ -69,8 +82,50 @@ impl Bubble {
         self
     }
 
-    /// Moves the open/close morph `dt` seconds towards `open`.
+    /// Makes the bubble pop out at `from` and fly to where it is now, growing
+    /// to full size on the way.
+    pub fn spawn_from(&mut self, from: Pos2) {
+        self.spawn = Some(Spawn {
+            from,
+            to: self.center,
+            progress: 0.0,
+        });
+        self.center = from;
+        self.velocity = Vec2::ZERO;
+    }
+
+    /// True while the bubble is flying to its place after popping out.
+    pub fn is_spawning(&self) -> bool {
+        self.spawn.is_some()
+    }
+
+    /// Size relative to full size: smaller (and briefly larger, overshooting)
+    /// while spawning, otherwise 1.
+    pub fn scale(&self) -> f32 {
+        self.spawn
+            .as_ref()
+            .map_or(1.0, |spawn| ease_out_back(spawn.progress))
+    }
+
+    /// Moves the bubble, including where it is flying to, by `offset`.
+    pub fn translate(&mut self, offset: Vec2) {
+        self.center += offset;
+        if let Some(spawn) = &mut self.spawn {
+            spawn.from += offset;
+            spawn.to += offset;
+        }
+    }
+
+    /// Advances the spawn flight and the open/close morph by `dt` seconds.
     pub fn animate(&mut self, dt: f32) {
+        if let Some(spawn) = &mut self.spawn {
+            spawn.progress = (spawn.progress + dt / SPAWN_SECONDS).min(1.0);
+            self.center = spawn.from.lerp(spawn.to, ease_out_cubic(spawn.progress));
+            if spawn.progress == 1.0 {
+                self.spawn = None;
+            }
+        }
+
         let target = if self.open { 1.0 } else { 0.0 };
         let step = dt / MORPH_SECONDS;
         self.progress = if self.progress < target {
@@ -98,7 +153,7 @@ impl Bubble {
 
     pub fn shape(&self) -> Shape {
         let t = self.openness();
-        let r = self.radius;
+        let r = self.radius * self.scale();
         let half = (Vec2::splat(r) + (PANEL_SIZE / 2.0 - Vec2::splat(r)) * t).max(Vec2::splat(1.0));
         let max_round = half.min_elem();
         Shape {
@@ -173,6 +228,11 @@ impl Shape {
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
+}
+
+/// Starts fast and slows to a smooth stop.
+fn ease_out_cubic(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
 }
 
 /// Eases out with a small overshoot, so bubbles pop open.
