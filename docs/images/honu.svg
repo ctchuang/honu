@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 220" width="260" height="220" role="img" aria-labelledby="title">
+  <title id="title">Honu, a little green sea turtle</title>
+
+  <!-- Water -->
+  <circle cx="130" cy="112" r="100" fill="#d6f0f5"/>
+  <path d="M42 170 Q63 160 84 170 T126 170 T168 170 T210 170" fill="none" stroke="#a9dce6" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Bubbles -->
+  <g fill="#ffffff" stroke="#8fcfdc" stroke-width="2">
+    <circle cx="242" cy="72" r="6"/>
+    <circle cx="232" cy="50" r="4"/>
+    <circle cx="245" cy="33" r="3"/>
+  </g>
+
+  <g stroke="#2f6f46" stroke-width="4" stroke-linejoin="round">
+    <!-- Tail -->
+    <path d="M58 126 L38 136 L60 138 Z" fill="#8fd6a0"/>
+
+    <!-- Flippers -->
+    <ellipse cx="80" cy="150" rx="18" ry="9" transform="rotate(-28 80 150)" fill="#8fd6a0"/>
+    <ellipse cx="172" cy="154" rx="26" ry="11" transform="rotate(34 172 154)" fill="#8fd6a0"/>
+
+    <!-- Shell -->
+    <path d="M60 130 C60 80 95 54 125 54 C160 54 190 80 190 130 Z" fill="#5fb878"/>
+  </g>
+
+  <!-- Shell pattern -->
+  <g fill="#7fcf93">
+    <ellipse cx="125" cy="92" rx="21" ry="17"/>
+    <ellipse cx="87" cy="111" rx="13" ry="11"/>
+    <ellipse cx="163" cy="111" rx="13" ry="11"/>
+    <ellipse cx="125" cy="66" rx="12" ry="5"/>
+  </g>
+  <path d="M84 84 Q98 66 118 62" fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Shell rim -->
+  <rect x="52" y="123" width="146" height="15" rx="7.5" fill="#f4dfa0" stroke="#2f6f46" stroke-width="4"/>
+
+  <!-- Head -->
+  <circle cx="212" cy="106" r="26" fill="#8fd6a0" stroke="#2f6f46" stroke-width="4"/>
+  <ellipse cx="219" cy="100" rx="5.5" ry="7" fill="#1f3b2c"/>
+  <circle cx="221.5" cy="96.5" r="2.2" fill="#ffffff"/>
+  <ellipse cx="209" cy="115" rx="6" ry="3.5" fill="#ff9fb2" opacity="0.8"/>
+  <path d="M220 116 Q226 122 232 115" fill="none" stroke="#2f6f46" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -1,5 +1,9 @@
 # Honu
 
+<p align="center">
+  <img src="docs/images/honu.svg" alt="Honu, a little green sea turtle" width="240">
+</p>
+
 An experimental desktop GUI and Human-Computer-Interface project written in Rust with [egui](https://github.com/emilk/egui) / eframe.
 
 > **Status:** experimental. This is a playground for trying out egui, not a finished application. Expect breaking changes.
