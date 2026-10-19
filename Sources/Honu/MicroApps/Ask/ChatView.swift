@@ -32,7 +32,7 @@ struct ChatView: View {
     @FocusState private var focused: Bool
 
     private static let error = Color(red: 0.75, green: 0.24, blue: 0.2)
-    private static let ink = Color(white: 0.12)
+    private static let ink = AskApp.ink
 
     var body: some View {
         ScrollView {

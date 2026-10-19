@@ -16,6 +16,8 @@ final class NotesApp: MicroApp {
     static let emptyLabel = "Note"
     /// The pale yellow of a sticky note.
     static let yellow = Color(red: 1, green: 0.925, blue: 0.59)
+    /// The dark gray a note is written in, on its yellow glass.
+    static let ink = Color(white: 0.15)
 
     func create() -> ItemID {
         notes.insert("")
@@ -25,7 +27,7 @@ final class NotesApp: MicroApp {
         Appearance(
             tint: Self.yellow.opacity(0.75),
             closedSide: 120,
-            textColor: Color(white: 0.15)
+            textColor: Self.ink
         )
     }
 

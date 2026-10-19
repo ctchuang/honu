@@ -25,14 +25,14 @@ struct NoteEditor: View {
         )
         TextEditor(text: text)
             .font(.system(size: 16))
-            .foregroundStyle(Color(white: 0.15))
+            .foregroundStyle(NotesApp.ink)
             .scrollContentBackground(.hidden)
             .focused($focused)
             .overlay(alignment: .topLeading) {
                 if text.wrappedValue.isEmpty {
                     Text("Write something…")
                         .font(.system(size: 16))
-                        .foregroundStyle(Color(white: 0.15).opacity(0.45))
+                        .foregroundStyle(NotesApp.ink.opacity(0.45))
                         .padding(.leading, 5)
                         .allowsHitTesting(false)
                 }

@@ -22,6 +22,8 @@ final class AskApp: MicroApp {
     static let maxHeight: CGFloat = 560
     /// Panel height not taken by the content: the title bar and the margins.
     static let chromeHeight: CGFloat = 70
+    /// The near-black a chat is written in, on its pale glass.
+    static let ink = Color(white: 0.12)
 
     init(services: Services) {
         self.services = services
@@ -40,7 +42,7 @@ final class AskApp: MicroApp {
             tint: Color(white: 0.98).opacity(0.55),
             closedSide: 120,
             panelSize: CGSize(width: Self.panelWidth, height: height),
-            textColor: Color(white: 0.12)
+            textColor: Self.ink
         )
     }
 
