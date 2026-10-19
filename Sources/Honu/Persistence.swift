@@ -30,21 +30,19 @@ struct SavedBubble: Codable {
 }
 
 /// Writes the shell's `SavedState` for the next launch, in
-/// `~/Library/Application Support/Honu/state.json` (delete it to reset), and
+/// `~/.honu/state.json` (delete it to reset), and
 /// reads it back. It decides when and where to write, and leaves what to the
 /// shell. Each microapp saves its own items, so Honu never needs to know their
 /// shape.
 @MainActor
 final class Autosave {
     /// Where Honu saves: `HONU_STORE` if set, so a development run can keep
-    /// its own bubbles, otherwise the user's Application Support folder.
+    /// its own bubbles, otherwise Honu's own folder.
     static var storeURL: URL {
         ProcessInfo.processInfo.environment["HONU_STORE"].map { URL(filePath: $0) } ?? defaultURL
     }
 
-    static let defaultURL = URL.applicationSupportDirectory
-        .appending(path: "Honu", directoryHint: .isDirectory)
-        .appending(path: "state.json")
+    static let defaultURL = Services.folder.appending(path: "state.json")
     /// How often to check for changes, in seconds.
     private static let interval: TimeInterval = 1
 
