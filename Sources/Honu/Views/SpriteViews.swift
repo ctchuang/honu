@@ -36,7 +36,8 @@ struct OctopusView: View {
 
     var body: some View {
         let octopus = shell.octopus
-        TimelineView(.animation) { context in
+        // Out of sight it has nothing to animate, so it stops redrawing.
+        TimelineView(.animation(minimumInterval: nil, paused: !octopus.isUp)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             SpriteCanvas(grid: octopus.grid(at: time), color: Octopus.color)
                 .contentShape(PixelMask(grid: octopus.grid(at: time)))
