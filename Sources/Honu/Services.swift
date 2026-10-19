@@ -5,6 +5,10 @@ import Foundation
 final class Services {
     let claude: any ClaudeClient
 
+    /// Honu's own folder, `~/.honu/`: where it saves and where Claude Code runs.
+    nonisolated static let folder = FileManager.default.homeDirectoryForCurrentUser
+        .appending(path: ".honu", directoryHint: .isDirectory)
+
     init(claude: any ClaudeClient) {
         self.claude = claude
     }

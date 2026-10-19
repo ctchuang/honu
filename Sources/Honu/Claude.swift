@@ -85,10 +85,9 @@ final class ClaudeCode: ClaudeClient {
         "~/.local/bin", "~/.claude/local", "/opt/homebrew/bin", "/usr/local/bin",
     ]
 
-    /// Where `claude` runs: a folder of Honu's own, away from any project, so
-    /// no project's CLAUDE.md comes along.
-    nonisolated static let workingDirectory = FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: ".honu", directoryHint: .isDirectory)
+    /// Where `claude` runs: Honu's own folder, away from any project, so no
+    /// project's CLAUDE.md comes along.
+    nonisolated static let workingDirectory = Services.folder
 
     func ask(question: String) -> AnswerStream {
         let stream = AnswerStream()
