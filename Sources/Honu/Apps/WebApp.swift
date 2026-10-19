@@ -1,0 +1,185 @@
+import SwiftUI
+import WebKit
+
+/// The Web microapp: any number of web pages, each shown in its bubble. A new
+/// one asks for a link first; YouTube links play in YouTube's embedded player.
+@Observable
+@MainActor
+final class WebApp: MicroApp {
+    let id = AppID("web")
+    let menuLabel = "Open Web Page"
+
+    /// The model: each page's address, empty until one is entered.
+    private(set) var pages: [ItemID: String] = [:]
+    @ObservationIgnored private var ids = ItemIDs()
+
+    func create() -> ItemID {
+        let id = ids.next()
+        pages[id] = ""
+        return id
+    }
+
+    func appearance(of item: ItemID) -> Appearance {
+        let video = url(of: item).flatMap(youTubeID) != nil
+        return Appearance(
+            symbol: video ? "play.rectangle.fill" : "safari.fill",
+            panelSize: CGSize(width: 600, height: 440)
+        )
+    }
+
+    func title(of item: ItemID) -> String {
+        guard let url = url(of: item) else { return "Web Page" }
+        return shortLabel(url.host() ?? url.absoluteString)
+    }
+
+    func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? {
+        AddressDraft()
+    }
+
+    func content(of item: ItemID, viewState: AnyObject?) -> AnyView {
+        AnyView(WebContent(app: self, item: item, draft: viewState as? AddressDraft))
+    }
+
+    /// The page's address, if one has been entered.
+    func url(of item: ItemID) -> URL? {
+        guard let text = pages[item], !text.isEmpty else { return nil }
+        return URL(string: text)
+    }
+
+    /// Takes what the user typed as the page's address, adding `https://`
+    /// when it has no scheme.
+    func open(_ text: String, in item: ItemID) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard pages[item] != nil, !text.isEmpty else { return }
+        pages[item] = text.contains("://") ? text : "https://" + text
+    }
+
+    func remove(_ item: ItemID) {
+        pages[item] = nil
+    }
+
+    var items: [ItemID] { pages.keys.sorted() }
+
+    private struct SavedPage: Codable {
+        var id: ItemID
+        var url: String
+    }
+
+    func save() -> Data? {
+        try? JSONEncoder().encode(items.map { SavedPage(id: $0, url: pages[$0] ?? "") })
+    }
+
+    func load(_ data: Data) {
+        let saved = (try? JSONDecoder().decode([SavedPage].self, from: data)) ?? []
+        for page in saved {
+            ids.skip(past: page.id)
+            pages[page.id] = page.url
+        }
+    }
+}
+
+/// The video id of a YouTube link, if `url` is one.
+func youTubeID(_ url: URL) -> String? {
+    guard let host = url.host()?.lowercased() else { return nil }
+    let path = url.pathComponents.filter { $0 != "/" }
+    if host == "youtu.be" {
+        return path.first
+    }
+    guard host == "youtube.com" || host.hasSuffix(".youtube.com") else { return nil }
+    if let first = path.first, ["embed", "shorts", "live"].contains(first), path.count > 1 {
+        return path[1]
+    }
+    let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+    return query?.first { $0.name == "v" }?.value
+}
+
+/// What one bubble showing a page keeps for itself: the address being typed.
+@Observable
+@MainActor
+final class AddressDraft {
+    var text = ""
+}
+
+struct WebContent: View {
+    let app: WebApp
+    let item: ItemID
+    let draft: AddressDraft?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        if let url = app.url(of: item) {
+            if let video = youTubeID(url) {
+                YouTubeView(id: video)
+            } else {
+                WebView(url: url)
+            }
+        } else {
+            addressField
+        }
+    }
+
+    private var addressField: some View {
+        let text = Binding(
+            get: { draft?.text ?? "" },
+            set: { draft?.text = $0 }
+        )
+        return VStack(spacing: 12) {
+            Image(systemName: "safari")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(.secondary)
+            TextField("Paste a link, then press Return", text: text)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit { app.open(text.wrappedValue, in: item) }
+                .frame(maxWidth: 420)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { focused = true }
+    }
+}
+
+/// Plays a YouTube video through its embedded player.
+///
+/// The player refuses to play without a referring origin, so it is loaded
+/// from an HTML page with a base URL instead of from its URL directly.
+struct YouTubeView: View {
+    let id: String
+    // Spelled out instead of `@State`, whose macro ships only with Xcode.
+    private let player = State(initialValue: Player())
+
+    private var page: WebPage { player.wrappedValue.page }
+
+    var body: some View {
+        WebView(page)
+            .task(id: id) {
+                do {
+                    for try await _ in page.load(
+                        html: html, baseURL: URL(string: "https://honu.example")!)
+                    {}
+                } catch {
+                    // A failed load shows in the page itself, so there is nothing more to do.
+                }
+            }
+    }
+
+    private var html: String {
+        """
+        <!doctype html>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+          iframe { border: 0; width: 100%; height: 100%; }
+        </style>
+        <iframe src="https://www.youtube.com/embed/\(id)?playsinline=1&rel=0"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        """
+    }
+}
+
+/// Creates its page only when first used, since SwiftUI builds a new
+/// initial value every time the view is recreated and keeps only the first.
+@MainActor
+final class Player {
+    lazy var page = WebPage()
+}

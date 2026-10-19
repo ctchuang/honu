@@ -1,0 +1,170 @@
+import SwiftUI
+
+/// What is under a point, from the top layer down.
+enum Hit {
+    case menu
+    case turtle
+    case octopus
+    case bubble(Bubble)
+    case nothing
+}
+
+/// The shell: the whole app inside the window. It wires the microapps, the
+/// stage of bubbles, the turtle and its menu, and the octopus together, and
+/// routes what the user does between them.
+@Observable
+@MainActor
+final class Shell {
+    let registry: Registry
+    let stage: Stage
+    let turtle: Turtle
+    let octopus: Octopus
+    /// Where the turtle's menu is open (its top-left corner), if it is.
+    private(set) var menu: CGPoint?
+    /// Where the turtle was when the current drag of it began.
+    @ObservationIgnored private var turtleDragStart: CGPoint?
+    @ObservationIgnored private let autosave = Autosave()
+
+    /// How far a bubble must be dragged before the octopus comes up, so
+    /// nudging a bubble into place does not call it.
+    private static let summonDistance: CGFloat = 40
+
+    init(size: CGSize) {
+        registry = Registry([NotesApp(), WebApp()])
+        stage = Stage(size: size)
+        turtle = Turtle(stageSize: size)
+        octopus = Octopus(stageSize: size)
+        autosave.restore(into: self)
+    }
+
+    /// Whether the user is in the middle of something that takes every click,
+    /// like a native menu: a click outside an open menu only closes it.
+    var takesEveryClick: Bool {
+        menu != nil || stage.isDragging || turtleDragStart != nil
+    }
+
+    /// What is under `point`: the open menu takes everything, then the turtle
+    /// and the octopus, then the bubbles.
+    func hit(_ point: CGPoint) -> Hit {
+        if menu != nil {
+            .menu
+        } else if turtle.contains(point) {
+            .turtle
+        } else if octopus.contains(point) {
+            .octopus
+        } else if let bubble = stage.bubble(at: point) {
+            .bubble(bubble)
+        } else {
+            .nothing
+        }
+    }
+
+    /// Whether clicks at `point` are Honu's rather than the apps' below.
+    func takesClick(at point: CGPoint) -> Bool {
+        if takesEveryClick { return true }
+        if case .nothing = hit(point) { return false }
+        return true
+    }
+
+    // MARK: The turtle and its menu
+
+    /// Opens the turtle's menu at `point`, with a little hop.
+    func clickTurtle(at point: CGPoint) {
+        turtle.hop()
+        // Keep the whole menu on screen.
+        menu = CGPoint(
+            x: min(point.x, stage.size.width - TurtleMenu.width - 8),
+            y: min(point.y, stage.size.height - TurtleMenu.estimatedHeight - 8))
+    }
+
+    func closeMenu() {
+        menu = nil
+    }
+
+    func dragTurtle(by translation: CGSize) {
+        let start = turtleDragStart ?? turtle.origin
+        turtleDragStart = start
+        turtle.move(to: CGPoint(x: start.x + translation.width, y: start.y + translation.height))
+    }
+
+    func endTurtleDrag() {
+        turtleDragStart = nil
+        save()
+    }
+
+    /// Carries out the menu item for microapp `app`.
+    func choose(_ app: AppID) {
+        menu = nil
+        start(app)
+    }
+
+    /// Starts a new item in microapp `id` and has the turtle spit out a
+    /// bubble showing it, which opens into its panel when it lands.
+    func start(_ id: AppID) {
+        guard let app = registry.app(id) else { return }
+        let item = app.create()
+        let bubble = stage.add(
+            target: ViewTarget(app: id, item: item), center: turtle.center,
+            appearance: app.appearance(of: item),
+            viewState: app.newViewState(for: item, fresh: true))
+        stage.spitPanel(bubble, from: turtle.spit())
+    }
+
+    // MARK: Bubbles and the octopus
+
+    /// Any press on a bubble brings it to the front, including presses on an
+    /// open bubble's content, which SwiftUI's gestures never see.
+    func press(at point: CGPoint) {
+        if case .bubble(let bubble) = hit(point) {
+            stage.raise(bubble)
+        }
+    }
+
+    /// Moves `bubble`, picking it up if it is not yet. Holding it over the
+    /// octopus shrinks it, and letting go there deletes it. Where the pointer
+    /// is decides, not where the bubble is, so only a deliberate drop deletes.
+    func dragBubble(_ bubble: Bubble, by translation: CGSize, pointer: CGPoint) {
+        if !stage.isDragging {
+            stage.startDrag(bubble)
+        }
+        let doomed = octopus.inReach(pointer)
+        octopus.isEager = doomed
+        stage.dragged(by: translation, doomed: doomed)
+        let summoned = (stage.dragDistance ?? 0) > Self.summonDistance
+        octopus.summon(summoned, turtle: turtle.center)
+    }
+
+    func endBubbleDrag(pointer: CGPoint) {
+        let doomed = octopus.inReach(pointer)
+        octopus.isEager = false
+        guard let (bubble, home) = stage.endDrag() else { return }
+        if doomed {
+            octopus.swallow(bubble.id, home: home)
+            stage.swallow(bubble, into: octopus.mouth)
+        }
+        octopus.summon(false, turtle: turtle.center)
+    }
+
+    /// Has the octopus spit back the bubble it swallowed last, if it still can.
+    func undoDelete() {
+        guard let swallowed = octopus.spitBack(), let bubble = stage.bubble(swallowed.bubble)
+        else { return }
+        stage.spitBack(bubble, from: octopus.mouth, to: swallowed.home)
+    }
+
+    /// Catches up on what happens over time: deletes for good the bubbles the
+    /// octopus forgets, and saves what changed. Called many times a second.
+    func tick() {
+        for id in octopus.forget() {
+            if let bubble = stage.remove(id), !stage.shows(bubble.target) {
+                registry.remove(bubble.target)
+            }
+        }
+        autosave.tick(self)
+    }
+
+    /// Saves now, as when quitting.
+    func save() {
+        autosave.save(self)
+    }
+}

@@ -4,102 +4,55 @@
   <img src="docs/images/honu.svg" alt="Honu, a little green sea turtle" width="240">
 </p>
 
-An experimental desktop GUI and Human-Computer-Interface project written in Rust with [egui](https://github.com/emilk/egui) / eframe.
+An experimental desktop GUI and Human-Computer-Interface project for macOS, written in
+Swift with SwiftUI and Liquid Glass.
 
-> **Status:** experimental. This is a playground for trying out egui, not a finished application. Expect breaking changes.
+> **Status:** experimental prototype. Expect breaking changes. The first version was
+> written in Rust with [egui](https://github.com/emilk/egui) and lives in the git history.
 
 ## What it does
 
-Omitted for now.
+Liquid Glass bubbles float directly on your desktop, above other windows. A little
+pixel turtle spits them out: notes to write in, and web pages, which can also play
+YouTube videos. Bubbles that come close blend into each other.
 
 ## Getting started
 
-### 1. Install Rust
-
-Honu needs a stable Rust toolchain that supports edition 2024 (Rust 1.85 or newer).
-The easiest way to get one is [rustup](https://rustup.rs):
+Honu needs **macOS 26** or newer and a Swift 6.2 toolchain. Xcode is not required: the
+Command Line Tools are enough.
 
 ```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup update stable   # if Rust is already installed
+xcode-select --install   # if you have neither Xcode nor the Command Line Tools
+swift run                # build and launch
+swift build -c release   # optimized build
 ```
 
-Honu is developed on macOS. It builds on other platforms too, but floating on the
-desktop with click-through (see below) currently works only on macOS.
-
-### 2. Add your Claude API key (for asking Claude)
-
-Honu uses Claude to answer questions. Keep your key in a local `.env` file,
-which git ignores:
-
-```sh
-cp .env.example .env
-```
-
-Then open `.env` and paste your key after `ANTHROPIC_API_KEY=`. You can create a key
-in the [Claude Console](https://console.anthropic.com/settings/keys). Never commit
-`.env` or put your key anywhere else in the repository; only the empty template
-`.env.example` is tracked.
-
-The **Ask AI** item in the turtle's menu uses it. Without one, the Ask bubble asks you to
-paste a key, which the desktop app keeps only until it quits. The web version keeps a
-pasted key in that browser's local storage, since a web page cannot read `.env`.
-
-### 3. Run
-
-```sh
-cargo run                # build and launch
-cargo run -- --windowed  # launch in an ordinary window instead
-cargo build --release    # optimized build
-```
-
-By default the bubbles float directly on your desktop, above other windows. Clicks
-pass through to the apps below everywhere except on a bubble, the turtle, or the octopus. The window
-has no close button: click a bubble or the turtle to focus Honu, then press
-<kbd>⌘</kbd><kbd>Q</kbd> to quit (or quit it from the Dock).
-
-`--windowed` shows the bubbles in a regular window with their own wallpaper, which is
-handy during development.
+Clicks pass through to the apps below everywhere except on a bubble. The window has no
+close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd> to quit
+(or quit it from the Dock).
 
 ### Using the bubbles
 
 - Honu starts with just a little pixel turtle in the bottom-left corner. **Drag** it to
-  move it anywhere. It stays where you leave it, even after you quit and reopen Honu.
+  move it anywhere.
 - **Click** or **right-click** the turtle for its menu: **Add Note** makes it spit out
-  a note to write in, **Ask AI** a bubble where you can ask Claude a question, and **Exit**
-  quits Honu. A closed note shows its first line.
-- **Drag** a bubble to move it, and **throw** it to let it glide.
+  a note to write in, **Open Web Page** a bubble that asks for a link and then shows the
+  page (YouTube links play the video), and **Exit** quits Honu. A closed note shows its
+  first line.
+- **Drag** a bubble to move it. Drag bubbles close together to watch the glass merge.
 - To delete a bubble, drag it to the pixel octopus that comes up in a bottom corner
   while you drag, and let go. Changed your mind? For a few seconds afterwards,
   **click** the octopus (or press <kbd>⌘</kbd><kbd>Z</kbd>) and it spits the bubble back.
-- **Double-click** a bubble to open it into a panel; double-click its title or edge to
-  close it again.
-- Bubbles, notes, and answers are saved as you go, so quitting and reopening Honu brings
-  them back where you left them. A bubble still in the octopus when you quit is gone.
-
-### In a web browser
-
-Honu also runs as a web page, which is handy on an iPad or any machine without a
-Rust GUI. It shows the bubbles in the page like `--windowed`; floating on the desktop
-and the turtle's menu are desktop-only.
-
-```sh
-rustup target add wasm32-unknown-unknown
-cargo install --locked trunk   # or: brew install trunk
-trunk serve                    # then open http://127.0.0.1:8080
-```
-
-On a remote machine (such as a cloud dev box you reach from an iPad), run
-`trunk serve --address 0.0.0.0` and open its port 8080 in the browser. `trunk build
---release` writes a static site to `dist/` that any web server can host.
+- **Double-click** a bubble to open it into a panel, and double-click its title to close it.
+- The turtle, bubbles, notes, and pages are saved as you go, so quitting and reopening
+  Honu brings them back where you left them. A bubble still in the octopus when you quit
+  is gone.
 
 ## Development
 
 ```sh
-cargo clippy --all-targets  # lint
-cargo fmt                   # format
-cargo test                  # run tests
-cargo clippy --target wasm32-unknown-unknown  # lint the web build
+swift format lint -r Sources Package.swift   # lint
+swift format -i -r Sources Package.swift     # format
 ```
 
 ## License

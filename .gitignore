@@ -1,8 +1,7 @@
-/target
+# Swift Package Manager build output.
+/.build
 .claude/worktrees/
 # Local secrets such as the Claude API key. Only the template is committed.
 .env
 .env.*
 !.env.example
-# Web build output from `trunk build` / `trunk serve`.
-/dist

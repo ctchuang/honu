@@ -1,35 +1,28 @@
 # TODO
 
-## Real refractive glass (wgpu shader)
+## Bring over the Rust version
 
-Glass bubbles currently fake transparency by layering translucent vertex colors.
-Real Liquid Glass–style glass would blur, magnify, and distort whatever is behind it.
+The Rust/egui version (in the git history before the switch to Swift) had more than
+this prototype. Bring these over:
 
-- Needs custom WGSL shaders hooked into egui through its wgpu paint callbacks.
-- The hard part is reading what is behind a bubble: egui callbacks draw into the
-  frame being rendered and cannot sample it. Options:
-  - **Background only**: render the wallpaper to a texture first and refract just that.
-    Smaller (a few hundred lines), but overlapping bubbles would not refract each other.
-  - **Full scene**: draw all bubbles in our own wgpu pass, copying the frame to a texture
-    before each glass layer. Refracts everything, but replaces most of `render.rs` and
-    decouples bubble drawing from egui.
-- Refracting egui content inside open bubbles would also require rendering that content
-  to a texture, so settle how bubble content is drawn before choosing an option.
-- wgpu has breaking API changes in most releases and egui upgrades pull in new wgpu
-  versions, so custom wgpu code adds upkeep on every egui upgrade.
-- Keep it behind a switch so the CPU-shaded rendering stays available as a fallback.
+- Ask AI streaming answers from Claude through the Messages API, with the panel growing
+  to fit the answer.
+- Physics: thrown bubbles glide, idle bubbles float, crowded bubbles push apart.
+- Breathing while busy, and the `Rise` and `Wobble` gestures.
+- Type-ahead: text typed while a new bubble flies out of the turtle goes into it.
+- Bubbles flying out of the turtle along their own curved paths.
+- Click-through on the actual bubble shape rather than its bounding rectangle.
 
 ## LLM integration
 
 The guiding idea: Claude should work with the bubbles on the desktop, not live in a
-chat window. Done so far: the turtle's menu has **Ask AI**, which spits out a bubble
-whose answer streams in while the panel grows to fit it (`src/apps/ask.rs`, `src/claude.rs`).
-Its **Add Note** makes plain note bubbles to write in (`src/apps/notes.rs`), the octopus
-deletes bubbles (`src/sprite/octopus.rs`), and bubbles are saved across launches.
+chat window. The turtle, the octopus, notes, and saving across launches are back;
+**Ask AI**, a bubble whose answer streams in while the panel grows to fit it, comes next
+(see above).
 
 - **Spit out several bubbles at once** (next step): give Claude a `create_bubble` tool,
   so "give me five weekend ideas" becomes five bubbles the turtle spits out one by one.
-  Reuses the spawn animation, tool use, and streaming that already exist.
+  Reuses the spawn animation, tool use, and streaming.
   Several bubbles also give the octopus more to do: keep the ideas you like and feed
   it the rest.
 - **Answers as UI, not paragraphs**: define a small set of `Content` kinds (list,
@@ -37,12 +30,12 @@ deletes bubbles (`src/sprite/octopus.rs`), and bubbles are saved across launches
   output, and that Honu draws.
 - **Bumping bubbles shares their context**: dragging one bubble into another hands
   both to Claude, to compare them or find what links them. The collision physics
-  already provides the gesture.
-- **Physics shows status** (started): Ask bubbles breathe while Claude works, float up
-  when the answer is in, and wobble when something needs the user (`Bubble::set_busy`,
-  `Gesture`). New kinds of bubbles should report their state the same way.
+  gives the gesture, and Liquid Glass already shows bubbles merging.
+- **Physics shows status**: bubbles breathe while Claude works, float up when the answer
+  is in, and wobble when something needs the user. Every kind of bubble should report its
+  state the same way.
 - **Space as memory**: bubbles that sit together belong to the same project, now that
-  bubbles and where they sit are saved across launches (`src/persistence.rs`).
+  bubbles and where they sit are saved across launches (`Sources/Honu/Persistence.swift`).
 - **Confirm before side effects**: before Claude sends mail, changes a file, or runs a
   command, the turtle spits out a confirmation bubble, and nothing happens until it is
   accepted. Each bubble should also show where it came from.
