@@ -2,8 +2,9 @@
 
 Honu as a desk for following US markets: live prices, news, and the economic and earnings
 calendar, shown as bubbles, with Claude explaining and filtering rather than just
-displaying. Everything here is written in Honu's terms (microapps, services, bubbles)
-so it applies to the egui version and to the SwiftUI port alike.
+displaying. Everything here is written in Honu's terms (microapps, bubbles, the turtle
+and the octopus) for the SwiftUI app; the services and protocols it names do not exist
+yet.
 
 This section merges two brainstorms: what finance bubbles could show and how to connect
 the data, and a design for the *harness* around Claude (the deterministic code that
@@ -94,10 +95,10 @@ Each item is one symbol, such as `AAPL`.
 |---|---|---|---|
 | **Finnhub** (recommended) | Free sign-up | Real-time US trades over WebSocket; REST quote, company news, market news, earnings calendar, economic calendar, company profile | The free plan caps how many symbols stream at once (sources say 30 or 50; check the pricing page). Whether the economic calendar is on the free plan is unverified. Crypto symbols such as `BINANCE:BTCUSDT` stream on the same socket, which allows testing while US markets are closed. |
 | Alpaca | Free account | Real-time WebSocket | The free feed covers only IEX trades, a small share of US volume: prices are fine, volumes are low. |
-| Yahoo Finance | None | Near-real-time quotes through unofficial endpoints | Unofficial: may break or be blocked at any time, terms are unclear, and browsers are blocked by CORS. |
+| Yahoo Finance | None | Near-real-time quotes through unofficial endpoints | Unofficial: may break or be blocked at any time, and terms are unclear. |
 | Forex Factory JSON feed | None | This week's macro calendar (`nfs.faireconomy.media/ff_calendar_thisweek.json`) | Unofficial, no published terms. Forecast and previous only, no actual figure. Times are US/Eastern. Next week's file is sometimes not up yet (404). |
 | Financial Modeling Prep | Free plan | Economic and earnings calendars | About 250 requests a day on the free plan. |
-| SEC EDGAR | None | Filings and reported financials as JSON (`data.sec.gov/submissions/CIK##########.json`, `data.sec.gov/api/xbrl/companyfacts/CIK##########.json`), the primary documents to check news against | Requires a descriptive `User-Agent` with a contact; about 10 requests a second. Browser CORS unverified. |
+| SEC EDGAR | None | Filings and reported financials as JSON (`data.sec.gov/submissions/CIK##########.json`, `data.sec.gov/api/xbrl/companyfacts/CIK##########.json`), the primary documents to check news against | Requires a descriptive `User-Agent` with a contact; about 10 requests a second. |
 | FRED | Free key | Treasury yields and other macro series, for a yield-curve bubble on FOMC days | Daily data, not real time. |
 | Federal Reserve, BLS | None | Official FOMC and release schedules | Web pages rather than APIs; good for updating dates once a year. |
 
@@ -110,8 +111,6 @@ Personal use is fine; sharing Honu with others means reading them first.
 
 - Keep `FINNHUB_API_KEY` next to `ANTHROPIC_API_KEY`: in `.env` during development (git
   ignores it) and in the Keychain in a macOS app. Never commit a key.
-- A key in a web build is visible to whoever uses the page, which is acceptable only for
-  personal use.
 
 ### Real-time trades over WebSocket (Finnhub)
 
@@ -136,13 +135,9 @@ Handling the stream:
 - US regular hours are 9:30 to 16:00 US/Eastern. Outside them, use a crypto symbol or
   the fake feed below to see bubbles move.
 
-Platform notes:
-
-- **Swift:** `URLSessionWebSocketTask` (`send(.string(...))`, a `receive()` loop) running
-  in a `Task`, publishing per-symbol state to the UI through an `@Observable` model on
-  the main actor.
-- **Rust/egui:** `ewebsock`, which works natively and in the browser (verify the
-  version), drained in the microapp's `update` each frame, like the Ask chats' streams.
+In Swift: a `URLSessionWebSocketTask` (`send(.string(...))`, a `receive()` loop) running
+in a `Task`, publishing per-symbol state to the UI through an `@Observable` model on the
+main actor, which SwiftUI views redraw from.
 
 ### REST snapshots (Finnhub)
 
@@ -171,12 +166,12 @@ calendars a few times a day, and cache what comes back.
 ### Time zones
 
 Event times are US/Eastern, which observes daylight saving time on different dates from
-other places. Convert through the time zone database (`TimeZone` in Swift,
-`chrono-tz` in Rust), never with a fixed offset.
+other places. Convert through the time zone database (`TimeZone(identifier: "America/New_York")`),
+never with a fixed offset.
 
 ### One interface per kind of source
 
-Following how Honu reaches Claude through a swappable client in its services:
+Each kind of source sits behind a protocol, so it can be swapped:
 
 - A `MarketFeed` service: subscribe and unsubscribe symbols, and a stream of trades.
   Implementations: Finnhub, and a **fake feed** that plays scripted trades, for tests,
@@ -275,7 +270,8 @@ question needs, in a tool-use loop that Honu runs locally with the user's keys:
   with sources.
 - This needs the Messages API's tools: send `tools` with the request, run each
   `tool_use` block when the response stops for `tool_use`, and answer with a
-  `tool_result` carrying its `tool_use_id`. Today's `claude::Client` only streams text.
+  `tool_result` carrying its `tool_use_id`. The Swift app has no Claude client yet (Ask
+  AI is in `TODO.md`); the one it gets should handle tools from the start.
 
 **The numeric firewall**, the base of trust in everything Claude says:
 
@@ -428,7 +424,6 @@ firewall, and keeping the trifecta apart: the rest stands on them.
 
 - Up and down colors: US convention or East Asian, or follow the system locale?
 - How many symbols the watchlist needs, against the free plan's streaming cap.
-- Whether the web build matters, given keys in the page and CORS on unofficial sources.
 - Whether a thesis belongs to the ticker item or is a note linked to it.
 - Default alert quota and wake thresholds, and how far the learned ones may move.
 - Where the glass-box log lives and how long it is kept.
