@@ -28,7 +28,7 @@ final class FloatingWindow: NSWindow {
 }
 
 /// Lets clicks through to the apps below everywhere except on something of
-/// Honu's, and lets the shell catch up on what happens over time.
+/// Honu's. Call `update` every frame.
 ///
 /// A window that ignores mouse events gets none, so the global mouse position
 /// is polled to decide when to start taking them again.
@@ -36,19 +36,13 @@ final class FloatingWindow: NSWindow {
 final class ClickThrough {
     private weak var window: NSWindow?
     private let shell: Shell
-    private var timer: Timer?
 
     init(window: NSWindow, shell: Shell) {
         self.window = window
         self.shell = shell
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) {
-            [weak self] _ in
-            MainActor.assumeIsolated { self?.update() }
-        }
     }
 
-    private func update() {
-        shell.tick()
+    func update() {
         guard let window else { return }
         let mouse = NSEvent.mouseLocation
         let frame = window.frame

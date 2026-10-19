@@ -7,7 +7,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: FloatingWindow?
     private var shell: Shell?
-    private var clickThrough: ClickThrough?
+    private var frameClock: FrameClock?
     private var eventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,7 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let shell = Shell(size: frame.size)
         let window = FloatingWindow(frame: frame, content: ShellView(shell: shell))
         window.makeKeyAndOrderFront(nil)
-        clickThrough = ClickThrough(window: window, shell: shell)
+        let clickThrough = ClickThrough(window: window, shell: shell)
+        frameClock = FrameClock(window: window) {
+            shell.tick()
+            clickThrough.update()
+        }
         eventMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.keyDown, .leftMouseDown, .rightMouseDown]
         ) { [weak self] event in
