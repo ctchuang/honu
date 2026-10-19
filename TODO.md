@@ -33,3 +33,9 @@ Smaller improvements:
 
 - **Follow-up questions**: an Ask bubble answers only one question today; let it carry
   on as a multi-turn conversation.
+
+## Project
+
+- **A web page for Honu**, hosted on GitHub Pages: a page that shows what Honu is
+  (bubbles on the desktop, the turtle and the octopus) with a short demo video, and how
+  to build and run it.
