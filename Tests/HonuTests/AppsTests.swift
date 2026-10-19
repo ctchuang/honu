@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WebKit
 
 @testable import Honu
 
@@ -114,7 +115,7 @@ struct WebStatusTests {
         web.startedLoading(item)
         #expect(web.isBusy(item))
         #expect(update(web).isEmpty)
-        web.stoppedLoading(item, finished: true)
+        web.stoppedLoading(item, .finished)
         #expect(!web.isBusy(item))
         #expect(update(web) == [.motion(ViewTarget(app: web.id, item: item), .rise)])
         #expect(update(web).isEmpty, "rose twice for one load")
@@ -125,9 +126,33 @@ struct WebStatusTests {
         let item = web.create()
         web.open("en.wikipedia.org", in: item)
         web.startedLoading(item)
-        web.stoppedLoading(item, finished: false)
+        web.stoppedLoading(item, .cancelled)
         #expect(!web.isBusy(item))
         #expect(update(web).isEmpty)
+    }
+
+    @Test func aFailedLoadWobbles() {
+        let web = WebApp()
+        let item = web.create()
+        web.open("no-such-host.invalid", in: item)
+        web.startedLoading(item)
+        web.stoppedLoading(item, .failed)
+        #expect(!web.isBusy(item))
+        #expect(update(web) == [.motion(ViewTarget(app: web.id, item: item), .wobble)])
+    }
+
+    @Test func loadErrorsAreToldFromLoadsGivenUp() {
+        #expect(LoadEnd(CancellationError()) == .cancelled)
+        #expect(LoadEnd(URLError(.cancelled)) == .cancelled)
+        #expect(LoadEnd(NSError(domain: "WebKitErrorDomain", code: 102)) == .cancelled)
+        #expect(LoadEnd(URLError(.cannotFindHost)) == .failed)
+        #expect(LoadEnd(URLError(.notConnectedToInternet)) == .failed)
+        // As WebPage reports them, wrapped in its own error.
+        let wrapped = WebPage.NavigationError.failedProvisionalNavigation
+        #expect(LoadEnd(wrapped(URLError(.cancelled))) == .cancelled)
+        #expect(LoadEnd(wrapped(URLError(.cannotFindHost))) == .failed)
+        #expect(LoadEnd(WebPage.NavigationError.pageClosed) == .cancelled)
+        #expect(LoadEnd(WebPage.NavigationError.invalidURL) == .failed)
     }
 
     @Test func aPageInTwoBubblesBreathesUntilBothHaveLoaded() {
@@ -136,9 +161,9 @@ struct WebStatusTests {
         web.open("en.wikipedia.org", in: item)
         web.startedLoading(item)
         web.startedLoading(item)
-        web.stoppedLoading(item, finished: true)
+        web.stoppedLoading(item, .finished)
         #expect(web.isBusy(item))
-        web.stoppedLoading(item, finished: true)
+        web.stoppedLoading(item, .finished)
         #expect(!web.isBusy(item))
         #expect(update(web).count == 1)
     }
@@ -150,7 +175,7 @@ struct WebStatusTests {
         web.startedLoading(item)
         web.remove(item)
         #expect(!web.isBusy(item))
-        web.stoppedLoading(item, finished: true)
+        web.stoppedLoading(item, .finished)
         #expect(update(web).isEmpty)
     }
 

@@ -14,8 +14,9 @@ final class WebApp: MicroApp {
     @ObservationIgnored private var ids = ItemIDs()
     /// How many bubbles are loading each page, which makes them breathe.
     @ObservationIgnored private var loading: [ItemID: Int] = [:]
-    /// Pages that finished loading since the last `update`, whose bubbles rise.
-    @ObservationIgnored private var loaded: Set<ItemID> = []
+    /// Pages that finished loading since the last `update`, whose bubbles
+    /// rise, or failed to, whose bubbles wobble.
+    @ObservationIgnored private var ended: [ItemID: Motion] = [:]
 
     func create() -> ItemID {
         let id = ids.next()
@@ -56,12 +57,13 @@ final class WebApp: MicroApp {
         loading[item, default: 0] > 0
     }
 
-    /// Has the bubbles of every page that finished loading rise.
+    /// Has the bubbles of every page that finished loading rise, and those of
+    /// every page that failed to wobble.
     func update(_ context: Context) {
-        for item in loaded.sorted() {
-            context.play(.rise, for: item)
+        for (item, motion) in ended.sorted(by: { $0.key < $1.key }) {
+            context.play(motion, for: item)
         }
-        loaded.removeAll()
+        ended.removeAll()
     }
 
     /// Notes that a bubble started loading the page.
@@ -69,13 +71,15 @@ final class WebApp: MicroApp {
         loading[item, default: 0] += 1
     }
 
-    /// Notes that a bubble stopped loading the page: `finished` it, or gave
-    /// up, as when the load failed or the bubble closed.
-    func stoppedLoading(_ item: ItemID, finished: Bool) {
+    /// Notes that a bubble stopped loading the page, and how the load ended.
+    func stoppedLoading(_ item: ItemID, _ end: LoadEnd) {
         let count = loading[item, default: 0] - 1
         loading[item] = count > 0 ? count : nil
-        if finished, pages[item] != nil {
-            loaded.insert(item)
+        guard pages[item] != nil else { return }
+        switch end {
+        case .finished: ended[item] = .rise
+        case .failed: ended[item] = .wobble
+        case .cancelled: break
         }
     }
 
@@ -96,7 +100,7 @@ final class WebApp: MicroApp {
     func remove(_ item: ItemID) {
         pages[item] = nil
         loading[item] = nil
-        loaded.remove(item)
+        ended[item] = nil
     }
 
     var items: [ItemID] { pages.keys.sorted() }
@@ -116,6 +120,38 @@ final class WebApp: MicroApp {
             ids.skip(past: page.id)
             pages[page.id] = page.url
         }
+    }
+}
+
+/// How a page's load ended.
+enum LoadEnd: Equatable {
+    case finished
+    /// The page could not be loaded, as when the address is wrong or the
+    /// network is down; the user is needed.
+    case failed
+    /// Nobody wants the page anymore: its bubble closed, or a new load,
+    /// such as a link followed, replaced it.
+    case cancelled
+
+    /// How a load that threw `error` ended.
+    init(_ error: any Error) {
+        // WebPage wraps what went wrong in a navigation error of its own.
+        if let error = error as? WebPage.NavigationError {
+            switch error {
+            case .failedProvisionalNavigation(let underlying): self.init(underlying)
+            case .pageClosed: self = .cancelled
+            case .webContentProcessTerminated, .invalidURL: self = .failed
+            @unknown default: self = .failed
+            }
+            return
+        }
+        let error = error as NSError
+        let cancelled =
+            error is CancellationError
+            || (error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled)
+            // WebKit's "frame load interrupted", when a new navigation replaces the load.
+            || (error.domain == "WebKitErrorDomain" && error.code == 102)
+        self = cancelled ? .cancelled : .failed
     }
 }
 
@@ -212,7 +248,7 @@ struct PageView: View {
         WebView(page)
             .task(id: source) {
                 app.startedLoading(item)
-                let finished =
+                let end =
                     switch source {
                     case .web(let url):
                         await Self.finishes(page.load(URLRequest(url: url)))
@@ -224,21 +260,23 @@ struct PageView: View {
                                 html: Self.player(id), baseURL: URL(string: "https://honu.example")!
                             ))
                     }
-                app.stoppedLoading(item, finished: finished)
+                app.stoppedLoading(item, Task.isCancelled ? .cancelled : end)
             }
     }
 
-    /// Waits for a load to finish, returning whether it did. A failed load
-    /// shows in the page itself, and one cut short is no longer wanted.
+    /// Waits for a load to end, returning how it did.
     private static func finishes(
         _ events: some AsyncSequence<WebPage.NavigationEvent, any Error>
-    ) async -> Bool {
+    ) async -> LoadEnd {
         do {
             for try await event in events where event == .finished {
-                return true
+                return .finished
             }
-        } catch {}
-        return false
+            // Ending without finishing or failing, the load was given up.
+            return .cancelled
+        } catch {
+            return LoadEnd(error)
+        }
     }
 
     private static func player(_ id: String) -> String {
