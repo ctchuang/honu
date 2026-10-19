@@ -6,7 +6,6 @@ The Rust/egui version (in the git history before the switch to Swift) had a litt
 Still to bring over:
 
 - Type-ahead: text typed while a new bubble flies out of the turtle goes into it.
-- Click-through on the actual bubble shape rather than its bounding rectangle.
 
 ## LLM integration
 

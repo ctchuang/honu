@@ -10,8 +10,7 @@ struct BubbleView: View {
     let glass: Namespace.ID
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(
-            cornerRadius: bubble.isOpen ? 30 : bubble.closedSide * 0.28, style: .continuous)
+        RoundedRectangle(cornerRadius: bubble.cornerRadius, style: .continuous)
     }
 
     var body: some View {

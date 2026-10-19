@@ -90,6 +90,19 @@ final class Bubble: Identifiable {
             width: size.width, height: size.height)
     }
 
+    /// The corner radius of its outline at full size: like a macOS app icon
+    /// when closed, a little rounder than a window when open.
+    var cornerRadius: CGFloat {
+        isOpen ? 30 : closedSide * 0.28
+    }
+
+    /// Whether `point` is inside its outline as drawn, so presses on the
+    /// transparent area past its rounded corners go to whatever is below.
+    func contains(_ point: CGPoint) -> Bool {
+        let outline = RoundedRectangle(cornerRadius: cornerRadius * drawnScale, style: .continuous)
+        return outline.path(in: frame).contains(point)
+    }
+
     /// Where it is going to rest: where a flight ends, otherwise where it is.
     var destination: CGPoint { flight?.to ?? center }
 

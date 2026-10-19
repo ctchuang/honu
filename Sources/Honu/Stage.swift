@@ -46,7 +46,7 @@ final class Stage {
 
     /// The topmost bubble under `point` that can be picked up.
     func bubble(at point: CGPoint) -> Bubble? {
-        bubbles.last { $0.isGrabbable && $0.frame.insetBy(dx: -2, dy: -2).contains(point) }
+        bubbles.last { $0.isGrabbable && $0.contains(point) }
     }
 
     /// Whether any bubble shows `target`, counting swallowed bubbles that

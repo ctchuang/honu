@@ -82,3 +82,53 @@ struct StageTests {
         #expect(!bubble.isOpen)
     }
 }
+
+@MainActor
+struct BubbleShapeTests {
+    private func bubble(open: Bool = false) -> Bubble {
+        let bubble = Bubble(
+            id: BubbleID(rawValue: 1),
+            target: ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1)),
+            center: CGPoint(x: 500, y: 300), appearance: Appearance(closedSide: 100),
+            viewState: nil)
+        bubble.isOpen = open
+        return bubble
+    }
+
+    @Test func roundedCornersAreNotHit() {
+        let closed = bubble()
+        #expect(closed.contains(CGPoint(x: 500, y: 300)), "middle")
+        #expect(closed.contains(CGPoint(x: 451, y: 300)), "left edge")
+        #expect(closed.contains(CGPoint(x: 500, y: 349)), "bottom edge")
+        #expect(!closed.contains(CGPoint(x: 451, y: 251)), "top-left corner")
+        #expect(!closed.contains(CGPoint(x: 549, y: 349)), "bottom-right corner")
+        #expect(!closed.contains(CGPoint(x: 560, y: 300)), "outside")
+
+        // An open panel's corners are rounder in points but smaller for its size.
+        let open = bubble(open: true)
+        let frame = open.frame
+        #expect(!open.contains(CGPoint(x: frame.minX + 2, y: frame.minY + 2)))
+        #expect(open.contains(CGPoint(x: frame.minX + 30, y: frame.minY + 30)))
+    }
+
+    @Test func aShrunkBubbleIsHitOnlyWhereItIsDrawn() {
+        let doomed = bubble()
+        doomed.isDoomed = true
+        #expect(doomed.contains(CGPoint(x: 500, y: 300)))
+        #expect(!doomed.contains(CGPoint(x: 545, y: 300)), "hit past its shrunk edge")
+    }
+
+    @Test func clicksPastACornerReachTheBubbleBelow() {
+        let stage = Stage(size: CGSize(width: 1200, height: 800))
+        let target = ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1))
+        let below = stage.add(
+            target: target, center: CGPoint(x: 440, y: 240),
+            appearance: Appearance(closedSide: 100), viewState: nil)
+        let above = stage.add(
+            target: target, center: CGPoint(x: 500, y: 300),
+            appearance: Appearance(closedSide: 100), viewState: nil)
+        #expect(stage.bubble(at: CGPoint(x: 500, y: 300)) === above)
+        // Past the top bubble's rounded corner, inside the one below it.
+        #expect(stage.bubble(at: CGPoint(x: 452, y: 252)) === below)
+    }
+}
