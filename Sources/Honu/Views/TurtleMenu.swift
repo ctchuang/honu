@@ -8,6 +8,17 @@ struct TurtleMenu: View {
     static let width: CGFloat = 190
     /// About how tall the menu is, for keeping it on screen.
     static let estimatedHeight: CGFloat = 120
+    /// Gap kept between the menu and the edges of the screen.
+    private static let margin: CGFloat = 8
+
+    /// The top-left corner of the menu opened at `point` on a screen of
+    /// `size`: at the point, moved back as far as it takes to keep the whole
+    /// menu on screen.
+    static func corner(at point: CGPoint, in size: CGSize) -> CGPoint {
+        CGPoint(
+            x: min(point.x, size.width - width - margin),
+            y: min(point.y, size.height - estimatedHeight - margin))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {

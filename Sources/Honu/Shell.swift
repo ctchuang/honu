@@ -19,7 +19,7 @@ final class Shell {
     let stage: Stage
     let turtle: Turtle
     let octopus: Octopus
-    /// Where the turtle's menu is open (its top-left corner), if it is.
+    /// Where the turtle was clicked to open its menu, if it is open.
     private(set) var menu: CGPoint?
     /// The newest bubble the turtle spat out, which takes text typed before
     /// its field takes the focus.
@@ -116,10 +116,7 @@ final class Shell {
     /// Opens the turtle's menu at `point`, with a little hop.
     func clickTurtle(at point: CGPoint) {
         turtle.hop()
-        // Keep the whole menu on screen.
-        menu = CGPoint(
-            x: min(point.x, stage.size.width - TurtleMenu.width - 8),
-            y: min(point.y, stage.size.height - TurtleMenu.estimatedHeight - 8))
+        menu = point
     }
 
     func closeMenu() {

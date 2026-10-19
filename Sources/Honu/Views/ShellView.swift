@@ -17,8 +17,9 @@ struct ShellView: View {
                 // Pressing anywhere outside the menu closes it.
                 Color.black.opacity(0.001)
                     .onTapGesture { shell.closeMenu() }
+                let corner = TurtleMenu.corner(at: point, in: shell.stage.size)
                 TurtleMenu(shell: shell)
-                    .offset(x: point.x, y: point.y)
+                    .offset(x: corner.x, y: corner.y)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
