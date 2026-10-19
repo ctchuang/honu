@@ -5,7 +5,9 @@
 The guiding idea: Claude should work with the bubbles on the desktop, not live in a
 chat window. Done so far: the turtle's menu has **Ask AI**, which spits out a bubble
 whose answer streams in while the panel grows to fit it (`Sources/Honu/MicroApps/Ask/`,
-`Sources/Honu/Claude.swift`).
+`Sources/Honu/Claude.swift`). It asks through Claude Code (`claude -p`), with the user's
+Claude account rather than an API key, so Claude Code's agent loop, tools, and sessions
+are there for the next steps.
 
 - **Spit out several bubbles at once** (next step): give Claude a `create_bubble` tool,
   so "give me five weekend ideas" becomes five bubbles the turtle spits out one by one.
@@ -33,24 +35,6 @@ Smaller improvements:
 
 - **Follow-up questions**: an Ask bubble answers only one question today; let it carry
   on as a multi-turn conversation.
-- **Ask through the Claude Code CLI**: run `claude` instead of calling the Messages API,
-  as one more `ClaudeClient` (`ClaudeCLI`) that `Services.live()` picks, so `AskApp`
-  and its tests stay as they are. To work out first:
-  - *Streaming*: `claude -p --output-format stream-json --include-partial-messages`
-    prints one JSON event per line; read the text chunks out of them and turn them into
-    `ClaudeEvent`s (`.text`, `.done`, `.failed`), parsing line by line in place of
-    `EventParser`.
-  - *No API key*: the CLI uses the user's own login, so `.env`, the key field, and
-    `keyRejected` may all go; what needs handling instead is the CLI being missing or
-    not logged in.
-  - *Finding the executable*: `swift run` from a terminal has the full `PATH`, but an
-    app bundle opened from the Finder gets a short one without `claude` (installed in
-    `/opt/homebrew/bin` here). Look in the usual install places, or let the user set
-    the path.
-  - *Cancelling*: when the octopus swallows a chat, `Process.terminate()` the child, or
-    it lives on as an orphan.
-  - *Start-up delay*: every question starts a new process, so the first words take
-    longer to come; the bubble breathes meanwhile, so it shows that it is busy.
 
 ## Project
 

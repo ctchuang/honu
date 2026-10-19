@@ -7,13 +7,13 @@ import Testing
 struct TypeAheadTests {
     private let claude = FakeClaude()
 
-    private func shell(key: String? = "sk-ant-test") -> Shell {
+    private func shell() -> Shell {
         let url = FileManager.default.temporaryDirectory
             .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
             .appending(path: "state.json")
         return Shell(
             size: CGSize(width: 1200, height: 800), storeURL: url,
-            services: Services(apiKey: ApiKey(key), claude: claude))
+            services: Services(claude: claude))
     }
 
     @Test func textTypedWhileANoteFliesOutGoesIntoIt() throws {
@@ -44,19 +44,13 @@ struct TypeAheadTests {
         #expect(notes.notes[second.target.item] == "hi")
     }
 
-    @Test func anAskBubbleTakesItAsTheKeyOrTheQuestion() throws {
-        let withKey = shell()
-        withKey.start(AppID("ask"))
-        let question = try #require(withKey.stage.bubbles.last)
-        #expect(withKey.type("Why?"))
-        let asks = try #require(withKey.registry.app(AppID("ask")) as? AskApp)
+    @Test func anAskBubbleTakesItAsTheQuestion() throws {
+        let shell = shell()
+        shell.start(AppID("ask"))
+        let question = try #require(shell.stage.bubbles.last)
+        #expect(shell.type("Why?"))
+        let asks = try #require(shell.registry.app(AppID("ask")) as? AskApp)
         #expect(asks.chats[question.target.item]?.question == "Why?")
-
-        let withoutKey = shell(key: nil)
-        withoutKey.start(AppID("ask"))
-        let key = try #require(withoutKey.stage.bubbles.last)
-        #expect(withoutKey.type("sk-ant-"))
-        #expect((key.viewState as? ChatViewState)?.keyDraft == "sk-ant-")
     }
 
     @Test func aWebBubbleTakesItAsTheAddress() throws {

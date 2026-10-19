@@ -3,14 +3,14 @@ import Testing
 
 @testable import Honu
 
-/// A stand-in for the API: it records the questions asked and keeps each
+/// A stand-in for Claude Code: it records the questions asked and keeps each
 /// answer stream, for the test to answer.
 @MainActor
 final class FakeClaude: ClaudeClient {
     private(set) var asked: [String] = []
     private(set) var streams: [AnswerStream] = []
 
-    func ask(apiKey: String, question: String) -> AnswerStream {
+    func ask(question: String) -> AnswerStream {
         asked.append(question)
         let stream = AnswerStream()
         streams.append(stream)
@@ -22,8 +22,8 @@ final class FakeClaude: ClaudeClient {
 struct AskAppTests {
     private let claude = FakeClaude()
 
-    private func app(key: String? = "sk-ant-test") -> AskApp {
-        AskApp(services: Services(apiKey: ApiKey(key), claude: claude))
+    private func app() -> AskApp {
+        AskApp(services: Services(claude: claude))
     }
 
     /// A new chat in `asks` that has asked `question`.
@@ -64,26 +64,7 @@ struct AskAppTests {
         #expect(asks.chats[other]?.status == .typing(error: "The answer stopped unexpectedly."))
     }
 
-    @Test func aRefusedKeyIsForgottenAndTheQuestionCanBeSentAgain() {
-        let asks = app()
-        let item = ask(asks, "Why is the sea salty?")
-        claude.streams[0].send(.keyRejected("invalid x-api-key"))
-        #expect(update(asks) == [.motion(ViewTarget(app: asks.id, item: item), .wobble)])
-        #expect(asks.services.apiKey.value == nil)
-        let chat = asks.chats[item]!
-        #expect(chat.keyError == "invalid x-api-key")
-        #expect(chat.status == .typing(error: nil))
-
-        asks.setKey("  sk-ant-new \n")
-        #expect(asks.services.apiKey.value == "sk-ant-new")
-        #expect(chat.keyError == nil)
-        asks.ask(chat)
-        #expect(claude.asked == ["Why is the sea salty?", "Why is the sea salty?"])
-    }
-
-    @Test func nothingIsAskedWithoutAKeyOrAQuestion() {
-        let asks = app(key: nil)
-        _ = ask(asks, "Why is the sea salty?")
+    @Test func nothingIsAskedWithoutAQuestion() {
         let blank = app()
         _ = ask(blank, "   ")
         #expect(claude.asked.isEmpty)

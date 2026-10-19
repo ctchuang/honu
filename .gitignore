@@ -1,7 +1,6 @@
 # Swift Package Manager build output.
 /.build
 .claude/worktrees/
-# Local secrets such as the Claude API key. Only the template is committed.
+# Honu needs no API key, but keep any old key files out of git.
 .env
 .env.*
-!.env.example
