@@ -51,8 +51,9 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
 ## Development
 
 ```sh
-swift format lint -r Sources Package.swift   # lint
-swift format -i -r Sources Package.swift     # format
+swift test                                           # run the tests
+swift format lint --strict -r Sources Tests Package.swift   # lint
+swift format -i -r Sources Tests Package.swift     # format
 ```
 
 ## License

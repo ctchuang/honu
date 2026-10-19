@@ -24,14 +24,15 @@ final class Turtle {
         "...OKKO.........OKKKKO..",
         "....OO...........OOOO...",
     ])
-    /// The sprite with the mouth open, showing its dark inside.
-    static let openMouthGrid = grid.replacing([(22, 7), (23, 7), (22, 8), (23, 8)], with: "E")
+    /// Pixels (column, row) that turn into the dark inside of the open mouth.
+    static let openMouth = [(22, 7), (23, 7), (22, 8), (23, 8)]
+    static let openMouthGrid = grid.replacing(openMouth, with: "E")
     /// Where bubbles come out, in sprite pixels: the front of the open mouth.
     private static let mouth = CGPoint(x: 24, y: 8)
     /// Seconds the mouth stays open after spitting.
     private static let mouthSeconds: TimeInterval = 0.3
     /// Gap between the turtle and the corner of the screen.
-    private static let margin: CGFloat = 24
+    static let margin: CGFloat = 24
     private static let hopSeconds: TimeInterval = 0.35
     /// Height of a hop, in sprite pixels.
     private static let hopPixels: Double = 3

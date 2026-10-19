@@ -19,8 +19,10 @@ jobs:
       - name: Show the toolchain
         run: swift --version
       - name: Check formatting
-        run: swift format lint --strict -r Sources Package.swift
+        run: swift format lint --strict -r Sources Tests Package.swift
       - name: Build
         run: swift build
+      - name: Test
+        run: swift test
       - name: Build for release
         run: swift build -c release

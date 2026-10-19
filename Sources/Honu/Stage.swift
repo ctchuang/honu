@@ -13,6 +13,8 @@ final class Bubble: Identifiable {
     let id: BubbleID
     let target: ViewTarget
     var center: CGPoint
+    /// Where it is flying to, or where it is.
+    var destination: CGPoint
     var isOpen = false
     let closedSide: CGFloat
     let panelSize: CGSize
@@ -36,6 +38,7 @@ final class Bubble: Identifiable {
         self.id = id
         self.target = target
         self.center = center
+        destination = center
         closedSide = appearance.closedSide
         panelSize = appearance.panelSize
         self.viewState = viewState
@@ -76,7 +79,7 @@ final class Stage {
     private(set) var drag: (bubble: Bubble, home: CGPoint)?
 
     /// How far a new panel steps aside from one already in its place.
-    private static let cascadeStep: CGFloat = 28
+    static let cascadeStep: CGFloat = 28
     /// Most steps aside a new panel takes before landing where it is.
     private static let cascadeLimit = 10
     /// Gap kept between a panel and the edges of the screen.
@@ -139,6 +142,7 @@ final class Stage {
         withAnimation(.bouncy(duration: 0.5, extraBounce: 0.15)) {
             bubble.isOpen.toggle()
             bubble.center = clamped(bubble.center, size: bubble.size)
+            bubble.destination = bubble.center
         }
     }
 
@@ -171,6 +175,7 @@ final class Stage {
         guard let drag else { return }
         drag.bubble.center = CGPoint(
             x: drag.home.x + translation.width, y: drag.home.y + translation.height)
+        drag.bubble.destination = drag.bubble.center
         if drag.bubble.isDoomed != doomed {
             withAnimation(.spring(duration: 0.25)) { drag.bubble.isDoomed = doomed }
         }
@@ -197,8 +202,9 @@ final class Stage {
         // right of any panel already there, as windows cascade.
         for _ in 0..<Self.cascadeLimit {
             let taken = bubbles.contains {
-                $0 !== bubble && $0.isOpen && !$0.isSwallowed
-                    && hypot($0.center.x - place.x, $0.center.y - place.y) < Self.cascadeStep
+                $0 !== bubble && ($0.isOpen || $0.isInFlight) && !$0.isSwallowed
+                    && hypot($0.destination.x - place.x, $0.destination.y - place.y)
+                        < Self.cascadeStep
             }
             if !taken { break }
             place = clamped(
@@ -211,6 +217,7 @@ final class Stage {
     /// Sends `bubble` into the octopus's `mouth`, where it stays out of sight.
     func swallow(_ bubble: Bubble, into mouth: CGPoint) {
         bubble.isInFlight = true
+        bubble.destination = mouth
         withAnimation(.easeIn(duration: 0.3)) {
             bubble.center = mouth
             bubble.scale = 0.05
@@ -237,6 +244,7 @@ final class Stage {
     {
         bubble.isInFlight = true
         bubble.center = start
+        bubble.destination = place
         bubble.scale = 0.15
         // Let the bubble show at the start first, so the flight animates from there.
         Task { @MainActor in

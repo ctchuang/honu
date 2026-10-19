@@ -23,14 +23,20 @@ private struct SavedBubble: Codable {
 /// their shape.
 @MainActor
 final class Autosave {
-    private static let url = URL.applicationSupportDirectory
+    static let defaultURL = URL.applicationSupportDirectory
         .appending(path: "Honu", directoryHint: .isDirectory)
         .appending(path: "state.json")
     /// How often to check for changes, in seconds.
     private static let interval: TimeInterval = 1
 
+    /// Where it saves.
+    private let url: URL
     private var lastSaved: Data?
     private var lastCheck = -TimeInterval.infinity
+
+    init(url: URL) {
+        self.url = url
+    }
 
     /// Saves if a second has passed since the last check and anything changed.
     func tick(_ shell: Shell) {
@@ -46,8 +52,8 @@ final class Autosave {
         guard let data = try? encoder.encode(state(of: shell)), data != lastSaved else { return }
         do {
             try FileManager.default.createDirectory(
-                at: Self.url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: Self.url, options: .atomic)
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
             lastSaved = data
         } catch {
             // Try again at the next check.
@@ -64,7 +70,9 @@ final class Autosave {
         state.bubbles = shell.stage.bubbles.filter { !$0.isSwallowed }.map {
             SavedBubble(
                 target: $0.target,
-                offset: CGPoint(x: $0.center.x - center.x, y: $0.center.y - center.y),
+                // Where it is going, so a bubble saved mid-flight comes back where it lands.
+                offset: CGPoint(
+                    x: $0.destination.x - center.x, y: $0.destination.y - center.y),
                 isOpen: $0.isOpen)
         }
         for app in shell.registry.apps {
@@ -78,7 +86,7 @@ final class Autosave {
     /// Puts back what was saved on the last launch, and deletes items no
     /// bubble showed, such as one still in the octopus.
     func restore(into shell: Shell) {
-        guard let data = try? Data(contentsOf: Self.url),
+        guard let data = try? Data(contentsOf: url),
             let state = try? JSONDecoder().decode(SavedState.self, from: data)
         else { return }
         lastSaved = data

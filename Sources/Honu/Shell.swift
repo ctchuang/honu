@@ -23,13 +23,15 @@ final class Shell {
     private(set) var menu: CGPoint?
     /// Where the turtle was when the current drag of it began.
     @ObservationIgnored private var turtleDragStart: CGPoint?
-    @ObservationIgnored private let autosave = Autosave()
+    @ObservationIgnored private let autosave: Autosave
 
     /// How far a bubble must be dragged before the octopus comes up, so
     /// nudging a bubble into place does not call it.
     private static let summonDistance: CGFloat = 40
 
-    init(size: CGSize) {
+    /// A shell for a screen of `size`, saving to and restoring from `storeURL`.
+    init(size: CGSize, storeURL: URL = Autosave.defaultURL) {
+        autosave = Autosave(url: storeURL)
         registry = Registry([NotesApp(), WebApp()])
         stage = Stage(size: size)
         turtle = Turtle(stageSize: size)

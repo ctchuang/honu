@@ -8,6 +8,10 @@ let package = Package(
         .executableTarget(
             name: "Honu",
             resources: [.copy("Resources/icon.png")]
-        )
+        ),
+        .testTarget(
+            name: "HonuTests",
+            dependencies: ["Honu"]
+        ),
     ]
 )

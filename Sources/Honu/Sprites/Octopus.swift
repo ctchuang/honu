@@ -11,7 +11,7 @@ import SwiftUI
 final class Octopus {
     /// The head and body, one character per pixel: Outline, Body, White
     /// highlight, Eye (also the mouth), Pink cheek, and `.` for transparent.
-    private static let head = [
+    static let head = [
         "......OOOOOO......",
         "....OOBBBBBBOO....",
         "...OBBWWBBBBBBO...",
@@ -25,7 +25,7 @@ final class Octopus {
         ".OBBBBBBBBBBBBBBO.",
     ]
     /// The tentacles below the head, in two frames that sway them left and right.
-    private static let tentacles = [
+    static let tentacles = [
         [
             ".OBBOBBOBBOBBOBBO.",
             ".OBBOBBOBBOBBOBBO.",
@@ -41,7 +41,7 @@ final class Octopus {
     ]
     private static let frames = tentacles.map { PixelGrid(head + $0) }
     /// Pixels (column, row) that turn dark when the mouth opens wide.
-    private static let openMouth = [(8, 9), (9, 9)]
+    static let openMouth = [(8, 9), (9, 9)]
     private static let openFrames = frames.map { $0.replacing(openMouth, with: "E") }
     /// Where swallowed bubbles go in and spat-out ones come out, in sprite pixels.
     private static let mouth = CGPoint(x: 9, y: 9)
@@ -51,7 +51,7 @@ final class Octopus {
     /// bubble to be swallowed. Wider than the sprite, so dropping takes no aim.
     private static let reach: CGFloat = 80
     /// Seconds a swallowed bubble can still be brought back.
-    private static let undoSeconds: TimeInterval = 5
+    static let undoSeconds: TimeInterval = 5
     /// Seconds a bubble takes to go down, and the gulp afterwards lasts.
     private static let swallowSeconds: TimeInterval = 0.3
     private static let gulpSeconds: TimeInterval = 0.3
@@ -98,7 +98,7 @@ final class Octopus {
     /// How far below `origin` it hides when not up.
     var hiddenDrop: CGFloat { size.height + Self.margin }
 
-    private var middle: CGPoint {
+    var middle: CGPoint {
         CGPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
     }
 
@@ -150,9 +150,8 @@ final class Octopus {
         return grid.pixel(x, y) != "."
     }
 
-    /// Swallows `bubble`, which was picked up at `home`.
-    func swallow(_ bubble: BubbleID, home: CGPoint) {
-        let time = now()
+    /// Swallows `bubble`, which was picked up at `home`, at `time`.
+    func swallow(_ bubble: BubbleID, home: CGPoint, at time: TimeInterval = now()) {
         stomach.append(Swallowed(bubble: bubble, home: home, at: time))
         undoUntil = time + Self.swallowSeconds + Self.undoSeconds
         rise()
@@ -160,9 +159,8 @@ final class Octopus {
 
     /// Spits out the latest swallowed bubble, returning it; it should fly
     /// back to where it was picked up from `mouth`.
-    func spitBack() -> Swallowed? {
+    func spitBack(at time: TimeInterval = now()) -> Swallowed? {
         guard let swallowed = stomach.popLast() else { return nil }
-        let time = now()
         spatAt = time
         // Leave time to bring back the one swallowed before it, too.
         undoUntil = time + Self.undoSeconds
@@ -170,10 +168,10 @@ final class Octopus {
         return swallowed
     }
 
-    /// Forgets bubbles too old to bring back, returning them; they are now
-    /// deleted for good.
-    func forget() -> [BubbleID] {
-        guard canUndo, now() >= undoUntil else { return [] }
+    /// Forgets bubbles too old to bring back at `time`, returning them; they
+    /// are now deleted for good.
+    func forget(at time: TimeInterval = now()) -> [BubbleID] {
+        guard canUndo, time >= undoUntil else { return [] }
         let gone = stomach.map(\.bubble)
         stomach = []
         rise()

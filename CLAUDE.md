@@ -14,11 +14,13 @@ Honu was first written in Rust with egui; that version is in the git history bef
 swift build                  # build
 swift run                    # build and launch; bubbles float on the real desktop (quit with ⌘Q)
 swift build -c release       # optimized build
-swift format lint --strict -r Sources Package.swift   # lint (as CI does)
-swift format -i -r Sources Package.swift     # format
+swift test                   # run the tests in Tests/HonuTests
+swift test --filter <name>   # run tests whose name matches
+swift format lint --strict -r Sources Tests Package.swift   # lint (as CI does)
+swift format -i -r Sources Tests Package.swift     # format
 ```
 
-CI (`.github/workflows/ci.yml`) runs on a `macos-26` runner for every push to `main` and every pull request: the strict format check (`swift format lint --strict`, so warnings fail), a debug build, and a release build.
+CI (`.github/workflows/ci.yml`) runs on a `macos-26` runner for every push to `main` and every pull request: the strict format check (`swift format lint --strict`, so warnings fail), a debug build, the tests, and a release build.
 
 `.swift-format` sets 4-space indentation and 100-column lines. The project is a Swift package, so it builds with the Command Line Tools alone; Xcode is not needed. The Command Line Tools do not ship SwiftUI's macro plugins, so **`@State` and other SwiftUI macros do not compile**: spell state out as a stored `State` value instead (`private let player = State(initialValue: Player())`, read through `wrappedValue`), or keep it in an `@Observable` model (Observation's macros do ship). `swift run` launches a bare executable, not an app bundle; the Dock icon is set at launch from `Sources/Honu/Resources/icon.png`.
 
@@ -39,9 +41,10 @@ The code follows MVC. Each **microapp** (Notes, Web) is a controller that keeps 
 - `Sources/Honu/Sprites/Turtle.swift`: the turtle, which starts in the bottom-left corner and can be dragged anywhere on screen. It bobs while idle, hops when clicked, and briefly opens its mouth (`spit`) for each bubble.
 - `Sources/Honu/Sprites/Octopus.swift`: the octopus. It rises from the bottom edge, in the corner away from the turtle, while summoned or while a swallowed bubble can still come back, and sinks again afterwards. Whether the *pointer* is within `reach` decides a drop, not where the bubble is. It remembers swallowed bubbles for `undoSeconds`, showing "Click to undo"; clicking it or the hint, or ⌘Z, spits the latest back to where it was picked up.
 - `Sources/Honu/Views/`: the SwiftUI views. `ShellView` stacks the bubbles, the octopus, the turtle, and the open menu (over a nearly transparent layer, so a press outside closes it) in the `stage` coordinate space. `StageView` puts every bubble in one `GlassEffectContainer`, so bubbles that come close blend into each other. `BubbleView` draws a bubble as interactive Liquid Glass with its title or symbol, or, open, its title over its microapp's content; dragging moves it and double-clicking toggles it. `TurtleView` and `OctopusView` animate the sprites with `TimelineView`. `TurtleMenu` is a glass menu with one item per microapp and Exit.
+- `Tests/HonuTests/`: Swift Testing tests (`@Test`, `#expect`), run on the main actor and importing the executable target with `@testable import Honu`. They drive the models and controllers directly, not the views: what depends on time takes the time as an argument (the octopus's `swallow`, `spitBack`, and `forget` default to `now()`), and a `Shell` can save to a store of its own (`storeURL`), so persistence is tested against a temporary file.
 
 ## Conventions
 
 - Everything in the repository must be in English: identifiers, comments, UI strings, docs, and commit messages — even when the conversation is in Chinese.
-- After changing Swift code, run `swift build` and `swift format lint --strict -r Sources Package.swift` before reporting the work as done, and fix any warnings they raise.
+- After changing Swift code, run `swift build`, `swift test`, and `swift format lint --strict -r Sources Tests Package.swift` before reporting the work as done, and fix any warnings they raise.
 - The Claude API key lives in `.env` at the repository root as `ANTHROPIC_API_KEY` (the name the Anthropic SDKs read). `.env` and `.env.*` are git-ignored; only the empty template `.env.example` is committed. Never read, print, or commit `.env`, and never put a key anywhere else in the repository.
