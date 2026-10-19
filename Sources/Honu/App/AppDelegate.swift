@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Sets up the menu bar and the floating window that covers the screen, and
-/// hands the shell the input SwiftUI's gestures do not cover.
+/// passes the input SwiftUI's gestures do not cover to an `InputRouter`.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: FloatingWindow?
@@ -41,65 +41,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shell?.save()
     }
 
-    /// Handles what SwiftUI's gestures do not: presses on content that
-    /// AppKit views take for themselves, right-clicks, Escape, and ⌘Z.
-    /// Returns whether it handled the event, which then goes no further.
+    /// Hands the shell, through an `InputRouter`, what SwiftUI's gestures do
+    /// not cover. Returns whether it was handled, and then goes no further.
     private func handle(_ event: NSEvent) -> Bool {
-        guard let shell, let window, event.window === window else { return false }
+        guard let shell, let window, event.window === window,
+            let input = Self.input(event, in: window)
+        else { return false }
+        let typing = window.firstResponder is NSText
+        return InputRouter(shell: shell).handle(input, typing: typing)
+    }
+
+    /// `event` as the input router takes it, if it is one it handles.
+    private static func input(_ event: NSEvent, in window: NSWindow) -> InputEvent? {
         // SwiftUI measures from the top-left corner, AppKit from the bottom-left.
         let height = window.contentView?.bounds.height ?? 0
         let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
         switch event.type {
         case .leftMouseDown:
-            shell.press(at: point)
+            return .press(at: point)
         case .rightMouseDown:
-            // Right-clicking the turtle opens its menu as clicking does;
-            // right-clicking anywhere else closes it.
-            if shell.turtle.contains(point) {
-                shell.clickTurtle(at: point)
-                return true
-            }
-            if shell.menu != nil {
-                shell.closeMenu()
-                return true
-            }
+            return .rightPress(at: point)
+        case .keyDown where event.keyCode == 53:
+            return .escape
         case .keyDown:
-            if event.keyCode == 53, shell.menu != nil {  // Escape
-                shell.closeMenu()
-                return true
-            }
-            let typing = window.firstResponder is NSText
-            // Text typed while no field has the focus goes to the newest bubble,
-            // whose field takes it once the bubble lands and opens.
-            if !typing, event.modifierFlags.isDisjoint(with: [.command, .control]),
-                let text = event.characters, isPrintable(text), shell.type(text)
-            {
-                return true
-            }
-            // ⌘Z undoes a delete, unless a text field wants it.
-            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z",
-                !typing, shell.octopus.canUndo
-            {
-                shell.undoDelete()
-                return true
-            }
+            return .key(
+                text: event.characters ?? "",
+                unmodified: event.charactersIgnoringModifiers ?? "",
+                command: event.modifierFlags.contains(.command),
+                control: event.modifierFlags.contains(.control))
         default:
-            break
+            return nil
         }
-        return false
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
-    }
-
-    /// Whether `text` is something typed to write, rather than a key such as
-    /// Return, Delete, or an arrow.
-    private func isPrintable(_ text: String) -> Bool {
-        !text.isEmpty
-            && text.unicodeScalars.allSatisfy {
-                ![.control, .privateUse, .unassigned].contains($0.properties.generalCategory)
-            }
     }
 
     private func makeMainMenu() -> NSMenu {
