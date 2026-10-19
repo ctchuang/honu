@@ -43,5 +43,5 @@ The code follows MVC. Each **microapp** (Notes, Web) is a controller that keeps 
 ## Conventions
 
 - Everything in the repository must be in English: identifiers, comments, UI strings, docs, and commit messages — even when the conversation is in Chinese.
-- After changing Swift code, run `swift build` and `swift format lint -r Sources Package.swift` before reporting the work as done, and fix any warnings they raise.
+- After changing Swift code, run `swift build` and `swift format lint --strict -r Sources Package.swift` before reporting the work as done, and fix any warnings they raise.
 - The Claude API key lives in `.env` at the repository root as `ANTHROPIC_API_KEY` (the name the Anthropic SDKs read). `.env` and `.env.*` are git-ignored; only the empty template `.env.example` is committed. Never read, print, or commit `.env`, and never put a key anywhere else in the repository.
