@@ -43,7 +43,7 @@ final class Bubble: Identifiable {
 
     static let doomedScale: CGFloat = 0.6
     /// Seconds a flight out of the turtle or back from the octopus lasts.
-    nonisolated static let spawnSeconds: Double = 1.6
+    nonisolated static let spawnSeconds: Double = 0.8
     /// Seconds a bubble takes to go down into the octopus.
     nonisolated static let swallowSeconds: Double = 0.3
     /// How far a busy bubble's glass swells at the height of each breath.
