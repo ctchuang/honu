@@ -71,43 +71,28 @@ final class AnswerStream: @unchecked Sendable {
 }
 
 /// Claude Code's CLI, run once per question.
-@MainActor
-final class ClaudeCode: ClaudeClient {
-    nonisolated private static let model = "claude-opus-5-5"
-    nonisolated private static let systemPrompt = """
+/// Only asking runs on the main actor (`ClaudeClient`); running `claude` and
+/// reading its answer happen off it.
+final class ClaudeCode {
+    private static let model = "claude-opus-5-5"
+    private static let systemPrompt = """
         You answer questions inside a small floating panel on the user's desktop. \
         Keep answers short and to the point. Write plain text without Markdown, \
         since the panel shows the raw text.
         """
     /// Where `claude` is usually installed, for when Honu runs without a
     /// shell's `PATH`, as an app opened from the Finder does.
-    nonisolated private static let installFolders = [
+    private static let installFolders = [
         "~/.local/bin", "~/.claude/local", "/opt/homebrew/bin", "/usr/local/bin",
     ]
 
     /// Where `claude` runs: Honu's own folder, away from any project, so no
     /// project's CLAUDE.md comes along.
-    nonisolated static let workingDirectory = Services.folder
-
-    func ask(question: String) -> AnswerStream {
-        let stream = AnswerStream()
-        let executable = Self.executable()
-        stream.run { stream in
-            guard let executable else {
-                stream.send(
-                    .failed(
-                        "Claude Code isn't installed. Install it from claude.com/claude-code, "
-                            + "then run claude once in Terminal to sign in."))
-                return
-            }
-            await Self.receive(question, from: executable, into: stream)
-        }
-        return stream
-    }
+    static let workingDirectory = Services.folder
 
     /// The arguments for answering one question read from standard input:
     /// streamed as JSON lines, with no tools, and nothing saved to resume.
-    nonisolated static let arguments = [
+    static let arguments = [
         "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
         "--model", model, "--effort", "low", "--tools", "", "--strict-mcp-config",
         "--no-session-persistence", "--system-prompt", systemPrompt,
@@ -115,7 +100,7 @@ final class ClaudeCode: ClaudeClient {
 
     /// The `claude` executable: the first in `PATH`, or else in a folder it
     /// is usually installed in.
-    nonisolated static func executable(
+    static func executable(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         isExecutable: (String) -> Bool = FileManager.default.isExecutableFile(atPath:)
     ) -> URL? {
@@ -133,14 +118,14 @@ final class ClaudeCode: ClaudeClient {
 
     /// The environment `claude` runs in: Honu's own, without an API key, so
     /// Claude Code always signs in with the user's Claude account.
-    nonisolated static func environment(_ environment: [String: String]) -> [String: String] {
+    static func environment(_ environment: [String: String]) -> [String: String] {
         environment.filter { $0.key != "ANTHROPIC_API_KEY" }
     }
 
     /// Runs `executable` (`claude`) in `directory` on `question` and feeds its
     /// answer into `stream` until it ends, stopping it if the stream is
     /// cancelled first.
-    nonisolated static func receive(
+    static func receive(
         _ question: String, from executable: URL, in directory: URL = workingDirectory,
         into stream: AnswerStream
     ) async {
@@ -202,12 +187,30 @@ final class ClaudeCode: ClaudeClient {
 
     /// Everything `handle` gives until it ends, read on a thread of its own,
     /// apart from the one reading the answer.
-    nonisolated private static func readToEnd(_ handle: FileHandle) async -> Data {
+    private static func readToEnd(_ handle: FileHandle) async -> Data {
         await withCheckedContinuation { read in
             DispatchQueue.global().async {
                 read.resume(returning: handle.readDataToEndOfFile())
             }
         }
+    }
+}
+
+extension ClaudeCode: ClaudeClient {
+    func ask(question: String) -> AnswerStream {
+        let stream = AnswerStream()
+        let executable = Self.executable()
+        stream.run { stream in
+            guard let executable else {
+                stream.send(
+                    .failed(
+                        "Claude Code isn't installed. Install it from claude.com/claude-code, "
+                            + "then run claude once in Terminal to sign in."))
+                return
+            }
+            await Self.receive(question, from: executable, into: stream)
+        }
+        return stream
     }
 }
 
