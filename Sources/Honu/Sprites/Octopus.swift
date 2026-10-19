@@ -106,8 +106,7 @@ final class Octopus {
 
     /// Where swallowed bubbles go in and spat-out ones come out.
     var mouth: CGPoint {
-        CGPoint(
-            x: origin.x + Self.mouth.x * spritePixel, y: origin.y + Self.mouth.y * spritePixel)
+        PixelGrid.point(Self.mouth, origin: origin)
     }
 
     /// Calls the octopus up while `summoned`, as while a bubble is dragged,
@@ -145,9 +144,7 @@ final class Octopus {
         if canUndo && abs(point.x - hintCenter.x) < 56 && abs(point.y - hintCenter.y) < 14 {
             return true
         }
-        let grid = Self.frames[0]
-        guard let (x, y) = grid.pixel(at: point, origin: origin) else { return false }
-        return grid.pixel(x, y) != "."
+        return Self.frames[0].isOpaque(at: point, origin: origin)
     }
 
     /// Swallows `bubble`, which was picked up at `home`, at `time`.

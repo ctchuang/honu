@@ -80,8 +80,7 @@ final class Turtle {
     /// Opens the mouth for a moment and returns where a bubble should come out.
     func spit() -> CGPoint {
         spatAt = now()
-        return CGPoint(
-            x: origin.x + Self.mouth.x * spritePixel, y: origin.y + Self.mouth.y * spritePixel)
+        return PixelGrid.point(Self.mouth, origin: origin)
     }
 
     /// How far the turtle is lifted at `time` by a hop or an idle bob, in
@@ -101,8 +100,7 @@ final class Turtle {
 
     /// Whether `point` is on one of the turtle's visible pixels.
     func contains(_ point: CGPoint) -> Bool {
-        guard let (x, y) = Self.grid.pixel(at: point, origin: origin) else { return false }
-        return Self.grid.pixel(x, y) != "."
+        Self.grid.isOpaque(at: point, origin: origin)
     }
 
     static func color(_ c: Character) -> Color? {

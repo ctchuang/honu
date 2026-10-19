@@ -36,6 +36,19 @@ struct PixelGrid {
         return (Int(x), Int(y))
     }
 
+    /// Whether `point` is on a visible pixel, for a sprite whose top-left
+    /// corner is at `origin`.
+    func isOpaque(at point: CGPoint, origin: CGPoint) -> Bool {
+        guard let (x, y) = pixel(at: point, origin: origin) else { return false }
+        return pixel(x, y) != "."
+    }
+
+    /// Where `pixel`, in sprite pixels from the top-left corner, lies on
+    /// screen for a sprite whose top-left corner is at `origin`.
+    static func point(_ pixel: CGPoint, origin: CGPoint) -> CGPoint {
+        origin + pixel * spritePixel
+    }
+
     /// The grid with some pixels replaced.
     func replacing(_ pixels: [(Int, Int)], with c: Character) -> PixelGrid {
         var grid = self

@@ -20,6 +20,19 @@ struct SpriteTests {
         #expect(grid.pixel(at: CGPoint(x: origin.x - 0.1, y: origin.y), origin: origin) == nil)
         #expect(grid.replacing([(2, 0)], with: "x").pixel(2, 0) == "x")
     }
+
+    @Test func onlyVisiblePixelsAreHit() {
+        let grid = PixelGrid(["ab..", "cdef"])
+        let origin = CGPoint(x: 100, y: 50)
+        let at = { (x: CGFloat, y: CGFloat) in
+            PixelGrid.point(CGPoint(x: x + 0.5, y: y + 0.5), origin: origin)
+        }
+        #expect(PixelGrid.point(.zero, origin: origin) == origin)
+        #expect(grid.isOpaque(at: at(1, 0), origin: origin))
+        #expect(!grid.isOpaque(at: at(2, 0), origin: origin), "hit a transparent pixel")
+        #expect(grid.isOpaque(at: at(3, 1), origin: origin))
+        #expect(!grid.isOpaque(at: at(4, 1), origin: origin), "hit past the edge")
+    }
 }
 
 @MainActor
