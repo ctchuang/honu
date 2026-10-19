@@ -2,20 +2,18 @@
 
 ## Bring over the Rust version
 
-The Rust/egui version (in the git history before the switch to Swift) had more than
-this prototype. Bring these over:
+The Rust/egui version (in the git history before the switch to Swift) had a little more.
+Still to bring over:
 
-- Ask AI streaming answers from Claude through the Messages API, with the panel growing
-  to fit the answer.
 - Type-ahead: text typed while a new bubble flies out of the turtle goes into it.
 - Click-through on the actual bubble shape rather than its bounding rectangle.
 
 ## LLM integration
 
 The guiding idea: Claude should work with the bubbles on the desktop, not live in a
-chat window. The turtle, the octopus, notes, and saving across launches are back;
-**Ask AI**, a bubble whose answer streams in while the panel grows to fit it, comes next
-(see above).
+chat window. Done so far: the turtle's menu has **Ask AI**, which spits out a bubble
+whose answer streams in while the panel grows to fit it (`Sources/Honu/Apps/AskApp.swift`,
+`Sources/Honu/Claude.swift`).
 
 - **Spit out several bubbles at once** (next step): give Claude a `create_bubble` tool,
   so "give me five weekend ideas" becomes five bubbles the turtle spits out one by one.

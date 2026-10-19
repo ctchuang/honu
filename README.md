@@ -13,8 +13,8 @@ Swift with SwiftUI and Liquid Glass.
 ## What it does
 
 Liquid Glass bubbles float directly on your desktop, above other windows. A little
-pixel turtle spits them out: notes to write in, and web pages, which can also play
-YouTube videos. Bubbles that come close blend into each other.
+pixel turtle spits them out: notes to write in, questions for Claude whose answers stream
+in, and web pages, which can also play YouTube videos. Bubbles that come close blend into each other.
 
 ## Getting started
 
@@ -27,6 +27,23 @@ swift run                # build and launch
 swift build -c release   # optimized build
 ```
 
+### Add your Claude API key (for Ask AI)
+
+Honu uses Claude to answer questions. Keep your key in a local `.env` file, which git
+ignores:
+
+```sh
+cp .env.example .env
+```
+
+Then open `.env` and paste your key after `ANTHROPIC_API_KEY=`. You can create a key in
+the [Claude Console](https://console.anthropic.com/settings/keys). Honu reads it at launch
+from the environment or from `.env` in or above the folder it runs in. Never commit `.env`
+or put your key anywhere else in the repository. Without a key, an Ask bubble asks you to
+paste one, which Honu keeps only until it quits.
+
+### Floating on the desktop
+
 Clicks pass through to the apps below everywhere except on a bubble. The window has no
 close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd> to quit
 (or quit it from the Dock).
@@ -36,7 +53,9 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
 - Honu starts with just a little pixel turtle in the bottom-left corner. **Drag** it to
   move it anywhere.
 - **Click** or **right-click** the turtle for its menu: **Add Note** makes it spit out
-  a note to write in, **Open Web Page** a bubble that asks for a link and then shows the
+  a note to write in, **Ask AI** a bubble where you ask Claude a question and watch the
+  answer stream in (it breathes while Claude works, rises when the answer is in, and
+  wobbles when something needs you), **Open Web Page** a bubble that asks for a link and then shows the
   page (YouTube links play the video), and **Exit** quits Honu. A closed note shows its
   first line.
 - **Drag** a bubble to move it, and **throw** it to let it glide. Idle bubbles drift, and

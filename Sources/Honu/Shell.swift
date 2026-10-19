@@ -31,10 +31,13 @@ final class Shell {
     /// nudging a bubble into place does not call it.
     private static let summonDistance: CGFloat = 40
 
-    /// A shell for a screen of `size`, saving to and restoring from `storeURL`.
-    init(size: CGSize, storeURL: URL = Autosave.defaultURL) {
+    /// A shell for a screen of `size`, saving to and restoring from
+    /// `storeURL`, whose microapps share `services`.
+    init(
+        size: CGSize, storeURL: URL = Autosave.defaultURL, services: Services = .live()
+    ) {
         autosave = Autosave(url: storeURL)
-        registry = Registry([NotesApp(), WebApp()])
+        registry = Registry([NotesApp(), AskApp(services: services), WebApp()])
         stage = Stage(size: size)
         turtle = Turtle(stageSize: size)
         octopus = Octopus(stageSize: size)
@@ -177,7 +180,8 @@ final class Shell {
     }
 
     /// Lets the microapps catch up, shows on each bubble what its item is
-    /// doing (it breathes while busy), and plays the motions they ask for.
+    /// doing (it breathes while busy, and an open panel takes the size its
+    /// microapp asks for), and plays the motions they ask for.
     private func updateApps() {
         for effect in registry.update() {
             switch effect {
@@ -191,6 +195,12 @@ final class Shell {
             let busy = registry.isBusy(bubble.target)
             if bubble.isBusy != busy {
                 bubble.isBusy = busy
+            }
+            let app = registry.app(bubble.target.app)
+            if let size = app?.appearance(of: bubble.target.item).panelSize,
+                size != bubble.panelSize
+            {
+                withAnimation(.smooth(duration: 0.25)) { bubble.panelSize = size }
             }
         }
     }

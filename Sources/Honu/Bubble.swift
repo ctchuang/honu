@@ -19,7 +19,9 @@ final class Bubble: Identifiable {
     @ObservationIgnored var phase: Double
     var isOpen = false
     let closedSide: CGFloat
-    let panelSize: CGSize
+    /// The size when open, which its microapp may change, as an Ask panel
+    /// grows with its answer.
+    var panelSize: CGSize
     /// What the bubble keeps for itself about its item, made by its microapp.
     @ObservationIgnored let viewState: AnyObject?
     /// Held over the octopus, where letting go deletes it; it shrinks.
