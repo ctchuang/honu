@@ -33,6 +33,24 @@ Smaller improvements:
 
 - **Follow-up questions**: an Ask bubble answers only one question today; let it carry
   on as a multi-turn conversation.
+- **Ask through the Claude Code CLI**: run `claude` instead of calling the Messages API,
+  as one more `ClaudeClient` (`ClaudeCLI`) that `Services.live()` picks, so `AskApp`
+  and its tests stay as they are. To work out first:
+  - *Streaming*: `claude -p --output-format stream-json --include-partial-messages`
+    prints one JSON event per line; read the text chunks out of them and turn them into
+    `ClaudeEvent`s (`.text`, `.done`, `.failed`), parsing line by line in place of
+    `EventParser`.
+  - *No API key*: the CLI uses the user's own login, so `.env`, the key field, and
+    `keyRejected` may all go; what needs handling instead is the CLI being missing or
+    not logged in.
+  - *Finding the executable*: `swift run` from a terminal has the full `PATH`, but an
+    app bundle opened from the Finder gets a short one without `claude` (installed in
+    `/opt/homebrew/bin` here). Look in the usual install places, or let the user set
+    the path.
+  - *Cancelling*: when the octopus swallows a chat, `Process.terminate()` the child, or
+    it lives on as an orphan.
+  - *Start-up delay*: every question starts a new process, so the first words take
+    longer to come; the bubble breathes meanwhile, so it shows that it is busy.
 
 ## Project
 
