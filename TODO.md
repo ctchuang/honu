@@ -4,7 +4,7 @@
 
 The guiding idea: Claude should work with the bubbles on the desktop, not live in a
 chat window. Done so far: the turtle's menu has **Ask AI**, which spits out a bubble
-whose answer streams in while the panel grows to fit it (`Sources/Honu/Apps/Ask/`,
+whose answer streams in while the panel grows to fit it (`Sources/Honu/MicroApps/Ask/`,
 `Sources/Honu/Claude.swift`).
 
 - **Spit out several bubbles at once** (next step): give Claude a `create_bubble` tool,
