@@ -102,7 +102,7 @@ final class Shell {
 
     /// What an open `bubble` shows, made by its microapp.
     func content(of bubble: Bubble) -> AnyView? {
-        registry.app(bubble.target.app)?.content(
+        registry.app(bubble.target.app)?.anyContent(
             of: bubble.target.item, viewState: bubble.viewState)
     }
 
@@ -167,7 +167,7 @@ final class Shell {
             typeAheadTarget = nil
             return false
         }
-        app.typeAhead(text, into: bubble.target.item, viewState: bubble.viewState)
+        app.anyTypeAhead(text, into: bubble.target.item, viewState: bubble.viewState)
         return true
     }
 

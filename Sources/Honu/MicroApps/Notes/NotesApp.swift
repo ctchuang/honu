@@ -42,16 +42,16 @@ final class NotesApp: MicroApp {
     }
 
     /// A new note is for writing in, so its bubble starts with the cursor in it.
-    func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? {
+    func newViewState(for item: ItemID, fresh: Bool) -> NoteViewState {
         NoteViewState(focusPending: fresh)
     }
 
-    func content(of item: ItemID, viewState: AnyObject?) -> AnyView {
-        AnyView(NoteEditor(app: self, item: item, state: viewState as? NoteViewState))
+    func content(of item: ItemID, viewState: NoteViewState) -> NoteEditor {
+        NoteEditor(app: self, item: item, state: viewState)
     }
 
     /// Text typed before the note's field took the focus goes at its end.
-    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {
+    func typeAhead(_ text: String, into item: ItemID, viewState: NoteViewState) {
         setText((notes[item] ?? "") + text, of: item)
     }
 

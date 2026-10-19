@@ -24,7 +24,7 @@ private final class Counters: MicroApp {
         counts[item].map(String.init) ?? ""
     }
 
-    func content(of item: ItemID, viewState: AnyObject?) -> AnyView { AnyView(EmptyView()) }
+    func content(of item: ItemID, viewState: NoViewState) -> EmptyView { EmptyView() }
 
     func remove(_ item: ItemID) {
         counts[item] = nil
@@ -76,6 +76,19 @@ struct MicroAppTests {
         let unknown = ViewTarget(app: AppID("unknown"), item: target.item)
         #expect(registry.app(unknown.app) == nil)
         #expect(registry.title(of: unknown) == "")
+    }
+
+    @Test func aViewStateOfAnotherTypeIsNeitherTypedIntoNorShown() {
+        let notes = NotesApp()
+        let item = notes.create()
+        notes.anyTypeAhead("lost", into: item, viewState: NoViewState())
+        notes.anyTypeAhead("lost", into: item, viewState: nil)
+        #expect(notes.notes[item] == "")
+        notes.anyTypeAhead(
+            "kept", into: item, viewState: notes.newViewState(for: item, fresh: true))
+        #expect(notes.notes[item] == "kept")
+        // Content for a bubble without the right view state still shows the note.
+        _ = notes.anyContent(of: item, viewState: nil)
     }
 
     @Test func longTextGetsAShortLabel() {

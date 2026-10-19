@@ -15,7 +15,7 @@ final class NoteViewState: FocusTaking {
 struct NoteEditor: View {
     let app: NotesApp
     let item: ItemID
-    let state: NoteViewState?
+    let state: NoteViewState
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -38,7 +38,7 @@ struct NoteEditor: View {
                 }
             }
             .onAppear {
-                if let state, state.focusPending {
+                if state.focusPending {
                     state.focusPending = false
                     focused = true
                     placeCursorAtEnd()

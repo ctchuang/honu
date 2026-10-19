@@ -38,18 +38,18 @@ final class WebApp: MicroApp {
     }
 
     /// A new page asks for a link, so its bubble starts with the cursor in the field.
-    func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? {
+    func newViewState(for item: ItemID, fresh: Bool) -> AddressDraft {
         AddressDraft(focusPending: fresh)
     }
 
     /// Text typed before the address field took the focus goes into it.
-    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {
+    func typeAhead(_ text: String, into item: ItemID, viewState: AddressDraft) {
         guard url(of: item) == nil else { return }
-        (viewState as? AddressDraft)?.text += text
+        viewState.text += text
     }
 
-    func content(of item: ItemID, viewState: AnyObject?) -> AnyView {
-        AnyView(WebContent(app: self, item: item, draft: viewState as? AddressDraft))
+    func content(of item: ItemID, viewState: AddressDraft) -> WebContent {
+        WebContent(app: self, item: item, draft: viewState)
     }
 
     /// Whether a bubble is still loading the page.

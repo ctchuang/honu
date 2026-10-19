@@ -64,7 +64,7 @@ private final class Worker: MicroApp {
     func create() -> ItemID { items[0] }
     func appearance(of item: ItemID) -> Appearance { Appearance() }
     func title(of item: ItemID) -> String { "Work" }
-    func content(of item: ItemID, viewState: AnyObject?) -> AnyView { AnyView(EmptyView()) }
+    func content(of item: ItemID, viewState: NoViewState) -> EmptyView { EmptyView() }
     func remove(_ item: ItemID) {}
     func save() -> Data? { nil }
     func load(_ data: Data) {}

@@ -75,22 +75,22 @@ final class AskApp: MicroApp {
     }
 
     /// A new chat is for asking, so its bubble starts with the cursor in it.
-    func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? {
+    func newViewState(for item: ItemID, fresh: Bool) -> ChatViewState {
         ChatViewState(focusPending: fresh)
     }
 
-    func content(of item: ItemID, viewState: AnyObject?) -> AnyView {
-        guard let chat = chats[item] else { return AnyView(EmptyView()) }
-        let state = viewState as? ChatViewState ?? ChatViewState(focusPending: false)
-        return AnyView(ChatView(app: self, chat: chat, state: state))
+    func content(of item: ItemID, viewState: ChatViewState) -> some View {
+        if let chat = chats[item] {
+            ChatView(app: self, chat: chat, state: viewState)
+        }
     }
 
     /// Text typed before the chat's field took the focus goes to the field
     /// it shows first: the key's, or the question's.
-    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {
+    func typeAhead(_ text: String, into item: ItemID, viewState: ChatViewState) {
         guard let chat = chats[item] else { return }
         if services.apiKey.value == nil {
-            (viewState as? ChatViewState)?.keyDraft += text
+            viewState.keyDraft += text
         } else if case .typing = chat.status {
             chat.question += text
         }

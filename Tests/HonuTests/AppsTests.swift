@@ -55,10 +55,10 @@ struct NotesAppTests {
     @Test func onlyANewNoteTakesTheFocus() {
         let notes = NotesApp()
         let item = notes.create()
-        let fresh = notes.newViewState(for: item, fresh: true) as? NoteViewState
-        let restored = notes.newViewState(for: item, fresh: false) as? NoteViewState
-        #expect(fresh?.focusPending == true)
-        #expect(restored?.focusPending == false)
+        let fresh = notes.newViewState(for: item, fresh: true)
+        let restored = notes.newViewState(for: item, fresh: false)
+        #expect(fresh.focusPending)
+        #expect(!restored.focusPending)
     }
 }
 

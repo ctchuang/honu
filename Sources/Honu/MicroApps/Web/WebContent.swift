@@ -16,7 +16,7 @@ final class AddressDraft: FocusTaking {
 struct WebContent: View {
     let app: WebApp
     let item: ItemID
-    let draft: AddressDraft?
+    let draft: AddressDraft
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -29,8 +29,8 @@ struct WebContent: View {
 
     private var addressField: some View {
         let text = Binding(
-            get: { draft?.text ?? "" },
-            set: { draft?.text = $0 }
+            get: { draft.text },
+            set: { draft.text = $0 }
         )
         return VStack(spacing: 12) {
             Image(systemName: "safari")
@@ -44,7 +44,7 @@ struct WebContent: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            if let draft, draft.focusPending {
+            if draft.focusPending {
                 draft.focusPending = false
                 focused = true
                 placeCursorAtEnd()

@@ -80,41 +80,11 @@ final class Context {
     }
 }
 
-/// A microapp: it keeps its items and makes the views that show them.
+/// What a microapp keeps: its items, and how they are saved between launches.
 @MainActor
-protocol MicroApp: AnyObject {
-    var id: AppID { get }
-
-    /// The turtle's menu item that starts a new item.
-    var menuLabel: String { get }
-
+protocol ItemStore: AnyObject {
     /// Starts a new item.
     func create() -> ItemID
-
-    func appearance(of item: ItemID) -> Appearance
-
-    /// The label of the bubbles showing `item`.
-    func title(of item: ItemID) -> String
-
-    /// Whether `item` is being worked on, which makes its bubbles breathe.
-    func isBusy(_ item: ItemID) -> Bool
-
-    /// Catches up on work done in the background, asking things of the
-    /// bubbles through `context`. Called many times a second.
-    func update(_ context: Context)
-
-    /// What one new bubble showing `item` keeps for itself apart from the
-    /// item's data, such as a draft or whether it still has to take the
-    /// focus. A `fresh` item was just created, as opposed to restored from a
-    /// previous launch, so its bubble may take the focus.
-    func newViewState(for item: ItemID, fresh: Bool) -> AnyObject?
-
-    /// Takes `text`, typed for a new bubble showing `item` before its field
-    /// could take the focus, for the field it shows first.
-    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?)
-
-    /// The content of an open bubble showing `item`, below its title.
-    func content(of item: ItemID, viewState: AnyObject?) -> AnyView
 
     /// Deletes `item` for good.
     func remove(_ item: ItemID)
@@ -129,11 +99,85 @@ protocol MicroApp: AnyObject {
     func load(_ data: Data)
 }
 
-extension MicroApp {
+/// How a microapp's items look on their bubbles, open or closed.
+@MainActor
+protocol ItemLook {
+    func appearance(of item: ItemID) -> Appearance
+
+    /// The label of the bubbles showing `item`.
+    func title(of item: ItemID) -> String
+
+    /// Whether `item` is being worked on, which makes its bubbles breathe.
+    func isBusy(_ item: ItemID) -> Bool
+}
+
+extension ItemLook {
     func isBusy(_ item: ItemID) -> Bool { false }
+}
+
+/// What an open bubble shows of a microapp's item, and what each bubble
+/// keeps for itself apart from the item's data.
+@MainActor
+protocol ItemViews {
+    /// What one bubble keeps for itself, such as a draft or whether it still
+    /// has to take the focus.
+    associatedtype ViewState: AnyObject = NoViewState
+    associatedtype Content: View
+
+    /// The view state of one new bubble showing `item`. A `fresh` item was
+    /// just created, as opposed to restored from a previous launch, so its
+    /// bubble may take the focus.
+    func newViewState(for item: ItemID, fresh: Bool) -> ViewState
+
+    /// The content of an open bubble showing `item`, below its title.
+    @ViewBuilder
+    func content(of item: ItemID, viewState: ViewState) -> Content
+
+    /// Takes `text`, typed for a new bubble showing `item` before its field
+    /// could take the focus, for the field it shows first.
+    func typeAhead(_ text: String, into item: ItemID, viewState: ViewState)
+}
+
+/// The view state of bubbles that keep nothing for themselves.
+final class NoViewState {}
+
+extension ItemViews {
+    func typeAhead(_ text: String, into item: ItemID, viewState: ViewState) {}
+}
+
+extension ItemViews where ViewState == NoViewState {
+    func newViewState(for item: ItemID, fresh: Bool) -> NoViewState { NoViewState() }
+}
+
+/// A microapp: it keeps its items (`ItemStore`), says how they look
+/// (`ItemLook`), and makes the views that show them (`ItemViews`).
+@MainActor
+protocol MicroApp: ItemStore, ItemLook, ItemViews {
+    var id: AppID { get }
+
+    /// The turtle's menu item that starts a new item.
+    var menuLabel: String { get }
+
+    /// Catches up on work done in the background, asking things of the
+    /// bubbles through `context`. Called every frame.
+    func update(_ context: Context)
+}
+
+extension MicroApp {
     func update(_ context: Context) {}
-    func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? { nil }
-    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {}
+
+    /// `content` for a view state the shell holds without its type. A bubble
+    /// without one of the right type gets a new one, as a restored bubble would.
+    func anyContent(of item: ItemID, viewState: AnyObject?) -> AnyView {
+        let state = viewState as? ViewState ?? newViewState(for: item, fresh: false)
+        return AnyView(content(of: item, viewState: state))
+    }
+
+    /// `typeAhead` for a view state the shell holds without its type.
+    func anyTypeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {
+        guard let state = viewState as? ViewState else { return }
+        typeAhead(text, into: item, viewState: state)
+    }
 }
 
 /// A bubble's view state whose field may still have to take the focus. Until
@@ -142,64 +186,4 @@ extension MicroApp {
 @MainActor
 protocol FocusTaking: AnyObject {
     var focusPending: Bool { get }
-}
-
-/// Puts the cursor at the end of the text in the field that just took the
-/// focus, rather than selecting it all, so typing carries on where it stops.
-@MainActor
-func placeCursorAtEnd() {
-    Task { @MainActor in
-        // The focus moves to the field once SwiftUI has updated.
-        try? await Task.sleep(for: .milliseconds(30))
-        guard let text = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
-        text.setSelectedRange(NSRange(location: (text.string as NSString).length, length: 0))
-    }
-}
-
-/// The microapps, in the order the turtle's menu lists them.
-@MainActor
-final class Registry {
-    let apps: [any MicroApp]
-
-    init(_ apps: [any MicroApp]) {
-        self.apps = apps
-    }
-
-    func app(_ id: AppID) -> (any MicroApp)? {
-        apps.first { $0.id == id }
-    }
-
-    func title(of target: ViewTarget) -> String {
-        app(target.app)?.title(of: target.item) ?? ""
-    }
-
-    /// Whether the microapp of `target` keeps its item.
-    func has(_ target: ViewTarget) -> Bool {
-        app(target.app)?.items.contains(target.item) ?? false
-    }
-
-    func remove(_ target: ViewTarget) {
-        app(target.app)?.remove(target.item)
-    }
-
-    func isBusy(_ target: ViewTarget) -> Bool {
-        app(target.app)?.isBusy(target.item) ?? false
-    }
-
-    /// Lets every microapp catch up, returning what they ask of their bubbles.
-    func update() -> [Effect] {
-        apps.flatMap { app in
-            let context = Context(app: app.id)
-            app.update(context)
-            return context.effects
-        }
-    }
-}
-
-/// Shortens `text` to a bubble label.
-func shortLabel(_ text: String) -> String {
-    let limit = 24
-    guard text.count > limit else { return text }
-    let label = text.prefix(limit).trimmingCharacters(in: .whitespaces)
-    return label + "…"
 }
