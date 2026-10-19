@@ -36,6 +36,12 @@ Smaller improvements:
 - **Follow-up questions**: an Ask bubble answers only one question today; let it carry
   on as a multi-turn conversation.
 
+## Microapp generation
+
+- **Every microapp is an MCP server**: each microapp offers its items and what can be
+  done with them as MCP tools, so Claude can read and change them, and drive Honu
+  through the same interface a microapp it generated would offer.
+
 ## Project
 
 - **A web page for Honu**, hosted on GitHub Pages: a page that shows what Honu is
