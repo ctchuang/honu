@@ -10,7 +10,9 @@ final class FloatingWindow: NSWindow {
         backgroundColor = .clear
         hasShadow = false
         level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Stay on the Space Honu was launched on, like an ordinary window,
+        // rather than following the user to every Space.
+        collectionBehavior = [.managed]
         isReleasedWhenClosed = false
 
         let hosting = NSHostingView(rootView: content)
