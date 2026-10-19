@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch or pull request makes an older run moot.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Liquid Glass and SwiftUI's WebView need the macOS 26 SDK, which comes with Xcode 26.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Show the toolchain
+        run: swift --version
+      - name: Check formatting
+        run: swift format lint --strict -r Sources Package.swift
+      - name: Build
+        run: swift build
+      - name: Build for release
+        run: swift build -c release

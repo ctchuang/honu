@@ -14,9 +14,11 @@ Honu was first written in Rust with egui; that version is in the git history bef
 swift build                  # build
 swift run                    # build and launch; bubbles float on the real desktop (quit with ⌘Q)
 swift build -c release       # optimized build
-swift format lint -r Sources Package.swift   # lint
+swift format lint --strict -r Sources Package.swift   # lint (as CI does)
 swift format -i -r Sources Package.swift     # format
 ```
+
+CI (`.github/workflows/ci.yml`) runs on a `macos-26` runner for every push to `main` and every pull request: the strict format check (`swift format lint --strict`, so warnings fail), a debug build, and a release build.
 
 `.swift-format` sets 4-space indentation and 100-column lines. The project is a Swift package, so it builds with the Command Line Tools alone; Xcode is not needed. The Command Line Tools do not ship SwiftUI's macro plugins, so **`@State` and other SwiftUI macros do not compile**: spell state out as a stored `State` value instead (`private let player = State(initialValue: Player())`, read through `wrappedValue`), or keep it in an `@Observable` model (Observation's macros do ship). `swift run` launches a bare executable, not an app bundle; the Dock icon is set at launch from `Sources/Honu/Resources/icon.png`.
 
