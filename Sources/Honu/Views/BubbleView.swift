@@ -81,20 +81,3 @@ struct BubbleView: View {
             .onEnded { shell.endBubbleDrag(pointer: $0.location) }
     }
 }
-
-/// `shape`, grown by `swell` on every side (past the view's own bounds),
-/// with the outlines of the bubbles above cut away.
-private struct CutAway: Shape {
-    let shape: RoundedRectangle
-    var swell: CGFloat = 0
-    let cuts: [Cut]
-
-    func path(in rect: CGRect) -> Path {
-        var path = shape.inset(by: -swell).path(in: rect)
-        for cut in cuts {
-            let outline = RoundedRectangle(cornerRadius: cut.cornerRadius, style: .continuous)
-            path = path.subtracting(outline.path(in: cut.rect))
-        }
-        return path
-    }
-}
