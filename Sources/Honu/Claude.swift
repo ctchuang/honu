@@ -1,18 +1,16 @@
 import Foundation
 
 // Asking Claude a question and streaming the answer back. Microapps ask
-// through a `ClaudeClient`: `MessagesAPI`, or a stand-in in tests. There is
-// no official Swift SDK, so `MessagesAPI` is raw HTTP over URLSession,
-// parsing the server-sent events itself.
+// through a `ClaudeClient`: `ClaudeCode`, or a stand-in in tests.
+// `ClaudeCode` runs the Claude Code CLI headless (`claude -p`), which signs
+// in with the user's own Claude account, so Honu needs no API key.
 
 /// What an answer stream reports, in order: any number of `text` pieces,
-/// then `done`, `failed`, or `keyRejected`.
+/// then `done` or `failed`.
 enum ClaudeEvent: Equatable, Sendable {
     case text(String)
     case done
     case failed(String)
-    /// The API key was refused (HTTP 401), with the API's explanation.
-    case keyRejected(String)
 
     /// Whether it ends the answer.
     var isFinal: Bool {
@@ -26,7 +24,7 @@ enum ClaudeEvent: Equatable, Sendable {
 protocol ClaudeClient: AnyObject {
     /// Starts streaming Claude's answer to `question`. Take the events from
     /// the returned stream as they arrive.
-    func ask(apiKey: String, question: String) -> AnswerStream
+    func ask(question: String) -> AnswerStream
 }
 
 /// The events of one answer, handed from whatever receives them to the
@@ -72,144 +70,154 @@ final class AnswerStream: @unchecked Sendable {
     }
 }
 
-/// The Messages API.
+/// Claude Code's CLI, run once per question.
 @MainActor
-final class MessagesAPI: ClaudeClient {
-    private static let url = URL(string: "https://api.anthropic.com/v1/messages")!
-    private static let model = "claude-opus-5-5"
-    /// Lets a refused request retry on the fallback model Anthropic
-    /// recommends for the refusal's category, inside the same call.
-    private static let fallbackBeta = "server-side-fallback-2026-07-01"
-    private static let systemPrompt = """
+final class ClaudeCode: ClaudeClient {
+    nonisolated private static let model = "claude-opus-5-5"
+    nonisolated private static let systemPrompt = """
         You answer questions inside a small floating panel on the user's desktop. \
         Keep answers short and to the point. Write plain text without Markdown, \
         since the panel shows the raw text.
         """
+    /// Where `claude` is usually installed, for when Honu runs without a
+    /// shell's `PATH`, as an app opened from the Finder does.
+    nonisolated private static let installFolders = [
+        "~/.local/bin", "~/.claude/local", "/opt/homebrew/bin", "/usr/local/bin",
+    ]
 
-    func ask(apiKey: String, question: String) -> AnswerStream {
+    /// Where `claude` runs: a folder of Honu's own, away from any project, so
+    /// no project's CLAUDE.md comes along.
+    nonisolated static let workingDirectory = FileManager.default.homeDirectoryForCurrentUser
+        .appending(path: ".honu", directoryHint: .isDirectory)
+
+    func ask(question: String) -> AnswerStream {
         let stream = AnswerStream()
-        let request = Self.request(apiKey: apiKey, question: question)
+        let executable = Self.executable()
         stream.run { stream in
-            await Self.receive(request, into: stream)
+            guard let executable else {
+                stream.send(
+                    .failed(
+                        "Claude Code isn't installed. Install it from claude.com/claude-code, "
+                            + "then run claude once in Terminal to sign in."))
+                return
+            }
+            await Self.receive(question, from: executable, into: stream)
         }
         return stream
     }
 
-    static func request(apiKey: String, question: String) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue(fallbackBeta, forHTTPHeaderField: "anthropic-beta")
-        let body: [String: Any] = [
-            "model": model,
-            "max_tokens": 64000,
-            "stream": true,
-            "system": systemPrompt,
-            // Quick questions don't need deep thinking, and a fast first word matters here.
-            "output_config": ["effort": "low"],
-            "fallbacks": "default",
-            "messages": [["role": "user", "content": question]],
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        return request
+    /// The arguments for answering one question read from standard input:
+    /// streamed as JSON lines, with no tools, and nothing saved to resume.
+    nonisolated static let arguments = [
+        "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+        "--model", model, "--effort", "low", "--tools", "", "--strict-mcp-config",
+        "--no-session-persistence", "--system-prompt", systemPrompt,
+    ]
+
+    /// The `claude` executable: the first in `PATH`, or else in a folder it
+    /// is usually installed in.
+    nonisolated static func executable(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        isExecutable: (String) -> Bool = FileManager.default.isExecutableFile(atPath:)
+    ) -> URL? {
+        let path = environment["PATH"]?.split(separator: ":").map(String.init) ?? []
+        let home = environment["HOME"] ?? NSHomeDirectory()
+        let folders =
+            path
+            + installFolders.map {
+                $0.hasPrefix("~/") ? home + $0.dropFirst() : $0
+            }
+        return folders.map { $0 + "/claude" }.first(where: isExecutable).map {
+            URL(filePath: $0)
+        }
     }
 
-    /// Sends `request` and feeds the answer into `stream` until it ends.
-    nonisolated private static func receive(_ request: URLRequest, into stream: AnswerStream)
-        async
-    {
-        var parser = EventParser()
+    /// The environment `claude` runs in: Honu's own, without an API key, so
+    /// Claude Code always signs in with the user's Claude account.
+    nonisolated static func environment(_ environment: [String: String]) -> [String: String] {
+        environment.filter { $0.key != "ANTHROPIC_API_KEY" }
+    }
+
+    /// Runs `claude` on `question` and feeds its answer into `stream` until
+    /// it ends, stopping `claude` if the stream is cancelled first.
+    nonisolated private static func receive(
+        _ question: String, from executable: URL, into stream: AnswerStream
+    ) async {
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = arguments
+        process.environment = environment(ProcessInfo.processInfo.environment)
+        try? FileManager.default.createDirectory(
+            at: workingDirectory, withIntermediateDirectories: true)
+        process.currentDirectoryURL = workingDirectory
+        let input = Pipe()
+        let output = Pipe()
+        let errors = Pipe()
+        process.standardInput = input
+        process.standardOutput = output
+        process.standardError = errors
         do {
-            let (bytes, response) = try await URLSession.shared.bytes(for: request)
-            if let status = (response as? HTTPURLResponse)?.statusCode, status != 200 {
-                parser.httpError = status
-            }
-            var line = Data()
-            for try await byte in bytes {
-                line.append(byte)
-                guard byte == UInt8(ascii: "\n") else { continue }
-                if send(parser.feed(line), to: stream) { return }
-                line.removeAll(keepingCapacity: true)
-            }
-            _ = send(parser.feed(line) + parser.finish(), to: stream)
-        } catch is CancellationError {
-            // Nobody wants the answer anymore.
-        } catch let error as URLError where error.code == .cancelled {
-            // Likewise.
+            try process.run()
         } catch {
-            stream.send(.failed(error.localizedDescription))
+            stream.send(.failed("Couldn't start Claude Code: \(error.localizedDescription)"))
+            return
         }
-    }
+        try? input.fileHandleForWriting.write(contentsOf: Data(question.utf8))
+        try? input.fileHandleForWriting.close()
 
-    /// Sends `events` down `stream`, stopping at the end of the answer.
-    /// Returns whether the answer ended.
-    nonisolated private static func send(_ events: [ClaudeEvent], to stream: AnswerStream) -> Bool {
-        for event in events {
-            stream.send(event)
-            if event.isFinal { return true }
+        await withTaskCancellationHandler {
+            do {
+                for try await line in output.fileHandleForReading.bytes.lines {
+                    if Task.isCancelled { return }
+                    if let event = EventParser.parse(line: line) {
+                        stream.send(event)
+                        if event.isFinal { return }
+                    }
+                }
+            } catch {
+                // The output broke off; report it below like any early end.
+            }
+            if Task.isCancelled { return }
+            process.waitUntilExit()
+            let detail = String(
+                decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            stream.send(EventParser.finish(status: process.terminationStatus, errors: detail))
+        } onCancel: {
+            process.terminate()
         }
-        return false
     }
 }
 
-/// Turns the raw bytes of a response into events.
+/// Turns the JSON lines `claude -p --output-format stream-json` writes into
+/// events.
 struct EventParser {
-    /// Bytes of the line still being received.
-    private var pending = Data()
-    /// The status of an unsuccessful response, whose body is an error object
-    /// rather than an event stream.
-    var httpError: Int?
-    /// The whole body of an unsuccessful response.
-    private var errorBody = Data()
-
-    mutating func feed(_ chunk: Data) -> [ClaudeEvent] {
-        if httpError != nil {
-            errorBody.append(chunk)
-            return []
-        }
-        pending.append(chunk)
-        var events: [ClaudeEvent] = []
-        // Split on whole lines only, so multi-byte characters never break apart.
-        while let end = pending.firstIndex(of: UInt8(ascii: "\n")) {
-            let line = pending[pending.startIndex...end]
-            pending.removeSubrange(pending.startIndex...end)
-            if let event = Self.parse(line: String(decoding: line, as: UTF8.self)) {
-                events.append(event)
-            }
-        }
-        return events
-    }
-
-    /// Called when the body ends. A complete answer has already reported
-    /// `done`, so ending here means something went wrong.
-    mutating func finish() -> [ClaudeEvent] {
-        guard let status = httpError else {
-            return [.failed("The connection closed before the answer was finished.")]
-        }
-        let body = try? JSONSerialization.jsonObject(with: errorBody) as? [String: Any]
-        let detail =
-            (body?["error"] as? [String: Any])?["message"] as? String
-            ?? String(decoding: errorBody, as: UTF8.self)
-        if status == 401 {
-            return [.keyRejected(detail)]
-        }
-        return [.failed("Request failed (\(status)): \(detail)")]
-    }
-
-    /// Reads one line of the server-sent event stream. Only `data:` lines
-    /// carry anything; thinking, fallback markers, and pings are ignored.
+    /// Reads one line. Only the answer's text and how it ended matter; the
+    /// session's setup, status, and rate limits are ignored.
     static func parse(line: String) -> ClaudeEvent? {
-        let line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard line.hasPrefix("data:") else { return nil }
-        let data = line.dropFirst("data:".count).trimmingCharacters(in: .whitespaces)
         guard
-            let event = try? JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any],
-            let type = event["type"] as? String
+            let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)),
+            let message = json as? [String: Any]
         else { return nil }
+        switch message["type"] as? String {
+        case "stream_event":
+            return parse(apiEvent: message["event"] as? [String: Any] ?? [:])
+        case "result":
+            if message["is_error"] as? Bool == false {
+                return .done
+            }
+            let errors = (message["errors"] as? [String])?.joined(separator: " ")
+            let result = message["result"] as? String
+            let detail = [result, errors].compactMap { $0 }.first { !$0.isEmpty }
+            return .failed(detail ?? "Claude Code reported an error.")
+        default:
+            return nil
+        }
+    }
+
+    /// Reads one event of the Messages API stream that Claude Code passes on.
+    private static func parse(apiEvent event: [String: Any]) -> ClaudeEvent? {
         let delta = event["delta"] as? [String: Any]
-        switch type {
+        switch event["type"] as? String {
         case "content_block_delta" where delta?["type"] as? String == "text_delta":
             return (delta?["text"] as? String).map(ClaudeEvent.text)
         case "message_delta":
@@ -218,13 +226,19 @@ struct EventParser {
             case "max_tokens": return .failed("The answer was cut off because it got too long.")
             default: return nil
             }
-        case "message_stop":
-            return .done
-        case "error":
-            let message = (event["error"] as? [String: Any])?["message"] as? String
-            return .failed(message ?? "Claude reported an error.")
         default:
             return nil
         }
+    }
+
+    /// Called when `claude` exits without reporting a result, with its exit
+    /// status and what it wrote to standard error.
+    static func finish(status: Int32, errors: String) -> ClaudeEvent {
+        let detail = errors.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !detail.isEmpty {
+            return .failed(detail)
+        }
+        return .failed(
+            "Claude Code stopped before the answer was finished (exit status \(status)).")
     }
 }

@@ -5,7 +5,7 @@ import Observation
 enum Outcome: Equatable {
     /// The whole answer arrived.
     case answered
-    /// The request failed or the key was refused; the user has to act.
+    /// The request failed; the user has to act.
     case needsAttention
 }
 
@@ -30,12 +30,8 @@ final class Chat {
     private(set) var answer = ""
     private(set) var status = Status.typing(error: nil)
     @ObservationIgnored private(set) var stream: AnswerStream?
-    /// Why the API refused the key, shown until another key is entered.
-    var keyError: String?
-    /// Set with `keyError` until the refused key has been forgotten.
-    @ObservationIgnored var keyRejected = false
     /// Counts the times the chat needed the user to type again, after a
-    /// failure or a refused key, so its views know to take the focus.
+    /// failure, so its views know to take the focus.
     private(set) var focusRequests = 0
     /// How tall the content is, as last laid out, for the panel to fit it.
     var contentHeight: CGFloat = 0
@@ -70,10 +66,10 @@ final class Chat {
     }
 
     /// Sends the question to Claude through `claude`.
-    func ask(_ claude: any ClaudeClient, apiKey: String) {
+    func ask(_ claude: any ClaudeClient) {
         let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
-        stream = claude.ask(apiKey: apiKey, question: question)
+        stream = claude.ask(question: question)
         status = .thinking
         title = shortLabel(question)
     }
@@ -94,13 +90,6 @@ final class Chat {
                 return .answered
             case .failed(let message):
                 fail(message)
-                return .needsAttention
-            case .keyRejected(let message):
-                keyError = message
-                keyRejected = true
-                status = .typing(error: nil)
-                self.stream = nil
-                focusRequests += 1
                 return .needsAttention
             }
         }

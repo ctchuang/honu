@@ -17,7 +17,7 @@ final class AskApp: MicroApp {
     /// The label of a chat with no question asked yet.
     static let emptyLabel = "Ask"
     static let panelWidth: CGFloat = 400
-    /// Panel height while asking for a key or a question.
+    /// Panel height while asking for a question.
     static let startHeight: CGFloat = 150
     /// The tallest the panel grows; longer answers scroll.
     static let maxHeight: CGFloat = 560
@@ -66,11 +66,6 @@ final class AskApp: MicroApp {
             case .needsAttention: context.play(.wobble, for: item)
             case nil: break
             }
-            // Ask for another key, then let the same question be sent again.
-            if chat.keyError != nil, chat.keyRejected {
-                chat.keyRejected = false
-                services.apiKey.value = nil
-            }
         }
     }
 
@@ -85,31 +80,15 @@ final class AskApp: MicroApp {
         }
     }
 
-    /// Text typed before the chat's field took the focus goes to the field
-    /// it shows first: the key's, or the question's.
+    /// Text typed before the chat's field took the focus goes into its question.
     func typeAhead(_ text: String, into item: ItemID, viewState: ChatViewState) {
-        guard let chat = chats[item] else { return }
-        if services.apiKey.value == nil {
-            viewState.keyDraft += text
-        } else if case .typing = chat.status {
-            chat.question += text
-        }
+        guard let chat = chats[item], case .typing = chat.status else { return }
+        chat.question += text
     }
 
-    /// Sends `chat`'s question to Claude, if there is a key and a question.
+    /// Sends `chat`'s question to Claude, if there is one.
     func ask(_ chat: Chat) {
-        guard let key = services.apiKey.value else { return }
-        chat.ask(services.claude, apiKey: key)
-    }
-
-    /// Takes a key the user entered, which clears a refused key's error.
-    func setKey(_ key: String) {
-        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        services.apiKey.value = key
-        for chat in chats.values {
-            chat.keyError = nil
-        }
+        chat.ask(services.claude)
     }
 
     /// Forgets a chat, which also stops its answer from streaming in.

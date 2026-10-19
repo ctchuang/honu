@@ -3,8 +3,6 @@ import SwiftUI
 /// What one bubble showing a chat keeps for itself.
 @MainActor
 final class ChatViewState: FocusTaking {
-    /// What is typed into the key field before it is entered.
-    var keyDraft = ""
     /// Whether the next text field shown should take the keyboard focus.
     var focusPending: Bool
     /// The chat's `focusRequests` this view has answered.
@@ -26,8 +24,7 @@ final class ChatViewState: FocusTaking {
     }
 }
 
-/// Shows a chat: a field for the API key if there is none, then one for the
-/// question, then the answer as it streams in.
+/// Shows a chat: a field for the question, then the answer as it streams in.
 struct ChatView: View {
     let app: AskApp
     let chat: Chat
@@ -52,38 +49,14 @@ struct ChatView: View {
         .scrollIndicators(.automatic)
         .onAppear(perform: takeFocusIfDue)
         .onChange(of: chat.focusRequests) { takeFocusIfDue() }
-        .onChange(of: app.services.apiKey.value) { takeFocusIfDue(force: true) }
     }
 
     @ViewBuilder
     private var content: some View {
-        if app.services.apiKey.value == nil {
-            keyForm
-        } else if case .typing(let error) = chat.status {
+        if case .typing(let error) = chat.status {
             questionForm(error: error)
         } else {
             answer
-        }
-    }
-
-    private var keyForm: some View {
-        let draft = Binding(get: { state.keyDraft }, set: { state.keyDraft = $0 })
-        return VStack(alignment: .leading, spacing: 8) {
-            if let error = chat.keyError {
-                Text("That key didn't work: \(error)").foregroundStyle(Self.error)
-            } else {
-                Text("Paste a Claude API key to ask questions.").foregroundStyle(Self.ink)
-            }
-            SecureField("sk-ant-…", text: draft)
-                .textFieldStyle(.roundedBorder)
-                .focused($focused)
-                .onSubmit {
-                    app.setKey(state.keyDraft)
-                    state.keyDraft = ""
-                }
-            Text("It is kept until Honu quits. To skip this, put ANTHROPIC_API_KEY in .env.")
-                .font(.caption)
-                .foregroundStyle(Self.ink.opacity(0.6))
         }
     }
 
@@ -129,13 +102,9 @@ struct ChatView: View {
         }
     }
 
-    private func takeFocusIfDue() {
-        takeFocusIfDue(force: false)
-    }
-
     /// Puts the cursor in the field shown, once per request for the focus.
-    private func takeFocusIfDue(force: Bool) {
-        if state.focusDue(after: chat.focusRequests) || force {
+    private func takeFocusIfDue() {
+        if state.focusDue(after: chat.focusRequests) {
             focused = true
             placeCursorAtEnd()
         }

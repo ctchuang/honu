@@ -28,20 +28,13 @@ swift run                # build and launch
 swift build -c release   # optimized build
 ```
 
-### Add your Claude API key (for Ask AI)
+### Install Claude Code (for Ask AI)
 
-Honu uses Claude to answer questions. Keep your key in a local `.env` file, which git
-ignores:
-
-```sh
-cp .env.example .env
-```
-
-Then open `.env` and paste your key after `ANTHROPIC_API_KEY=`. You can create a key in
-the [Claude Console](https://console.anthropic.com/settings/keys). Honu reads it at launch
-from the environment or from `.env` in or above the folder it runs in. Never commit `.env`
-or put your key anywhere else in the repository. Without a key, an Ask bubble asks you to
-paste one, which Honu keeps only until it quits.
+Honu asks Claude through [Claude Code](https://claude.com/claude-code), running it
+headless (`claude -p`) for each question, so it needs no API key: install Claude Code and
+run `claude` once in Terminal to sign in with your Claude account. Honu finds `claude` in
+your `PATH` or where it is usually installed, and leaves out any `ANTHROPIC_API_KEY` in its
+environment, so answers always come through your account.
 
 ### Floating on the desktop
 

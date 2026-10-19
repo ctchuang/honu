@@ -1,9 +1,5 @@
 # Git-ignored files to copy into new Claude Code worktrees (gitignore syntax).
 #
 # Nothing is needed yet:
-# - .env is left out on purpose. Worktrees live under .claude/worktrees/, inside the
-#   repository, and Honu looks for .env in and above the folder it runs in, so a
-#   worktree finds the one at the repository root. A copy would only be another place
-#   the key could leak from.
-# - .build is left out too: SwiftPM's cache holds absolute paths, so each worktree
+# - .build is left out: SwiftPM's cache holds absolute paths, so each worktree
 #   builds its own.

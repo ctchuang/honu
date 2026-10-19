@@ -4,130 +4,106 @@ import Testing
 @testable import Honu
 
 struct EventParserTests {
-    @Test func textArrivesAcrossChunkBoundaries() {
-        var parser = EventParser()
-        let line =
-            Data(
-                #"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi 🐢"}}"#
-                    .utf8) + Data("\n".utf8)
-        // Split in the middle of the turtle emoji's bytes.
-        let split = line.firstIndex(of: 0xF0)! + 2
-        #expect(parser.feed(line[..<split]).isEmpty)
-        #expect(parser.feed(line[split...]) == [.text("Hi 🐢")])
+    /// A line of `claude -p --output-format stream-json` passing on one
+    /// event of the Messages API stream.
+    private func apiEvent(_ event: String) -> String {
+        #"{"type":"stream_event","event":\#(event),"session_id":"s"}"#
     }
 
-    @Test func streamEndsWithDone() {
-        var parser = EventParser()
-        let body = """
-            event: message_delta
-            data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
-
-            event: message_stop
-            data: {"type":"message_stop"}
-
-
-            """
-        #expect(parser.feed(Data(body.utf8)) == [.done])
+    @Test func answerTextArrives() {
+        let line = apiEvent(
+            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi 🐢"}}"#
+        )
+        #expect(EventParser.parse(line: line) == .text("Hi 🐢"))
     }
 
-    @Test func refusalAndErrorsFail() {
-        let refusal = #"data: {"type":"message_delta","delta":{"stop_reason":"refusal"}}"#
+    @Test func aSuccessfulResultEndsTheAnswer() {
+        let result =
+            #"{"type":"result","subtype":"success","is_error":false,"result":"Salt.","session_id":"s"}"#
+        #expect(EventParser.parse(line: result) == .done)
+    }
+
+    @Test func aFailedResultReportsWhy() {
+        let notLoggedIn =
+            #"{"type":"result","subtype":"success","is_error":true,"result":"Not logged in · Please run /login"}"#
+        #expect(
+            EventParser.parse(line: notLoggedIn) == .failed("Not logged in · Please run /login"))
+        let errors =
+            #"{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["Overloaded"]}"#
+        #expect(EventParser.parse(line: errors) == .failed("Overloaded"))
+        let bare = #"{"type":"result","is_error":true}"#
+        #expect(EventParser.parse(line: bare) == .failed("Claude Code reported an error."))
+    }
+
+    @Test func refusalsAndCutOffAnswersFail() {
+        let refusal = apiEvent(#"{"type":"message_delta","delta":{"stop_reason":"refusal"}}"#)
         #expect(EventParser.parse(line: refusal) == .failed("Claude declined to answer this."))
-        let error =
-            #"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#
-        #expect(EventParser.parse(line: error) == .failed("Overloaded"))
+        let maxTokens = apiEvent(#"{"type":"message_delta","delta":{"stop_reason":"max_tokens"}}"#)
+        #expect(EventParser.parse(line: maxTokens)?.isFinal == true)
     }
 
-    @Test func everythingButAnswerTextIsIgnored() {
+    @Test func everythingButTheAnswerIsIgnored() {
         let ignored = [
-            "event: content_block_delta",
             "",
-            ": comment",
-            #"data: {"type":"ping"}"#,
-            #"data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}"#,
-            #"data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}"#,
-            "data: not json",
+            "not json",
+            #"{"type":"system","subtype":"init","session_id":"s","tools":[]}"#,
+            #"{"type":"system","subtype":"status","status":"requesting"}"#,
+            #"{"type":"assistant","message":{"content":[{"type":"text","text":"Salt."}]}}"#,
+            #"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}"#,
+            apiEvent(#"{"type":"message_start","message":{"content":[]}}"#),
+            apiEvent(
+                #"{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}"#
+            ),
+            apiEvent(#"{"type":"message_delta","delta":{"stop_reason":"end_turn"}}"#),
+            apiEvent(#"{"type":"message_stop"}"#),
         ]
         for line in ignored {
             #expect(EventParser.parse(line: line) == nil, "\(line)")
         }
     }
 
-    @Test func crlfLineEndingsAreAccepted() {
-        var parser = EventParser()
-        let body =
-            #"data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}"#
-        #expect(parser.feed(Data((body + "\r\n\r\n").utf8)) == [.text("ok")])
-    }
-
-    @Test func cutOffAnswersFail() {
-        let maxTokens = #"data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"}}"#
-        #expect(EventParser.parse(line: maxTokens)?.isFinal == true)
-        // The body ending without `message_stop` means the connection dropped.
-        var parser = EventParser()
-        #expect(parser.finish().count == 1)
-        #expect(parser.finish().first?.isFinal == true)
-    }
-
-    @Test func httpErrorsReportTheAPIMessage() {
-        func error(_ status: Int, _ message: String) -> [ClaudeEvent] {
-            var parser = EventParser()
-            parser.httpError = status
-            #expect(
-                parser.feed(Data(#"{"type":"error","error":{"message":"\#(message)"}}"#.utf8))
-                    .isEmpty)
-            return parser.finish()
-        }
-        #expect(error(401, "invalid x-api-key") == [.keyRejected("invalid x-api-key")])
-        #expect(error(429, "rate limited") == [.failed("Request failed (429): rate limited")])
-    }
-
-    @Test @MainActor func theRequestAsksForAQuickStreamedAnswer() throws {
-        let request = MessagesAPI.request(apiKey: "sk-ant-test", question: "Why is the sea salty?")
-        #expect(request.value(forHTTPHeaderField: "x-api-key") == "sk-ant-test")
-        #expect(request.value(forHTTPHeaderField: "anthropic-version") == "2023-06-01")
+    @Test func endingWithoutAResultFails() {
         #expect(
-            request.value(forHTTPHeaderField: "anthropic-beta") == "server-side-fallback-2026-07-01"
-        )
-        let data = try #require(request.httpBody)
-        let json = try JSONSerialization.jsonObject(with: data)
-        let body = try #require(json as? [String: Any])
-        #expect(body["model"] as? String == "claude-opus-5-5")
-        #expect(body["stream"] as? Bool == true)
-        #expect(body["fallbacks"] as? String == "default")
-        #expect((body["output_config"] as? [String: String])?["effort"] == "low")
-        let messages = try #require(body["messages"] as? [[String: String]])
-        #expect(messages == [["role": "user", "content": "Why is the sea salty?"]])
+            EventParser.finish(status: 1, errors: "  Error: unknown option\n")
+                == .failed("Error: unknown option"))
+        #expect(EventParser.finish(status: 15, errors: "").isFinal)
     }
 }
 
-struct ApiKeyTests {
-    @Test func dotEnvFilesAreRead() {
-        let text = """
-            # A comment
-            ANTHROPIC_API_KEY="sk-ant-quoted"
-
-            export OTHER = 'single'
-            BROKEN
-            EMPTY=
-            """
-        #expect(
-            ApiKey.parseDotEnv(text) == [
-                "ANTHROPIC_API_KEY": "sk-ant-quoted", "OTHER": "single", "EMPTY": "",
-            ])
+struct ClaudeCodeTests {
+    @Test func theQuestionIsAnsweredQuicklyWithoutToolsOrASession() {
+        let arguments = ClaudeCode.arguments
+        #expect(arguments.starts(with: ["-p"]))
+        for (flag, value) in [
+            ("--output-format", "stream-json"), ("--model", "claude-opus-5-5"),
+            ("--effort", "low"), ("--tools", ""),
+        ] {
+            let index = arguments.firstIndex(of: flag)
+            #expect(index.map { arguments[$0 + 1] } == value, "\(flag)")
+        }
+        for flag in ["--include-partial-messages", "--no-session-persistence", "--system-prompt"] {
+            #expect(arguments.contains(flag), "\(flag)")
+        }
     }
 
-    @Test func theEnvironmentComesBeforeTheNearestDotEnv() throws {
-        let root = FileManager.default.temporaryDirectory
-            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-        let inner = root.appending(path: "a/b", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: inner, withIntermediateDirectories: true)
-        try "ANTHROPIC_API_KEY=sk-ant-file\n".write(
-            to: root.appending(path: ".env"), atomically: true, encoding: .utf8)
-        #expect(ApiKey.fromEnvironment([:], directory: inner) == "sk-ant-file")
-        #expect(
-            ApiKey.fromEnvironment(["ANTHROPIC_API_KEY": "sk-ant-env"], directory: inner)
-                == "sk-ant-env")
-        #expect(ApiKey.fromEnvironment(["ANTHROPIC_API_KEY": "  "], directory: inner) == nil)
+    @Test func claudeIsFoundInPathOrWhereItIsUsuallyInstalled() {
+        let installed: Set = ["/usr/bin/claude", "/Users/me/.local/bin/claude"]
+        func find(_ environment: [String: String]) -> String? {
+            ClaudeCode.executable(environment: environment, isExecutable: installed.contains)?
+                .path()
+        }
+        #expect(find(["PATH": "/bin:/usr/bin", "HOME": "/Users/me"]) == "/usr/bin/claude")
+        #expect(find(["PATH": "/bin", "HOME": "/Users/me"]) == "/Users/me/.local/bin/claude")
+        #expect(find(["HOME": "/Users/nobody"]) == nil)
+    }
+
+    @Test func claudeRunsInAFolderOfHonusOwn() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        #expect(ClaudeCode.workingDirectory.path() == home.path() + ".honu/")
+    }
+
+    @Test func anAPIKeyInTheEnvironmentIsNotPassedOn() {
+        let environment = ClaudeCode.environment(["ANTHROPIC_API_KEY": "sk-ant-x", "HOME": "/h"])
+        #expect(environment == ["HOME": "/h"])
     }
 }
