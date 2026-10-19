@@ -85,6 +85,17 @@ final class AskApp: MicroApp {
         return AnyView(ChatView(app: self, chat: chat, state: state))
     }
 
+    /// Text typed before the chat's field took the focus goes to the field
+    /// it shows first: the key's, or the question's.
+    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {
+        guard let chat = chats[item] else { return }
+        if services.apiKey.value == nil {
+            (viewState as? ChatViewState)?.keyDraft += text
+        } else if case .typing = chat.status {
+            chat.question += text
+        }
+    }
+
     /// Sends `chat`'s question to Claude, if there is a key and a question.
     func ask(_ chat: Chat) {
         guard let key = services.apiKey.value else { return }
@@ -266,7 +277,7 @@ final class Chat {
 
 /// What one bubble showing a chat keeps for itself.
 @MainActor
-final class ChatViewState {
+final class ChatViewState: FocusTaking {
     /// What is typed into the key field before it is entered.
     var keyDraft = ""
     /// Whether the next text field shown should take the keyboard focus.
@@ -401,6 +412,7 @@ struct ChatView: View {
     private func takeFocusIfDue(force: Bool) {
         if state.focusDue(after: chat.focusRequests) || force {
             focused = true
+            placeCursorAtEnd()
         }
     }
 }

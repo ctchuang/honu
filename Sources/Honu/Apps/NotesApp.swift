@@ -50,6 +50,11 @@ final class NotesApp: MicroApp {
         AnyView(NoteEditor(app: self, item: item, state: viewState as? NoteViewState))
     }
 
+    /// Text typed before the note's field took the focus goes at its end.
+    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {
+        setText((notes[item] ?? "") + text, of: item)
+    }
+
     func setText(_ text: String, of item: ItemID) {
         guard notes[item] != nil else { return }
         notes[item] = text
@@ -82,7 +87,7 @@ final class NotesApp: MicroApp {
 
 /// What one bubble showing a note keeps for itself.
 @MainActor
-final class NoteViewState {
+final class NoteViewState: FocusTaking {
     /// Whether the text field should take the keyboard focus when next shown.
     var focusPending: Bool
 
@@ -121,6 +126,7 @@ struct NoteEditor: View {
                 if let state, state.focusPending {
                     state.focusPending = false
                     focused = true
+                    placeCursorAtEnd()
                 }
             }
     }

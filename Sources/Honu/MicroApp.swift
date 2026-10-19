@@ -109,6 +109,10 @@ protocol MicroApp: AnyObject {
     /// previous launch, so its bubble may take the focus.
     func newViewState(for item: ItemID, fresh: Bool) -> AnyObject?
 
+    /// Takes `text`, typed for a new bubble showing `item` before its field
+    /// could take the focus, for the field it shows first.
+    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?)
+
     /// The content of an open bubble showing `item`, below its title.
     func content(of item: ItemID, viewState: AnyObject?) -> AnyView
 
@@ -129,6 +133,27 @@ extension MicroApp {
     func isBusy(_ item: ItemID) -> Bool { false }
     func update(_ context: Context) {}
     func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? { nil }
+    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {}
+}
+
+/// A bubble's view state whose field may still have to take the focus. Until
+/// it does, text typed with no field focused goes to the bubble's microapp
+/// (`MicroApp.typeAhead`), so no keystroke is lost while it flies out.
+@MainActor
+protocol FocusTaking: AnyObject {
+    var focusPending: Bool { get }
+}
+
+/// Puts the cursor at the end of the text in the field that just took the
+/// focus, rather than selecting it all, so typing carries on where it stops.
+@MainActor
+func placeCursorAtEnd() {
+    Task { @MainActor in
+        // The focus moves to the field once SwiftUI has updated.
+        try? await Task.sleep(for: .milliseconds(30))
+        guard let text = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
+        text.setSelectedRange(NSRange(location: (text.string as NSString).length, length: 0))
+    }
 }
 
 /// The microapps, in the order the turtle's menu lists them.

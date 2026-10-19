@@ -32,8 +32,15 @@ final class WebApp: MicroApp {
         return shortLabel(url.host() ?? url.absoluteString)
     }
 
+    /// A new page asks for a link, so its bubble starts with the cursor in the field.
     func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? {
-        AddressDraft()
+        AddressDraft(focusPending: fresh)
+    }
+
+    /// Text typed before the address field took the focus goes into it.
+    func typeAhead(_ text: String, into item: ItemID, viewState: AnyObject?) {
+        guard url(of: item) == nil else { return }
+        (viewState as? AddressDraft)?.text += text
     }
 
     func content(of item: ItemID, viewState: AnyObject?) -> AnyView {
@@ -96,8 +103,14 @@ func youTubeID(_ url: URL) -> String? {
 /// What one bubble showing a page keeps for itself: the address being typed.
 @Observable
 @MainActor
-final class AddressDraft {
+final class AddressDraft: FocusTaking {
     var text = ""
+    /// Whether the address field should take the keyboard focus when next shown.
+    @ObservationIgnored var focusPending: Bool
+
+    init(focusPending: Bool) {
+        self.focusPending = focusPending
+    }
 }
 
 struct WebContent: View {
@@ -134,7 +147,13 @@ struct WebContent: View {
                 .frame(maxWidth: 420)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { focused = true }
+        .onAppear {
+            if let draft, draft.focusPending {
+                draft.focusPending = false
+                focused = true
+                placeCursorAtEnd()
+            }
+        }
     }
 }
 

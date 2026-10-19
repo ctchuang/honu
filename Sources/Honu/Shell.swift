@@ -21,6 +21,9 @@ final class Shell {
     let octopus: Octopus
     /// Where the turtle's menu is open (its top-left corner), if it is.
     private(set) var menu: CGPoint?
+    /// The newest bubble the turtle spat out, which takes text typed before
+    /// its field takes the focus.
+    @ObservationIgnored private var typeAheadTarget: BubbleID?
     /// Where the turtle was when the current drag of it began.
     @ObservationIgnored private var turtleDragStart: CGPoint?
     @ObservationIgnored private let autosave: Autosave
@@ -115,6 +118,22 @@ final class Shell {
             appearance: app.appearance(of: item),
             viewState: app.newViewState(for: item, fresh: true))
         stage.spitPanel(bubble, from: turtle.spit())
+        typeAheadTarget = bubble.id
+    }
+
+    /// Hands `text`, typed while no field has the focus, to the newest bubble
+    /// the turtle spat out, as long as its field has yet to take the focus.
+    /// Returns whether a bubble took it.
+    func type(_ text: String) -> Bool {
+        guard let id = typeAheadTarget, let bubble = stage.bubble(id), !bubble.isSwallowed,
+            (bubble.viewState as? FocusTaking)?.focusPending == true,
+            let app = registry.app(bubble.target.app)
+        else {
+            typeAheadTarget = nil
+            return false
+        }
+        app.typeAhead(text, into: bubble.target.item, viewState: bubble.viewState)
+        return true
     }
 
     // MARK: Bubbles and the octopus

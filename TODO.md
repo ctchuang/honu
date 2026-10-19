@@ -1,12 +1,5 @@
 # TODO
 
-## Bring over the Rust version
-
-The Rust/egui version (in the git history before the switch to Swift) had a little more.
-Still to bring over:
-
-- Type-ahead: text typed while a new bubble flies out of the turtle goes into it.
-
 ## LLM integration
 
 The guiding idea: Claude should work with the bubbles on the desktop, not live in a

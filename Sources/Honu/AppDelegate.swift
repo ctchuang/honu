@@ -64,8 +64,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 shell.closeMenu()
                 return true
             }
-            // ⌘Z undoes a delete, unless a text field wants it.
             let typing = window.firstResponder is NSText
+            // Text typed while no field has the focus goes to the newest bubble,
+            // whose field takes it once the bubble lands and opens.
+            if !typing, event.modifierFlags.isDisjoint(with: [.command, .control]),
+                let text = event.characters, isPrintable(text), shell.type(text)
+            {
+                return true
+            }
+            // ⌘Z undoes a delete, unless a text field wants it.
             if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z",
                 !typing, shell.octopus.canUndo
             {
@@ -80,6 +87,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    /// Whether `text` is something typed to write, rather than a key such as
+    /// Return, Delete, or an arrow.
+    private func isPrintable(_ text: String) -> Bool {
+        !text.isEmpty
+            && text.unicodeScalars.allSatisfy {
+                ![.control, .privateUse, .unassigned].contains($0.properties.generalCategory)
+            }
     }
 
     private func makeMainMenu() -> NSMenu {
