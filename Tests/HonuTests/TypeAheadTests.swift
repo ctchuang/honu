@@ -8,12 +8,7 @@ struct TypeAheadTests {
     private let claude = FakeClaude()
 
     private func shell() -> Shell {
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-            .appending(path: "state.json")
-        return Shell(
-            size: CGSize(width: 1200, height: 800), storeURL: url,
-            services: Services(claude: claude))
+        makeShell(claude: claude)
     }
 
     @Test func textTypedWhileANoteFliesOutGoesIntoIt() throws {

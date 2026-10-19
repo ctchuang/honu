@@ -5,19 +5,12 @@ import Testing
 
 @MainActor
 struct InputRouterTests {
-    private func shell() -> Shell {
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-            .appending(path: "state.json")
-        return Shell(size: CGSize(width: 1200, height: 800), storeURL: url)
-    }
-
     private func key(_ text: String, command: Bool = false, control: Bool = false) -> InputEvent {
         .key(text: text, unmodified: text, command: command, control: control)
     }
 
     @Test func rightClickingTheTurtleOpensTheMenuAndEscapeClosesIt() throws {
-        let shell = shell()
+        let shell = makeShell()
         let router = InputRouter(shell: shell)
         let turtle = shell.turtle.center
         try #require(shell.turtle.contains(turtle))
@@ -36,7 +29,7 @@ struct InputRouterTests {
     }
 
     @Test func aPressRaisesTheBubbleButGoesOn() {
-        let shell = shell()
+        let shell = makeShell()
         let target = ViewTarget(app: AppID("notes"), item: ItemID(rawValue: 1))
         let below = shell.stage.add(
             target: target, center: CGPoint(x: 400, y: 300), appearance: Appearance(),
@@ -49,7 +42,7 @@ struct InputRouterTests {
     }
 
     @Test func textGoesToTheNewBubbleOnlyWhenNothingElseTakesIt() throws {
-        let shell = shell()
+        let shell = makeShell()
         let router = InputRouter(shell: shell)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.last)
@@ -64,7 +57,7 @@ struct InputRouterTests {
     }
 
     @Test func commandZUndoesADeleteUnlessAFieldWantsIt() throws {
-        let shell = shell()
+        let shell = makeShell()
         let router = InputRouter(shell: shell)
         #expect(!router.handle(key("z", command: true), typing: false), "nothing to undo")
         shell.start(AppID("notes"))

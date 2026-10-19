@@ -7,20 +7,13 @@ import Testing
 struct PersistenceTests {
     private let size = CGSize(width: 1200, height: 800)
 
-    /// A file of its own for each test to save to, which does not exist yet.
-    private func storeURL() -> URL {
-        FileManager.default.temporaryDirectory
-            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-            .appending(path: "state.json")
-    }
-
     private func notes(_ shell: Shell) -> NotesApp {
         shell.registry.app(AppID("notes")) as! NotesApp
     }
 
     @Test func bubblesAndItemsComeBackInPlace() throws {
-        let url = storeURL()
-        let shell = Shell(size: size, storeURL: url)
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
         shell.turtle.move(to: CGPoint(x: 500, y: 400))
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.first)
@@ -29,7 +22,7 @@ struct PersistenceTests {
 
         // On a screen 200 points wider and taller, everything moves with its center.
         let bigger = CGSize(width: size.width + 200, height: size.height + 200)
-        let restored = Shell(size: bigger, storeURL: url)
+        let restored = makeShell(size: bigger, storeURL: url)
         let back = try #require(restored.stage.bubbles.first)
         #expect(restored.stage.bubbles.count == 1)
         #expect(back.target == bubble.target)
@@ -42,8 +35,8 @@ struct PersistenceTests {
     }
 
     @Test func swallowedBubblesAndTheirItemsCountAsDeleted() throws {
-        let url = storeURL()
-        let shell = Shell(size: size, storeURL: url)
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
         shell.start(AppID("notes"))
         shell.start(AppID("notes"))
         let doomed = try #require(shell.stage.bubbles.first)
@@ -56,15 +49,15 @@ struct PersistenceTests {
         #expect(doomed.isSwallowed && shell.octopus.canUndo)
         shell.save()
 
-        let restored = Shell(size: size, storeURL: url)
+        let restored = makeShell(size: size, storeURL: url)
         #expect(restored.stage.bubbles.count == 1)
         #expect(notes(restored).items.count == 1, "kept the swallowed bubble's note")
         #expect(!restored.stage.shows(doomed.target))
     }
 
     @Test func onlyChangesAreWritten() throws {
-        let url = storeURL()
-        let shell = Shell(size: size, storeURL: url)
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
         shell.start(AppID("notes"))
         shell.save()
         #expect(FileManager.default.fileExists(atPath: url.path()))
@@ -80,7 +73,7 @@ struct PersistenceTests {
     }
 
     @Test func undoBringsTheBubbleBackBeforeItIsForgotten() throws {
-        let shell = Shell(size: size, storeURL: storeURL())
+        let shell = makeShell(size: size)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.first)
         shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: bubble.center)
@@ -96,10 +89,8 @@ struct PersistenceTests {
 @MainActor
 struct AutosaveDriftTests {
     @Test func driftingIsNotAChangeButDraggingIs() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-            .appending(path: "state.json")
-        let shell = Shell(size: CGSize(width: 1200, height: 800), storeURL: url)
+        let url = temporaryStoreURL()
+        let shell = makeShell(storeURL: url)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.first)
         // Let it land, open, and be saved.
@@ -123,9 +114,7 @@ struct AutosaveDriftTests {
 @MainActor
 struct AutosaveTests {
     @Test func aStateComesBackAsSavedWithoutAShell() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-            .appending(path: "state.json")
+        let url = temporaryStoreURL()
         var state = SavedState()
         state.turtle = CGPoint(x: -100, y: 50)
         state.apps["notes"] = #"{"b":1,"a":2}"#

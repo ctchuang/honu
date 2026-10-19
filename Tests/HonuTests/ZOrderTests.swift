@@ -57,12 +57,7 @@ struct ZOrderTests {
     }
 
     @Test func pressingABubbleBringsItToTheTop() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-            .appending(path: "state.json")
-        let shell = Shell(
-            size: CGSize(width: 1200, height: 800), storeURL: url,
-            services: Services(claude: FakeClaude()))
+        let shell = makeShell()
         let target = ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1))
         let below = shell.stage.add(
             target: target, center: CGPoint(x: 500, y: 300),
