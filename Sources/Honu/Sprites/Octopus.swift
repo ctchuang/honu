@@ -58,6 +58,10 @@ final class Octopus {
     /// Tentacle sways per second while idle and while eagerly waiting for a drop.
     private static let swayRate: Double = 2
     private static let eagerSwayRate: Double = 6
+    /// The size of the "Click to undo" hint, which takes clicks too.
+    nonisolated static let hintSize = CGSize(width: 112, height: 26)
+    /// The gap between the hint and the top of the octopus.
+    nonisolated static let hintGap: CGFloat = 6
 
     /// A bubble the octopus swallowed, and where it was picked up, to return
     /// it there. The bubble itself stays on the stage, out of sight.
@@ -133,18 +137,29 @@ final class Octopus {
         isUp && (point - middle).length < Self.reach
     }
 
-    /// Where the "Click to undo" hint is drawn, above the octopus.
-    var hintCenter: CGPoint {
-        CGPoint(x: middle.x, y: origin.y - 18)
+    /// Top-left corner of the sprite as drawn at `time`, lifted while
+    /// gulping or eager.
+    func drawnOrigin(at time: TimeInterval) -> CGPoint {
+        CGPoint(x: origin.x, y: origin.y - lift(at: time))
     }
 
-    /// Whether `point` is on one of the octopus's visible pixels or on its undo hint.
-    func contains(_ point: CGPoint) -> Bool {
+    /// Where the "Click to undo" hint is drawn at `time`, above the octopus.
+    func hintCenter(at time: TimeInterval) -> CGPoint {
+        CGPoint(x: middle.x, y: drawnOrigin(at: time).y - Self.hintGap - Self.hintSize.height / 2)
+    }
+
+    /// Whether `point` is on one of the octopus's visible pixels or on its
+    /// undo hint, as they are drawn at `time`: the sprite of that moment,
+    /// with its tentacles swayed, lifted if it is.
+    func contains(_ point: CGPoint, at time: TimeInterval = now()) -> Bool {
         guard isUp else { return false }
-        if canUndo && abs(point.x - hintCenter.x) < 56 && abs(point.y - hintCenter.y) < 14 {
+        let hint = hintCenter(at: time)
+        if canUndo && abs(point.x - hint.x) < Self.hintSize.width / 2
+            && abs(point.y - hint.y) < Self.hintSize.height / 2
+        {
             return true
         }
-        return Self.frames[0].isOpaque(at: point, origin: origin)
+        return grid(at: time).isOpaque(at: point, origin: drawnOrigin(at: time))
     }
 
     /// Swallows `bubble`, which was picked up at `home`, at `time`.

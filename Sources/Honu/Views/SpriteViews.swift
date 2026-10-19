@@ -43,7 +43,7 @@ struct OctopusView: View {
                 .overlay(alignment: .top) {
                     if octopus.canUndo {
                         hint.opacity(octopus.hintOpacity(at: time))
-                            .alignmentGuide(.top) { $0[.bottom] + 6 }
+                            .alignmentGuide(.top) { $0[.bottom] + Octopus.hintGap }
                     }
                 }
                 .offset(y: -octopus.lift(at: time))
@@ -57,9 +57,9 @@ struct OctopusView: View {
         Text("Click to undo")
             .font(.system(size: 13))
             .foregroundStyle(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color(rgb: 40, 20, 34).opacity(0.8)))
             .fixedSize()
+            // As big as the octopus takes clicks on it.
+            .frame(width: Octopus.hintSize.width, height: Octopus.hintSize.height)
+            .background(Capsule().fill(Color(rgb: 40, 20, 34).opacity(0.8)))
     }
 }

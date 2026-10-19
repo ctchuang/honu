@@ -108,6 +108,22 @@ struct OctopusTests {
         #expect(!octopus.inReach(middle), "still there after the drag")
     }
 
+    @Test func onlyThePixelsDrawnAtTheTimeAreHit() throws {
+        let octopus = Octopus(stageSize: screen)
+        octopus.summon(true, turtle: turtle)
+        // A pixel visible in one frame of the swaying tentacles but not in the other.
+        let (a, b) = (octopus.grid(at: 0), octopus.grid(at: 0.6))
+        let rows = 0..<a.rows.count
+        let columns = 0..<a.columns
+        let pixel = try #require(
+            rows.lazy.flatMap { y in columns.lazy.map { x in (x, y) } }
+                .first { (a.pixel($0.0, $0.1) == ".") != (b.pixel($0.0, $0.1) == ".") })
+        let point = PixelGrid.point(
+            CGPoint(x: Double(pixel.0) + 0.5, y: Double(pixel.1) + 0.5), origin: octopus.origin)
+        #expect(octopus.contains(point, at: 0) == (a.pixel(pixel.0, pixel.1) != "."))
+        #expect(octopus.contains(point, at: 0.6) == (b.pixel(pixel.0, pixel.1) != "."))
+    }
+
     @Test func swallowedBubbleCanBeBroughtBackUntilItIsTooLate() {
         let octopus = Octopus(stageSize: screen)
         octopus.summon(true, turtle: turtle)
@@ -117,11 +133,12 @@ struct OctopusTests {
         #expect(octopus.forget(at: time + 1).isEmpty && octopus.canUndo)
         #expect(octopus.inReach(octopus.middle), "hid while it could undo")
         // The hint above it takes clicks too, but only while it applies.
-        #expect(octopus.contains(octopus.hintCenter), "hint does not take clicks")
+        let hint = octopus.hintCenter(at: time + 1)
+        #expect(octopus.contains(hint, at: time + 1), "hint does not take clicks")
 
         let spat = octopus.spitBack(at: time + 1)
         #expect(spat?.bubble == bubble && spat?.home == home)
-        #expect(!octopus.contains(octopus.hintCenter), "hint takes clicks with nothing to undo")
+        #expect(!octopus.contains(hint, at: time + 1), "hint takes clicks with nothing to undo")
         #expect(!octopus.canUndo)
 
         octopus.swallow(bubble, home: home, at: time + 2)
