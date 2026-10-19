@@ -39,3 +39,5 @@ Smaller improvements:
 - **A web page for Honu**, hosted on GitHub Pages: a page that shows what Honu is
   (bubbles on the desktop, the turtle and the octopus) with a short demo video, and how
   to build and run it.
+- **Install microapps on their own**: microapps are compiled into Honu and listed in
+  `Shell.init` today; let a microapp be installed separately, without rebuilding Honu.
