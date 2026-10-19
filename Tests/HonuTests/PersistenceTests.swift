@@ -120,6 +120,28 @@ struct AutosaveDriftTests {
     }
 }
 
+@MainActor
+struct AutosaveTests {
+    @Test func aStateComesBackAsSavedWithoutAShell() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appending(path: "state.json")
+        var state = SavedState()
+        state.turtle = CGPoint(x: -100, y: 50)
+        state.apps["notes"] = #"{"b":1,"a":2}"#
+        Autosave(url: url).save(state)
+
+        let autosave = Autosave(url: url)
+        let restored = try #require(autosave.restore())
+        #expect(restored.turtle == state.turtle)
+        #expect(restored.apps["notes"] == #"{"a":2,"b":1}"#)
+        // What was restored counts as saved, whatever order the keys come in.
+        try FileManager.default.removeItem(at: url)
+        autosave.save(state)
+        #expect(!FileManager.default.fileExists(atPath: url.path()), "wrote with nothing changed")
+    }
+}
+
 struct CanonicalJSONTests {
     @Test @MainActor func keyOrderDoesNotCount() throws {
         let a = try #require(Autosave.canonical(Data(#"[{"text":"","id":{"rawValue":1}}]"#.utf8)))

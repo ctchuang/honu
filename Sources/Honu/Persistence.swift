@@ -1,7 +1,8 @@
 import Foundation
 
-/// Everything kept for the next launch.
-private struct SavedState: Codable {
+/// Everything kept for the next launch. The shell makes it (`Shell.snapshot`)
+/// and puts it back (`Shell.restore`); `Autosave` only decides when to write it.
+struct SavedState: Codable {
     /// Where the turtle rests relative to the center of the screen, if it was dragged.
     var turtle: CGPoint?
     var bubbles: [SavedBubble] = []
@@ -20,7 +21,7 @@ private struct SavedState: Codable {
     }
 }
 
-private struct SavedBubble: Codable {
+struct SavedBubble: Codable {
     var target: ViewTarget
     /// Where it was relative to the center of the screen, so it comes back in
     /// place on a screen of another size.
@@ -28,10 +29,11 @@ private struct SavedBubble: Codable {
     var isOpen: Bool
 }
 
-/// Keeps the turtle's place, the bubbles, and the microapps' items for the
-/// next launch, in `~/Library/Application Support/Honu/state.json` (delete it
-/// to reset). Each microapp saves its own items, so Honu never needs to know
-/// their shape.
+/// Writes the shell's `SavedState` for the next launch, in
+/// `~/Library/Application Support/Honu/state.json` (delete it to reset), and
+/// reads it back. It decides when and where to write, and leaves what to the
+/// shell. Each microapp saves its own items, so Honu never needs to know their
+/// shape.
 @MainActor
 final class Autosave {
     /// Where Honu saves: `HONU_STORE` if set, so a development run can keep
@@ -64,20 +66,19 @@ final class Autosave {
         isMoved = true
     }
 
-    /// Saves if a second has passed since the last check and anything changed.
-    func tick(_ shell: Shell) {
+    /// Saves the state `snapshot` makes if a second has passed since the last
+    /// check and anything changed. `snapshot` runs only when a check is due.
+    func tick(_ snapshot: () -> SavedState) {
         guard now() - lastCheck >= Self.interval else { return }
-        save(shell)
+        save(snapshot())
     }
 
-    /// Saves if anything changed since the last save.
-    func save(_ shell: Shell) {
+    /// Saves `state` if anything changed since the last save.
+    func save(_ state: SavedState) {
         lastCheck = now()
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        let state = state(of: shell)
-        guard let data = try? encoder.encode(state),
-            let unplaced = try? encoder.encode(state.unplaced),
+        let state = Self.canonical(state)
+        guard let data = try? Self.encode(state),
+            let unplaced = try? Self.encode(state.unplaced),
             unplaced != lastSaved || isMoved
         else { return }
         do {
@@ -91,66 +92,29 @@ final class Autosave {
         }
     }
 
-    private func state(of shell: Shell) -> SavedState {
-        let center = Self.center(of: shell.stage.size)
-        var state = SavedState()
-        state.turtle = shell.turtle.rest.map {
-            CGPoint(x: $0.x - center.x, y: $0.y - center.y)
-        }
-        // A bubble still in the octopus when Honu quits counts as deleted.
-        state.bubbles = shell.stage.bubbles.filter { !$0.isSwallowed }.map {
-            SavedBubble(
-                target: $0.target,
-                // Where it is going, so a bubble saved mid-flight comes back where it lands.
-                offset: CGPoint(
-                    x: $0.destination.x - center.x, y: $0.destination.y - center.y),
-                isOpen: $0.isOpen)
-        }
-        for app in shell.registry.apps {
-            if let data = app.save().flatMap(Self.canonical),
-                let json = String(data: data, encoding: .utf8)
-            {
-                state.apps[app.id.rawValue] = json
-            }
-        }
+    /// What was saved on the last launch, if anything was, which counts as
+    /// saved already.
+    func restore() -> SavedState? {
+        guard let data = try? Data(contentsOf: url),
+            let state = try? JSONDecoder().decode(SavedState.self, from: data)
+        else { return nil }
+        lastSaved = try? Self.encode(Self.canonical(state).unplaced)
         return state
     }
 
-    /// Puts back what was saved on the last launch, and deletes items no
-    /// bubble showed, such as one still in the octopus.
-    func restore(into shell: Shell) {
-        guard let data = try? Data(contentsOf: url),
-            let state = try? JSONDecoder().decode(SavedState.self, from: data)
-        else { return }
-        lastSaved = try? {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-            return try encoder.encode(state.unplaced)
-        }()
-        let center = Self.center(of: shell.stage.size)
-        if let offset = state.turtle {
-            shell.turtle.move(to: CGPoint(x: center.x + offset.x, y: center.y + offset.y))
+    private static func encode(_ state: SavedState) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        return try encoder.encode(state)
+    }
+
+    /// `state` with each microapp's JSON in canonical form.
+    private static func canonical(_ state: SavedState) -> SavedState {
+        var state = state
+        state.apps = state.apps.compactMapValues { json in
+            canonical(Data(json.utf8)).flatMap { String(data: $0, encoding: .utf8) }
         }
-        for app in shell.registry.apps {
-            if let json = state.apps[app.id.rawValue] {
-                app.load(Data(json.utf8))
-            }
-        }
-        for saved in state.bubbles where shell.registry.has(saved.target) {
-            guard let app = shell.registry.app(saved.target.app) else { continue }
-            let item = saved.target.item
-            let bubble = shell.stage.add(
-                target: saved.target,
-                center: CGPoint(x: center.x + saved.offset.x, y: center.y + saved.offset.y),
-                appearance: app.appearance(of: item),
-                viewState: app.newViewState(for: item, fresh: false))
-            bubble.isOpen = saved.isOpen
-        }
-        for app in shell.registry.apps {
-            for item in app.items where !shell.stage.shows(ViewTarget(app: app.id, item: item)) {
-                app.remove(item)
-            }
-        }
+        return state
     }
 
     /// `json` with its object keys sorted. `JSONEncoder` may order keys
@@ -160,9 +124,5 @@ final class Autosave {
         else { return json }
         return try? JSONSerialization.data(
             withJSONObject: object, options: [.sortedKeys, .fragmentsAllowed])
-    }
-
-    private static func center(of size: CGSize) -> CGPoint {
-        CGPoint(x: size.width / 2, y: size.height / 2)
     }
 }

@@ -27,6 +27,9 @@ final class Stage {
 
     var isDragging: Bool { drag != nil }
 
+    /// The middle of the screen.
+    var center: CGPoint { CGPoint(x: size.width / 2, y: size.height / 2) }
+
     /// Puts a new bubble on top, below a bubble being dragged, which must stay on top.
     @discardableResult
     func add(target: ViewTarget, center: CGPoint, appearance: Appearance, viewState: AnyObject?)
