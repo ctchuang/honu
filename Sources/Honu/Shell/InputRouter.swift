@@ -20,8 +20,9 @@ enum InputEvent: Equatable {
 struct InputRouter {
     let shell: Shell
 
-    /// Handles `event`, given whether a text field has the keyboard focus.
-    /// Returns whether it did, in which case the event goes no further.
+    /// Handles `event`, given whether a text field or a web page has the
+    /// keyboard focus. Returns whether it did, in which case the event goes
+    /// no further.
     func handle(_ event: InputEvent, typing: Bool) -> Bool {
         switch event {
         case .press(let point):

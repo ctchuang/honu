@@ -6,8 +6,25 @@ import Testing
 /// What the views get from the shell, rather than from the microapps.
 @MainActor
 struct ShellTests {
+    @Test func everyBubbleKeepsItsOwnUndoHistory() {
+        let shell = makeShell()
+        let target = ViewTarget(app: AppID("notes"), item: ItemID(rawValue: 1))
+        let first = shell.stage.add(
+            target: target, center: CGPoint(x: 400, y: 300), appearance: Appearance(),
+            viewState: nil)
+        let second = shell.stage.add(
+            target: target, center: CGPoint(x: 700, y: 300), appearance: Appearance(),
+            viewState: nil)
+        let history = shell.undoManager(for: first)
+        #expect(shell.undoManager(for: first) === history)
+        #expect(shell.undoManager(for: second) !== history)
+    }
+
     @Test func theMenuListsEveryMicroappInOrder() {
-        #expect(makeShell().menuChoices.map(\.label) == ["Add Note", "Ask AI", "Open Web Page"])
+        #expect(
+            makeShell().menuChoices.map(\.label) == [
+                "Add Note", "Ask AI", "Open Web Page", "Microapp Probe",
+            ])
     }
 
     @Test func theMenuStaysOnScreen() {

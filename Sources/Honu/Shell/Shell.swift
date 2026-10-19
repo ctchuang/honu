@@ -29,6 +29,8 @@ final class Shell {
     @ObservationIgnored private let autosave: Autosave
     /// When `tick` last ran, for how far to move things.
     @ObservationIgnored private var lastTick: TimeInterval?
+    /// Each bubble's own undo history, made when first asked for.
+    @ObservationIgnored private var undoManagers: [BubbleID: UndoManager] = [:]
 
     /// How far a bubble must be dragged before the octopus comes up, so
     /// nudging a bubble into place does not call it.
@@ -40,7 +42,10 @@ final class Shell {
         size: CGSize, storeURL: URL = Autosave.storeURL, services: Services = .live()
     ) {
         autosave = Autosave(url: storeURL)
-        registry = Registry([NotesApp(), AskApp(services: services), WebApp()])
+        registry = Registry([
+            NotesApp(), AskApp(services: services), WebApp(),
+            MakerApp(root: MakerApp.root(for: storeURL)),
+        ])
         stage = Stage(size: size)
         turtle = Turtle(stageSize: size)
         octopus = Octopus(stageSize: size)
@@ -145,6 +150,19 @@ final class Shell {
 
     // MARK: Bubbles and the octopus
 
+    /// The undo history of `bubble`. Every bubble keeps its own, though they
+    /// share one window, so ⌘Z undoes typing in the bubble with the focus
+    /// rather than in whichever was edited last. It outlives the bubble's
+    /// content, so closing and opening the bubble keeps it.
+    func undoManager(for bubble: Bubble) -> UndoManager {
+        if let manager = undoManagers[bubble.id] {
+            return manager
+        }
+        let manager = UndoManager()
+        undoManagers[bubble.id] = manager
+        return manager
+    }
+
     /// Any press on a bubble brings it to the front, including presses on an
     /// open bubble's content, which SwiftUI's gestures never see.
     func press(at point: CGPoint) {
@@ -198,6 +216,7 @@ final class Shell {
         updateApps()
         stage.step(time: time, dt: dt)
         for id in octopus.forget() {
+            undoManagers[id] = nil
             if let bubble = stage.remove(id), !stage.shows(bubble.target) {
                 registry.remove(bubble.target)
             }

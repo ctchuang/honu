@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 
 /// Sets up the menu bar and the floating window that covers the screen, and
 /// passes the input SwiftUI's gestures do not cover to an `InputRouter`.
@@ -47,8 +48,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let shell, let window, event.window === window,
             let input = Self.input(event, in: window)
         else { return false }
-        let typing = window.firstResponder is NSText
-        return InputRouter(shell: shell).handle(input, typing: typing)
+        return InputRouter(shell: shell).handle(input, typing: Self.isTyping(in: window))
+    }
+
+    /// Whether the keyboard goes to something that types: a text field, or a
+    /// web page, which may have a field of its own and takes keys either way.
+    private static func isTyping(in window: NSWindow) -> Bool {
+        var responder: NSView? = window.firstResponder as? NSView
+        while let view = responder {
+            if view is NSText || view is WKWebView { return true }
+            responder = view.superview
+        }
+        return false
     }
 
     /// `event` as the input router takes it, if it is one it handles.
@@ -86,6 +97,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: "q"
         )
         let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = editMenu.addItem(
+            withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(.separator())
         editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(

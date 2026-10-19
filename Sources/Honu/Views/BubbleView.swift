@@ -50,9 +50,11 @@ struct BubbleView: View {
                     .padding(.horizontal, 24)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
-                shell.content(of: bubble)
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .padding([.horizontal, .bottom], 10)
+                UndoScope(
+                    history: shell.undoManager(for: bubble), content: shell.content(of: bubble)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding([.horizontal, .bottom], 10)
             }
             .transition(.opacity)
         } else if let symbol = appearance.symbol {
