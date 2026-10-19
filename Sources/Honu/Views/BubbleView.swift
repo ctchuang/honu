@@ -21,13 +21,11 @@ struct BubbleView: View {
         content(app: app, appearance: appearance, title: title)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(shape)
-            .background {
-                // Only the glass breathes, so the content holds still.
-                Color.clear
-                    .glassEffect(glassStyle(appearance), in: shape)
-                    .glassEffectID(bubble.id, in: glass)
-                    .padding(-bubble.swell)
-            }
+            // The glass goes on the content itself, which keeps the content in
+            // front of it; a glass layer of its own would be drawn over the
+            // content. Only the glass breathes, so the content holds still.
+            .glassEffect(glassStyle(appearance), in: Swelled(shape: shape, by: bubble.swell))
+            .glassEffectID(bubble.id, in: glass)
             .onTapGesture(count: 2) { shell.stage.toggle(bubble) }
             .gesture(drag)
     }
@@ -77,5 +75,20 @@ struct BubbleView: View {
                     bubble, by: $0.translation, velocity: $0.velocity, pointer: $0.location)
             }
             .onEnded { shell.endBubbleDrag(pointer: $0.location) }
+    }
+}
+
+/// `shape` grown by `amount` on every side, past the view's own bounds.
+private struct Swelled: Shape {
+    let shape: RoundedRectangle
+    var amount: CGFloat
+
+    init(shape: RoundedRectangle, by amount: CGFloat) {
+        self.shape = shape
+        self.amount = amount
+    }
+
+    func path(in rect: CGRect) -> Path {
+        shape.inset(by: -amount).path(in: rect)
     }
 }
