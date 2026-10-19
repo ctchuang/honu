@@ -10,8 +10,7 @@ final class AskApp: MicroApp {
     let menuLabel = "Ask AI"
 
     /// The model: each chat.
-    private(set) var chats: [ItemID: Chat] = [:]
-    @ObservationIgnored private var ids = ItemIDs()
+    private(set) var chats = ItemTable<Chat>()
     @ObservationIgnored let services: Services
 
     /// The label of a chat with no question asked yet.
@@ -30,9 +29,7 @@ final class AskApp: MicroApp {
 
     /// Starts a chat with no question yet.
     func create() -> ItemID {
-        let id = ids.next()
-        chats[id] = Chat()
-        return id
+        chats.insert(Chat())
     }
 
     /// A panel tall enough for what the chat shows, within limits.
@@ -60,7 +57,7 @@ final class AskApp: MicroApp {
     /// Takes in whatever the answer streams have delivered. A chat's bubbles
     /// rise when its answer is in, and wobble when something needs the user.
     func update(_ context: Context) {
-        for (item, chat) in chats {
+        for (item, chat) in chats.byID {
             switch chat.poll() {
             case .answered: context.play(.rise, for: item)
             case .needsAttention: context.play(.wobble, for: item)
@@ -94,10 +91,10 @@ final class AskApp: MicroApp {
     /// Forgets a chat, which also stops its answer from streaming in.
     func remove(_ item: ItemID) {
         chats[item]?.stream?.cancel()
-        chats[item] = nil
+        chats.remove(item)
     }
 
-    var items: [ItemID] { chats.keys.sorted() }
+    var items: [ItemID] { chats.items }
 
     /// A chat as saved between launches. A stream cannot be saved, so a
     /// question still being answered is saved as interrupted.
@@ -111,22 +108,19 @@ final class AskApp: MicroApp {
     }
 
     func save() -> Data? {
-        let saved = items.compactMap { id in
-            chats[id].map {
-                SavedChat(
-                    id: id, question: $0.question, title: $0.title, answer: $0.answer,
-                    error: $0.savedError)
-            }
+        chats.save {
+            SavedChat(
+                id: $0, question: $1.question, title: $1.title, answer: $1.answer,
+                error: $1.savedError)
         }
-        return try? JSONEncoder().encode(saved)
     }
 
     func load(_ data: Data) {
-        let saved = (try? JSONDecoder().decode([SavedChat].self, from: data)) ?? []
-        for chat in saved {
-            ids.skip(past: chat.id)
-            chats[chat.id] = Chat(
-                question: chat.question, title: chat.title, answer: chat.answer, error: chat.error)
+        chats.load(data, as: SavedChat.self) {
+            (
+                $0.id,
+                Chat(question: $0.question, title: $0.title, answer: $0.answer, error: $0.error)
+            )
         }
     }
 }

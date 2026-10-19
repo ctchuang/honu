@@ -91,6 +91,30 @@ struct MicroAppTests {
         _ = notes.anyContent(of: item, viewState: nil)
     }
 
+    @Test func anItemTableKeepsIdsInOrderAndSavesThemAsBefore() throws {
+        var table = ItemTable<String>()
+        let a = table.insert("a")
+        let b = table.insert("b")
+        table.remove(a)
+        table.update(a, to: "gone")
+        #expect(table.items == [b])
+        #expect(table[a] == nil, "a removed item came back")
+
+        // Saved as a JSON array, one object per item with its id, as the
+        // microapps always saved them.
+        struct Saved: Codable, Equatable {
+            var id: ItemID
+            var text: String
+        }
+        let data = try #require(table.save { Saved(id: $0, text: $1) })
+        let json = try #require(Autosave.canonical(data))
+        #expect(String(decoding: json, as: UTF8.self) == #"[{"id":{"rawValue":2},"text":"b"}]"#)
+        var restored = ItemTable<String>()
+        restored.load(data, as: Saved.self) { ($0.id, $0.text) }
+        #expect(restored[b] == "b")
+        #expect(restored.insert("c") > b, "reused a restored id")
+    }
+
     @Test func longTextGetsAShortLabel() {
         #expect(shortLabel("Groceries") == "Groceries")
         #expect(shortLabel(String(repeating: "a", count: 24)) == String(repeating: "a", count: 24))

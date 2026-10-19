@@ -10,8 +10,7 @@ final class NotesApp: MicroApp {
     let menuLabel = "Add Note"
 
     /// The model: each note's text.
-    private(set) var notes: [ItemID: String] = [:]
-    @ObservationIgnored private var ids = ItemIDs()
+    private(set) var notes = ItemTable<String>()
 
     /// The label of a note with nothing written in it yet.
     static let emptyLabel = "Note"
@@ -19,9 +18,7 @@ final class NotesApp: MicroApp {
     static let yellow = Color(red: 1, green: 0.925, blue: 0.59)
 
     func create() -> ItemID {
-        let id = ids.next()
-        notes[id] = ""
-        return id
+        notes.insert("")
     }
 
     func appearance(of item: ItemID) -> Appearance {
@@ -56,15 +53,14 @@ final class NotesApp: MicroApp {
     }
 
     func setText(_ text: String, of item: ItemID) {
-        guard notes[item] != nil else { return }
-        notes[item] = text
+        notes.update(item, to: text)
     }
 
     func remove(_ item: ItemID) {
-        notes[item] = nil
+        notes.remove(item)
     }
 
-    var items: [ItemID] { notes.keys.sorted() }
+    var items: [ItemID] { notes.items }
 
     private struct SavedNote: Codable {
         var id: ItemID
@@ -72,15 +68,10 @@ final class NotesApp: MicroApp {
     }
 
     func save() -> Data? {
-        try? JSONEncoder().encode(items.map { SavedNote(id: $0, text: notes[$0] ?? "") })
+        notes.save { SavedNote(id: $0, text: $1) }
     }
 
     func load(_ data: Data) {
-        // Anything unreadable is simply nothing to restore.
-        let saved = (try? JSONDecoder().decode([SavedNote].self, from: data)) ?? []
-        for note in saved {
-            ids.skip(past: note.id)
-            notes[note.id] = note.text
-        }
+        notes.load(data, as: SavedNote.self) { ($0.id, $0.text) }
     }
 }

@@ -10,8 +10,7 @@ final class WebApp: MicroApp {
     let menuLabel = "Open Web Page"
 
     /// The model: each page's address, empty until one is entered.
-    private(set) var pages: [ItemID: String] = [:]
-    @ObservationIgnored private var ids = ItemIDs()
+    private(set) var pages = ItemTable<String>()
     /// How many bubbles are loading each page, which makes them breathe.
     @ObservationIgnored private var loading: [ItemID: Int] = [:]
     /// Pages that finished loading since the last `update`, whose bubbles
@@ -19,9 +18,7 @@ final class WebApp: MicroApp {
     @ObservationIgnored private var ended: [ItemID: Motion] = [:]
 
     func create() -> ItemID {
-        let id = ids.next()
-        pages[id] = ""
-        return id
+        pages.insert("")
     }
 
     func appearance(of item: ItemID) -> Appearance {
@@ -94,16 +91,16 @@ final class WebApp: MicroApp {
     func open(_ text: String, in item: ItemID) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard pages[item] != nil, !text.isEmpty else { return }
-        pages[item] = text.contains("://") ? text : "https://" + text
+        pages.update(item, to: text.contains("://") ? text : "https://" + text)
     }
 
     func remove(_ item: ItemID) {
-        pages[item] = nil
+        pages.remove(item)
         loading[item] = nil
         ended[item] = nil
     }
 
-    var items: [ItemID] { pages.keys.sorted() }
+    var items: [ItemID] { pages.items }
 
     private struct SavedPage: Codable {
         var id: ItemID
@@ -111,15 +108,11 @@ final class WebApp: MicroApp {
     }
 
     func save() -> Data? {
-        try? JSONEncoder().encode(items.map { SavedPage(id: $0, url: pages[$0] ?? "") })
+        pages.save { SavedPage(id: $0, url: $1) }
     }
 
     func load(_ data: Data) {
-        let saved = (try? JSONDecoder().decode([SavedPage].self, from: data)) ?? []
-        for page in saved {
-            ids.skip(past: page.id)
-            pages[page.id] = page.url
-        }
+        pages.load(data, as: SavedPage.self) { ($0.id, $0.url) }
     }
 }
 
