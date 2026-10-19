@@ -7,11 +7,13 @@ import Testing
 /// answer stream, for the test to answer.
 @MainActor
 final class FakeClaude: ClaudeClient {
-    private(set) var asked: [String] = []
+    private(set) var requests: [ClaudeRequest] = []
     private(set) var streams: [AnswerStream] = []
+    /// The prompts asked, in order.
+    var asked: [String] { requests.map(\.prompt) }
 
-    func ask(question: String) -> AnswerStream {
-        asked.append(question)
+    func ask(_ request: ClaudeRequest) -> AnswerStream {
+        requests.append(request)
         let stream = AnswerStream()
         streams.append(stream)
         return stream
