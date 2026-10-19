@@ -12,6 +12,10 @@ final class WebApp: MicroApp {
     /// The model: each page's address, empty until one is entered.
     private(set) var pages: [ItemID: String] = [:]
     @ObservationIgnored private var ids = ItemIDs()
+    /// How many bubbles are loading each page, which makes them breathe.
+    @ObservationIgnored private var loading: [ItemID: Int] = [:]
+    /// Pages that finished loading since the last `update`, whose bubbles rise.
+    @ObservationIgnored private var loaded: Set<ItemID> = []
 
     func create() -> ItemID {
         let id = ids.next()
@@ -47,6 +51,34 @@ final class WebApp: MicroApp {
         AnyView(WebContent(app: self, item: item, draft: viewState as? AddressDraft))
     }
 
+    /// Whether a bubble is still loading the page.
+    func isBusy(_ item: ItemID) -> Bool {
+        loading[item, default: 0] > 0
+    }
+
+    /// Has the bubbles of every page that finished loading rise.
+    func update(_ context: Context) {
+        for item in loaded.sorted() {
+            context.play(.rise, for: item)
+        }
+        loaded.removeAll()
+    }
+
+    /// Notes that a bubble started loading the page.
+    func startedLoading(_ item: ItemID) {
+        loading[item, default: 0] += 1
+    }
+
+    /// Notes that a bubble stopped loading the page: `finished` it, or gave
+    /// up, as when the load failed or the bubble closed.
+    func stoppedLoading(_ item: ItemID, finished: Bool) {
+        let count = loading[item, default: 0] - 1
+        loading[item] = count > 0 ? count : nil
+        if finished, pages[item] != nil {
+            loaded.insert(item)
+        }
+    }
+
     /// The page's address, if one has been entered.
     func url(of item: ItemID) -> URL? {
         guard let text = pages[item], !text.isEmpty else { return nil }
@@ -63,6 +95,8 @@ final class WebApp: MicroApp {
 
     func remove(_ item: ItemID) {
         pages[item] = nil
+        loading[item] = nil
+        loaded.remove(item)
     }
 
     var items: [ItemID] { pages.keys.sorted() }
@@ -121,11 +155,7 @@ struct WebContent: View {
 
     var body: some View {
         if let url = app.url(of: item) {
-            if let video = youTubeID(url) {
-                YouTubeView(id: video)
-            } else {
-                WebView(url: url)
-            }
+            PageView(app: app, item: item, source: PageSource(url))
         } else {
             addressField
         }
@@ -157,12 +187,22 @@ struct WebContent: View {
     }
 }
 
-/// Plays a YouTube video through its embedded player.
-///
-/// The player refuses to play without a referring origin, so it is loaded
-/// from an HTML page with a base URL instead of from its URL directly.
-struct YouTubeView: View {
-    let id: String
+/// What a page shows: a web page, or a YouTube video in its embedded player.
+enum PageSource: Hashable {
+    case web(URL)
+    case video(id: String)
+
+    init(_ url: URL) {
+        self = youTubeID(url).map { .video(id: $0) } ?? .web(url)
+    }
+}
+
+/// Shows a page, telling its microapp while it loads, so the bubble breathes,
+/// and when it has finished, so the bubble rises.
+struct PageView: View {
+    let app: WebApp
+    let item: ItemID
+    let source: PageSource
     // Spelled out instead of `@State`, whose macro ships only with Xcode.
     private let player = State(initialValue: Player())
 
@@ -170,18 +210,38 @@ struct YouTubeView: View {
 
     var body: some View {
         WebView(page)
-            .task(id: id) {
-                do {
-                    for try await _ in page.load(
-                        html: html, baseURL: URL(string: "https://honu.example")!)
-                    {}
-                } catch {
-                    // A failed load shows in the page itself, so there is nothing more to do.
-                }
+            .task(id: source) {
+                app.startedLoading(item)
+                let finished =
+                    switch source {
+                    case .web(let url):
+                        await Self.finishes(page.load(URLRequest(url: url)))
+                    case .video(let id):
+                        // The player refuses to play without a referring origin, so it
+                        // is loaded from an HTML page with a base URL, not from its URL.
+                        await Self.finishes(
+                            page.load(
+                                html: Self.player(id), baseURL: URL(string: "https://honu.example")!
+                            ))
+                    }
+                app.stoppedLoading(item, finished: finished)
             }
     }
 
-    private var html: String {
+    /// Waits for a load to finish, returning whether it did. A failed load
+    /// shows in the page itself, and one cut short is no longer wanted.
+    private static func finishes(
+        _ events: some AsyncSequence<WebPage.NavigationEvent, any Error>
+    ) async -> Bool {
+        do {
+            for try await event in events where event == .finished {
+                return true
+            }
+        } catch {}
+        return false
+    }
+
+    private static func player(_ id: String) -> String {
         """
         <!doctype html>
         <meta name="viewport" content="width=device-width, initial-scale=1">

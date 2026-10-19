@@ -97,3 +97,67 @@ struct WebAppTests {
         #expect(restored.create() > item)
     }
 }
+
+@MainActor
+struct WebStatusTests {
+    private func update(_ web: WebApp) -> [Effect] {
+        let context = Context(app: web.id)
+        web.update(context)
+        return context.effects
+    }
+
+    @Test func aLoadingPageBreathesAndRisesWhenItHasLoaded() {
+        let web = WebApp()
+        let item = web.create()
+        web.open("en.wikipedia.org", in: item)
+        #expect(!web.isBusy(item))
+        web.startedLoading(item)
+        #expect(web.isBusy(item))
+        #expect(update(web).isEmpty)
+        web.stoppedLoading(item, finished: true)
+        #expect(!web.isBusy(item))
+        #expect(update(web) == [.motion(ViewTarget(app: web.id, item: item), .rise)])
+        #expect(update(web).isEmpty, "rose twice for one load")
+    }
+
+    @Test func aLoadCutShortDoesNotRise() {
+        let web = WebApp()
+        let item = web.create()
+        web.open("en.wikipedia.org", in: item)
+        web.startedLoading(item)
+        web.stoppedLoading(item, finished: false)
+        #expect(!web.isBusy(item))
+        #expect(update(web).isEmpty)
+    }
+
+    @Test func aPageInTwoBubblesBreathesUntilBothHaveLoaded() {
+        let web = WebApp()
+        let item = web.create()
+        web.open("en.wikipedia.org", in: item)
+        web.startedLoading(item)
+        web.startedLoading(item)
+        web.stoppedLoading(item, finished: true)
+        #expect(web.isBusy(item))
+        web.stoppedLoading(item, finished: true)
+        #expect(!web.isBusy(item))
+        #expect(update(web).count == 1)
+    }
+
+    @Test func aDeletedPageNeitherBreathesNorRises() {
+        let web = WebApp()
+        let item = web.create()
+        web.open("en.wikipedia.org", in: item)
+        web.startedLoading(item)
+        web.remove(item)
+        #expect(!web.isBusy(item))
+        web.stoppedLoading(item, finished: true)
+        #expect(update(web).isEmpty)
+    }
+
+    @Test func youTubeLinksPlayInTheEmbeddedPlayer() throws {
+        let video = try #require(URL(string: "https://youtu.be/aqz-KE-bpKQ"))
+        let page = try #require(URL(string: "https://en.wikipedia.org/wiki/Sea_turtle"))
+        #expect(PageSource(video) == .video(id: "aqz-KE-bpKQ"))
+        #expect(PageSource(page) == .web(page))
+    }
+}

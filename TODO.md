@@ -19,9 +19,11 @@ whose answer streams in while the panel grows to fit it (`Sources/Honu/Apps/AskA
   both to Claude, to compare them or find what links them. The collision physics
   gives the gesture, and Liquid Glass already shows bubbles merging.
 - **Physics shows status** (started): bubbles breathe while busy, rise when something
-  finishes, and wobble when the user is needed (`MicroApp.isBusy`, `Context.play`). Every
-  kind of bubble should report its state the same way; the Web microapp could breathe
-  while a page loads.
+  finishes, and wobble when the user is needed (`MicroApp.isBusy`, `Context.play`). Ask AI
+  does all three, and a Web bubble breathes while its page loads and rises once it has.
+  Still to do: a Web bubble should wobble when its page fails to load (`WebApp.stoppedLoading`
+  only tells a finished load from one cut short today), and new kinds of bubbles should
+  report their state the same way.
 - **Space as memory**: bubbles that sit together belong to the same project, now that
   bubbles and where they sit are saved across launches (`Sources/Honu/Persistence.swift`).
 - **Confirm before side effects**: before Claude sends mail, changes a file, or runs a
