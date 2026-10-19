@@ -137,24 +137,33 @@ final class ClaudeCode: ClaudeClient {
         environment.filter { $0.key != "ANTHROPIC_API_KEY" }
     }
 
-    /// Runs `claude` on `question` and feeds its answer into `stream` until
-    /// it ends, stopping `claude` if the stream is cancelled first.
-    nonisolated private static func receive(
-        _ question: String, from executable: URL, into stream: AnswerStream
+    /// Runs `executable` (`claude`) in `directory` on `question` and feeds its
+    /// answer into `stream` until it ends, stopping it if the stream is
+    /// cancelled first.
+    nonisolated static func receive(
+        _ question: String, from executable: URL, in directory: URL = workingDirectory,
+        into stream: AnswerStream
     ) async {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
         process.environment = environment(ProcessInfo.processInfo.environment)
-        try? FileManager.default.createDirectory(
-            at: workingDirectory, withIntermediateDirectories: true)
-        process.currentDirectoryURL = workingDirectory
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        process.currentDirectoryURL = directory
         let input = Pipe()
         let output = Pipe()
         let errors = Pipe()
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errors
+        // Set before it runs, so its exit cannot be missed; waited for
+        // without holding a thread.
+        let exit = AsyncStream<Int32> { exited in
+            process.terminationHandler = {
+                exited.yield($0.terminationStatus)
+                exited.finish()
+            }
+        }
         do {
             try process.run()
         } catch {
@@ -165,6 +174,9 @@ final class ClaudeCode: ClaudeClient {
         try? input.fileHandleForWriting.close()
 
         await withTaskCancellationHandler {
+            // Standard error is read alongside the answer: left unread, a full
+            // pipe would stop `claude` mid-answer, and the answer would never end.
+            async let errorOutput = readToEnd(errors.fileHandleForReading)
             do {
                 for try await line in output.fileHandleForReading.bytes.lines {
                     if Task.isCancelled { return }
@@ -177,12 +189,24 @@ final class ClaudeCode: ClaudeClient {
                 // The output broke off; report it below like any early end.
             }
             if Task.isCancelled { return }
-            process.waitUntilExit()
-            let detail = String(
-                decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            stream.send(EventParser.finish(status: process.terminationStatus, errors: detail))
+            var status: Int32 = -1
+            for await code in exit {
+                status = code
+            }
+            let detail = String(decoding: await errorOutput, as: UTF8.self)
+            stream.send(EventParser.finish(status: status, errors: detail))
         } onCancel: {
             process.terminate()
+        }
+    }
+
+    /// Everything `handle` gives until it ends, read on a thread of its own,
+    /// apart from the one reading the answer.
+    nonisolated private static func readToEnd(_ handle: FileHandle) async -> Data {
+        await withCheckedContinuation { read in
+            DispatchQueue.global().async {
+                read.resume(returning: handle.readDataToEndOfFile())
+            }
         }
     }
 }

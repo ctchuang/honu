@@ -102,6 +102,45 @@ struct ClaudeCodeTests {
         #expect(ClaudeCode.workingDirectory.path() == home.path() + ".honu/")
     }
 
+    /// Runs a stand-in for `claude`, the shell `script`, on a question, and
+    /// returns what it streamed.
+    private func answer(from script: String) async throws -> [ClaudeEvent] {
+        let folder = temporaryDirectory()
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let executable = folder.appending(path: "claude")
+        try ("#!/bin/sh\n" + script).write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: executable.path())
+        let stream = AnswerStream()
+        await ClaudeCode.receive("Why?", from: executable, in: folder, into: stream)
+        return stream.take().events
+    }
+
+    @Test func theAnswerStreamsInFromClaudeCode() async throws {
+        let events = try await answer(
+            from: #"""
+                cat > /dev/null
+                echo '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Salt."}}}'
+                echo '{"type":"result","is_error":false}'
+                """#)
+        #expect(events == [.text("Salt."), .done])
+    }
+
+    @Test func aLotWrittenToStandardErrorDoesNotStallTheAnswer() async throws {
+        // More than a pipe holds, so it blocks unless it is read as it comes.
+        let events = try await answer(
+            from: """
+                head -c 200000 /dev/zero | tr '\\0' x >&2
+                exit 3
+                """)
+        let failure = try #require(events.last)
+        guard case .failed(let detail) = failure else {
+            Issue.record("ended with \(failure)")
+            return
+        }
+        #expect(detail.count == 200_000 && detail.allSatisfy { $0 == "x" })
+    }
+
     @Test func anAPIKeyInTheEnvironmentIsNotPassedOn() {
         let environment = ClaudeCode.environment(["ANTHROPIC_API_KEY": "sk-ant-x", "HOME": "/h"])
         #expect(environment == ["HOME": "/h"])
