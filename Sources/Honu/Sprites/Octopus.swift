@@ -131,7 +131,7 @@ final class Octopus {
 
     /// Whether a bubble dropped with the pointer at `point` would be swallowed.
     func inReach(_ point: CGPoint) -> Bool {
-        isUp && hypot(point.x - middle.x, point.y - middle.y) < Self.reach
+        isUp && (point - middle).length < Self.reach
     }
 
     /// Where the "Click to undo" hint is drawn, above the octopus.

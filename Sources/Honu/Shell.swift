@@ -147,13 +147,21 @@ final class Shell {
     /// bubble showing it, which opens into its panel when it lands.
     func start(_ id: AppID) {
         guard let app = registry.app(id) else { return }
-        let item = app.create()
-        let bubble = stage.add(
-            target: ViewTarget(app: id, item: item), center: turtle.center,
-            appearance: app.appearance(of: item),
-            viewState: app.newViewState(for: item, fresh: true))
+        let bubble = addBubble(showing: app.create(), of: app, at: turtle.center, fresh: true)
         stage.spitPanel(bubble, from: turtle.spit())
         typeAheadTarget = bubble.id
+    }
+
+    /// Adds a bubble at `center` showing `item` of `app`, looking the way
+    /// `app` says, with a view state of its own. A `fresh` item, just
+    /// created, may take the focus.
+    private func addBubble(
+        showing item: ItemID, of app: any MicroApp, at center: CGPoint, fresh: Bool
+    ) -> Bubble {
+        stage.add(
+            target: ViewTarget(app: app.id, item: item), center: center,
+            appearance: app.appearance(of: item),
+            viewState: app.newViewState(for: item, fresh: fresh))
     }
 
     /// Hands `text`, typed while no field has the focus, to the newest bubble
@@ -299,11 +307,8 @@ final class Shell {
         }
         for saved in state.bubbles where registry.has(saved.target) {
             guard let app = registry.app(saved.target.app) else { continue }
-            let item = saved.target.item
-            let bubble = stage.add(
-                target: saved.target, center: center + saved.offset,
-                appearance: app.appearance(of: item),
-                viewState: app.newViewState(for: item, fresh: false))
+            let bubble = addBubble(
+                showing: saved.target.item, of: app, at: center + saved.offset, fresh: false)
             bubble.isOpen = saved.isOpen
         }
         for app in registry.apps {

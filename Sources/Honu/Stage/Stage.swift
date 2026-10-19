@@ -104,7 +104,7 @@ final class Stage {
     /// How far the dragged bubble is from where it was picked up.
     var dragDistance: CGFloat? {
         guard let drag else { return nil }
-        return hypot(drag.bubble.center.x - drag.home.x, drag.bubble.center.y - drag.home.y)
+        return (drag.bubble.center - drag.home).length
     }
 
     /// Moves the dragged bubble `translation` away from where it was picked
@@ -142,8 +142,7 @@ final class Stage {
         for _ in 0..<Self.cascadeLimit {
             let taken = bubbles.contains {
                 $0 !== bubble && ($0.isOpen || $0.isInFlight) && !$0.isSwallowed
-                    && hypot($0.destination.x - place.x, $0.destination.y - place.y)
-                        < Self.cascadeStep
+                    && ($0.destination - place).length < Self.cascadeStep
             }
             if !taken { break }
             place = clamped(

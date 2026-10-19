@@ -113,14 +113,14 @@ final class Bubble: Identifiable {
 
     var isInFlight: Bool { flight != nil }
 
-    /// Whether the pointer can pick it up.
-    var isGrabbable: Bool { !isInFlight && !isSwallowed }
+    /// Whether it is left to the physics: not following a path of its own.
+    var isFree: Bool { !isInFlight && !isSwallowed }
+
+    /// Whether the pointer can pick it up: only while it is free.
+    var isGrabbable: Bool { isFree }
 
     /// Whether it is out of sight in the octopus's stomach.
     var isHidden: Bool { isSwallowed && !isInFlight }
-
-    /// Whether it is left to the physics: not following a path of its own.
-    var isFree: Bool { !isInFlight && !isSwallowed }
 
     /// How far the glass swells this frame from breathing. Only the glass
     /// swells, so the content and hit-testing hold still.
