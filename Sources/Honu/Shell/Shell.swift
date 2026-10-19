@@ -78,39 +78,6 @@ final class Shell {
         return true
     }
 
-    // MARK: What the views show
-
-    /// One item of the turtle's menu, which starts a new item in a microapp.
-    struct MenuChoice: Identifiable {
-        let id: AppID
-        let label: String
-    }
-
-    /// The turtle's menu items, one per microapp.
-    var menuChoices: [MenuChoice] {
-        registry.apps.map { MenuChoice(id: $0.id, label: $0.menuLabel) }
-    }
-
-    /// How `bubble` looks, as its microapp says.
-    func appearance(of bubble: Bubble) -> Appearance {
-        registry.app(bubble.target.app)?.appearance(of: bubble.target.item) ?? Appearance()
-    }
-
-    func title(of bubble: Bubble) -> String {
-        registry.title(of: bubble.target)
-    }
-
-    /// What an open `bubble` shows, made by its microapp.
-    func content(of bubble: Bubble) -> AnyView? {
-        registry.app(bubble.target.app)?.anyContent(
-            of: bubble.target.item, viewState: bubble.viewState)
-    }
-
-    /// Opens a closed bubble into its panel, or closes an open one.
-    func toggle(_ bubble: Bubble) {
-        stage.toggle(bubble)
-    }
-
     // MARK: The turtle and its menu
 
     /// Opens the turtle's menu at `point`, with a little hop.
@@ -152,7 +119,7 @@ final class Shell {
     /// Adds a bubble at `center` showing `item` of `app`, looking the way
     /// `app` says, with a view state of its own. A `fresh` item, just
     /// created, may take the focus.
-    private func addBubble(
+    func addBubble(
         showing item: ItemID, of app: any MicroApp, at center: CGPoint, fresh: Bool
     ) -> Bubble {
         stage.add(
@@ -269,49 +236,5 @@ final class Shell {
     /// Saves now, as when quitting.
     func save() {
         autosave.save(snapshot())
-    }
-
-    /// What to keep for the next launch: places relative to the center of the
-    /// screen, so they come back in place on a screen of another size.
-    func snapshot() -> SavedState {
-        let center = stage.center
-        var state = SavedState()
-        state.turtle = turtle.rest.map { $0 - center }
-        // A bubble still in the octopus when Honu quits counts as deleted.
-        state.bubbles = stage.bubbles.filter { !$0.isSwallowed }.map {
-            // Where it is going, so a bubble saved mid-flight comes back where it lands.
-            SavedBubble(target: $0.target, offset: $0.destination - center, isOpen: $0.isOpen)
-        }
-        for app in registry.apps {
-            if let data = app.save(), let json = String(data: data, encoding: .utf8) {
-                state.apps[app.id.rawValue] = json
-            }
-        }
-        return state
-    }
-
-    /// Puts back what was saved on the last launch, without the focus, and
-    /// deletes items no bubble showed, such as one still in the octopus.
-    private func restore(_ state: SavedState) {
-        let center = stage.center
-        if let offset = state.turtle {
-            turtle.move(to: center + offset)
-        }
-        for app in registry.apps {
-            if let json = state.apps[app.id.rawValue] {
-                app.load(Data(json.utf8))
-            }
-        }
-        for saved in state.bubbles where registry.has(saved.target) {
-            guard let app = registry.app(saved.target.app) else { continue }
-            let bubble = addBubble(
-                showing: saved.target.item, of: app, at: center + saved.offset, fresh: false)
-            bubble.isOpen = saved.isOpen
-        }
-        for app in registry.apps {
-            for item in app.items where !stage.shows(ViewTarget(app: app.id, item: item)) {
-                app.remove(item)
-            }
-        }
     }
 }
