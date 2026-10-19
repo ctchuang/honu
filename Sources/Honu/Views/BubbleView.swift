@@ -16,10 +16,8 @@ struct BubbleView: View {
     }
 
     var body: some View {
-        let app = shell.registry.app(bubble.target.app)
-        let appearance = app?.appearance(of: bubble.target.item) ?? Appearance()
-        let title = shell.registry.title(of: bubble.target)
-        content(app: app, appearance: appearance, title: title)
+        let appearance = shell.appearance(of: bubble)
+        content(appearance: appearance, title: shell.title(of: bubble))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Content below another bubble is drawn above that bubble's glass,
             // so it is cut away too.
@@ -32,7 +30,7 @@ struct BubbleView: View {
                 glassStyle(appearance), in: CutAway(shape: shape, swell: bubble.swell, cuts: cuts)
             )
             .glassEffectID(bubble.id, in: glass)
-            .onTapGesture(count: 2) { shell.stage.toggle(bubble) }
+            .onTapGesture(count: 2) { shell.toggle(bubble) }
             .gesture(drag)
     }
 
@@ -42,7 +40,7 @@ struct BubbleView: View {
     }
 
     @ViewBuilder
-    private func content(app: (any MicroApp)?, appearance: Appearance, title: String) -> some View {
+    private func content(appearance: Appearance, title: String) -> some View {
         if bubble.isOpen {
             VStack(spacing: 0) {
                 Text(title)
@@ -52,7 +50,7 @@ struct BubbleView: View {
                     .padding(.horizontal, 24)
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
-                app?.content(of: bubble.target.item, viewState: bubble.viewState)
+                shell.content(of: bubble)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .padding([.horizontal, .bottom], 10)
             }
