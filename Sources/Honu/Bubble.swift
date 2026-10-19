@@ -103,6 +103,11 @@ final class Bubble: Identifiable {
         return outline.path(in: frame).contains(point)
     }
 
+    /// Where it is drawn this frame, moved by the motion being played.
+    var drawnFrame: CGRect {
+        frame.offsetBy(dx: motionOffset.width, dy: motionOffset.height)
+    }
+
     /// Where it is going to rest: where a flight ends, otherwise where it is.
     var destination: CGPoint { flight?.to ?? center }
 

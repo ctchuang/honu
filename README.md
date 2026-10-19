@@ -14,7 +14,8 @@ Swift with SwiftUI and Liquid Glass.
 
 Liquid Glass bubbles float directly on your desktop, above other windows. A little
 pixel turtle spits them out: notes to write in, questions for Claude whose answers stream
-in, and web pages, which can also play YouTube videos. Bubbles that come close blend into each other.
+in, and web pages, which can also play YouTube videos. The bubble you press comes to the
+top and covers the others.
 
 ## Getting started
 
@@ -59,7 +60,8 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
   page (YouTube links play the video), and **Exit** quits Honu. A closed note shows its
   first line.
 - **Drag** a bubble to move it, and **throw** it to let it glide. Idle bubbles drift, and
-  crowded ones push each other apart; drag bubbles close together to watch the glass merge.
+  crowded ones push each other apart. The bubble you press or drag comes to the top and
+  covers the others.
 - To delete a bubble, drag it to the pixel octopus that comes up in a bottom corner
   while you drag, and let go. Changed your mind? For a few seconds afterwards,
   **click** the octopus (or press <kbd>⌘</kbd><kbd>Z</kbd>) and it spits the bubble back.
