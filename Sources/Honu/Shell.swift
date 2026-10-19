@@ -24,6 +24,8 @@ final class Shell {
     /// Where the turtle was when the current drag of it began.
     @ObservationIgnored private var turtleDragStart: CGPoint?
     @ObservationIgnored private let autosave: Autosave
+    /// When `tick` last ran, for how far to move things.
+    @ObservationIgnored private var lastTick: TimeInterval?
 
     /// How far a bubble must be dragged before the octopus comes up, so
     /// nudging a bubble into place does not call it.
@@ -125,13 +127,15 @@ final class Shell {
     /// Moves `bubble`, picking it up if it is not yet. Holding it over the
     /// octopus shrinks it, and letting go there deletes it. Where the pointer
     /// is decides, not where the bubble is, so only a deliberate drop deletes.
-    func dragBubble(_ bubble: Bubble, by translation: CGSize, pointer: CGPoint) {
+    func dragBubble(
+        _ bubble: Bubble, by translation: CGSize, velocity: CGSize = .zero, pointer: CGPoint
+    ) {
         if !stage.isDragging {
             stage.startDrag(bubble)
         }
         let doomed = octopus.inReach(pointer)
         octopus.isEager = doomed
-        stage.dragged(by: translation, doomed: doomed)
+        stage.dragged(by: translation, velocity: velocity, doomed: doomed)
         let summoned = (stage.dragDistance ?? 0) > Self.summonDistance
         octopus.summon(summoned, turtle: turtle.center)
     }
@@ -140,6 +144,7 @@ final class Shell {
         let doomed = octopus.inReach(pointer)
         octopus.isEager = false
         guard let (bubble, home) = stage.endDrag() else { return }
+        autosave.moved()
         if doomed {
             octopus.swallow(bubble.id, home: home)
             stage.swallow(bubble, into: octopus.mouth)
@@ -154,9 +159,14 @@ final class Shell {
         stage.spitBack(bubble, from: octopus.mouth, to: swallowed.home)
     }
 
-    /// Catches up on what happens over time: deletes for good the bubbles the
-    /// octopus forgets, and saves what changed. Called many times a second.
-    func tick() {
+    /// Catches up on what happens over time: moves the bubbles, deletes for
+    /// good the bubbles the octopus forgets, and saves what changed. Called
+    /// many times a second.
+    func tick(at time: TimeInterval = now()) {
+        // A long pause, such as while the Mac slept, moves nothing far.
+        let dt = min(time - (lastTick ?? time), 1.0 / 30)
+        lastTick = time
+        stage.step(time: time, dt: dt)
         for id in octopus.forget() {
             if let bubble = stage.remove(id), !stage.shows(bubble.target) {
                 registry.remove(bubble.target)

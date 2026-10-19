@@ -39,7 +39,7 @@ struct StageView: View {
                     BubbleView(bubble: bubble, shell: shell, glass: glass)
                         .frame(width: bubble.size.width, height: bubble.size.height)
                         .scaleEffect(bubble.drawnScale)
-                        .opacity(bubble.isSwallowed ? 0 : 1)
+                        .opacity(bubble.isHidden ? 0 : 1)
                         .allowsHitTesting(bubble.isGrabbable)
                         .position(bubble.center)
                 }

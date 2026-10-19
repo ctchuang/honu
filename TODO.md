@@ -7,10 +7,8 @@ this prototype. Bring these over:
 
 - Ask AI streaming answers from Claude through the Messages API, with the panel growing
   to fit the answer.
-- Physics: thrown bubbles glide, idle bubbles float, crowded bubbles push apart.
 - Breathing while busy, and the `Rise` and `Wobble` gestures.
 - Type-ahead: text typed while a new bubble flies out of the turtle goes into it.
-- Bubbles flying out of the turtle along their own curved paths.
 - Click-through on the actual bubble shape rather than its bounding rectangle.
 
 ## LLM integration

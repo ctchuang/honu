@@ -67,7 +67,10 @@ struct BubbleView: View {
 
     private var drag: some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .named(ShellView.space))
-            .onChanged { shell.dragBubble(bubble, by: $0.translation, pointer: $0.location) }
+            .onChanged {
+                shell.dragBubble(
+                    bubble, by: $0.translation, velocity: $0.velocity, pointer: $0.location)
+            }
             .onEnded { shell.endBubbleDrag(pointer: $0.location) }
     }
 }

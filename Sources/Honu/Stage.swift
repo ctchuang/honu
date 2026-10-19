@@ -1,72 +1,8 @@
 import SwiftUI
 
-/// Names one bubble on the stage.
-struct BubbleID: Hashable, Sendable {
-    let rawValue: Int
-}
-
-/// One bubble: a view of one item of one microapp. A glass square when
-/// closed, a panel showing the item when open.
-@Observable
-@MainActor
-final class Bubble: Identifiable {
-    let id: BubbleID
-    let target: ViewTarget
-    var center: CGPoint
-    /// Where it is flying to, or where it is.
-    var destination: CGPoint
-    var isOpen = false
-    let closedSide: CGFloat
-    let panelSize: CGSize
-    /// What the bubble keeps for itself about its item, made by its microapp.
-    @ObservationIgnored let viewState: AnyObject?
-    /// Scale while flying out of the turtle or into the octopus.
-    var scale: CGFloat = 1
-    /// Flying out of the turtle or back from the octopus; it cannot be grabbed until it lands.
-    var isInFlight = false
-    /// Held over the octopus, where letting go deletes it; it shrinks.
-    var isDoomed = false
-    /// In the octopus's stomach, out of sight, until it is forgotten or spat back.
-    var isSwallowed = false
-
-    static let doomedScale: CGFloat = 0.6
-
-    init(
-        id: BubbleID, target: ViewTarget, center: CGPoint, appearance: Appearance,
-        viewState: AnyObject?
-    ) {
-        self.id = id
-        self.target = target
-        self.center = center
-        destination = center
-        closedSide = appearance.closedSide
-        panelSize = appearance.panelSize
-        self.viewState = viewState
-    }
-
-    var size: CGSize {
-        isOpen ? panelSize : CGSize(width: closedSide, height: closedSide)
-    }
-
-    /// The scale it is drawn at.
-    var drawnScale: CGFloat {
-        scale * (isDoomed ? Self.doomedScale : 1)
-    }
-
-    /// Where it is drawn, for hit-testing.
-    var frame: CGRect {
-        let size = CGSize(width: size.width * drawnScale, height: size.height * drawnScale)
-        return CGRect(
-            x: center.x - size.width / 2, y: center.y - size.height / 2,
-            width: size.width, height: size.height)
-    }
-
-    /// Whether the pointer can pick it up.
-    var isGrabbable: Bool { !isInFlight && !isSwallowed }
-}
-
 /// Every bubble in back-to-front paint order (pressing on a bubble moves it
-/// to the top), and how they are picked up, dragged, opened, and spat out.
+/// to the top), and how they are picked up, dragged, opened, spat out, and
+/// set moving.
 /// Bubbles swallowed by the octopus stay here too, out of sight, until it
 /// forgets them. The stage knows nothing of what a bubble shows.
 @Observable
@@ -142,7 +78,6 @@ final class Stage {
         withAnimation(.bouncy(duration: 0.5, extraBounce: 0.15)) {
             bubble.isOpen.toggle()
             bubble.center = clamped(bubble.center, size: bubble.size)
-            bubble.destination = bubble.center
         }
     }
 
@@ -170,12 +105,13 @@ final class Stage {
     }
 
     /// Moves the dragged bubble `translation` away from where it was picked
-    /// up. A `doomed` bubble, held where letting go deletes it, shrinks.
-    func dragged(by translation: CGSize, doomed: Bool) {
+    /// up, remembering the pointer's `velocity` so it keeps gliding when let
+    /// go. A `doomed` bubble, held where letting go deletes it, shrinks.
+    func dragged(by translation: CGSize, velocity: CGSize = .zero, doomed: Bool) {
         guard let drag else { return }
         drag.bubble.center = CGPoint(
             x: drag.home.x + translation.width, y: drag.home.y + translation.height)
-        drag.bubble.destination = drag.bubble.center
+        drag.bubble.velocity = CGPoint(x: velocity.width, y: velocity.height)
         if drag.bubble.isDoomed != doomed {
             withAnimation(.spring(duration: 0.25)) { drag.bubble.isDoomed = doomed }
         }
@@ -211,18 +147,12 @@ final class Stage {
                 CGPoint(x: place.x + Self.cascadeStep, y: place.y + Self.cascadeStep),
                 size: bubble.panelSize)
         }
-        fly(bubble, from: mouth, to: place, openOnLanding: true)
+        bubble.fly(from: mouth, to: place, openOnLanding: true)
     }
 
     /// Sends `bubble` into the octopus's `mouth`, where it stays out of sight.
     func swallow(_ bubble: Bubble, into mouth: CGPoint) {
-        bubble.isInFlight = true
-        bubble.destination = mouth
-        withAnimation(.easeIn(duration: 0.3)) {
-            bubble.center = mouth
-            bubble.scale = 0.05
-            bubble.isSwallowed = true
-        }
+        bubble.swallow(into: mouth)
     }
 
     /// Brings swallowed `bubble` back on top: it pops out of `mouth` and
@@ -231,33 +161,15 @@ final class Stage {
         guard let index = bubbles.firstIndex(where: { $0 === bubble }) else { return }
         bubbles.remove(at: index)
         putOnTop(bubble)
-        let wasOpen = bubble.isOpen
-        // Fly back closed, like any new bubble.
-        bubble.isOpen = false
-        bubble.isDoomed = false
-        bubble.isSwallowed = false
-        fly(bubble, from: mouth, to: home, openOnLanding: wasOpen)
+        bubble.fly(from: mouth, to: home, openOnLanding: bubble.isOpen)
     }
 
-    /// Flies `bubble` from `start`, small, to `place`, growing on the way.
-    private func fly(_ bubble: Bubble, from start: CGPoint, to place: CGPoint, openOnLanding: Bool)
-    {
-        bubble.isInFlight = true
-        bubble.center = start
-        bubble.destination = place
-        bubble.scale = 0.15
-        // Let the bubble show at the start first, so the flight animates from there.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(20))
-            withAnimation(.spring(duration: 0.8, bounce: 0.2)) {
-                bubble.center = place
-                bubble.scale = 1
-            } completion: {
-                bubble.isInFlight = false
-                if openOnLanding && !bubble.isOpen && !bubble.isSwallowed {
-                    self.toggle(bubble)
-                }
-            }
+    /// Advances every bubble's flight and motion by `dt` seconds at `time`. A
+    /// dragged bubble follows the pointer instead of the physics.
+    func step(time: Double, dt: Double) {
+        for bubble in bubbles where bubble.animate(dt: dt) {
+            toggle(bubble)
         }
+        Physics.step(bubbles, bounds: size, held: drag?.bubble, time: time, dt: dt)
     }
 }

@@ -53,7 +53,7 @@ final class Octopus {
     /// Seconds a swallowed bubble can still be brought back.
     static let undoSeconds: TimeInterval = 5
     /// Seconds a bubble takes to go down, and the gulp afterwards lasts.
-    private static let swallowSeconds: TimeInterval = 0.3
+    private static let swallowSeconds = Bubble.swallowSeconds
     private static let gulpSeconds: TimeInterval = 0.3
     /// Tentacle sways per second while idle and while eagerly waiting for a drop.
     private static let swayRate: Double = 2

@@ -39,7 +39,8 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
   a note to write in, **Open Web Page** a bubble that asks for a link and then shows the
   page (YouTube links play the video), and **Exit** quits Honu. A closed note shows its
   first line.
-- **Drag** a bubble to move it. Drag bubbles close together to watch the glass merge.
+- **Drag** a bubble to move it, and **throw** it to let it glide. Idle bubbles drift, and
+  crowded ones push each other apart; drag bubbles close together to watch the glass merge.
 - To delete a bubble, drag it to the pixel octopus that comes up in a bottom corner
   while you drag, and let go. Changed your mind? For a few seconds afterwards,
   **click** the octopus (or press <kbd>⌘</kbd><kbd>Z</kbd>) and it spits the bubble back.

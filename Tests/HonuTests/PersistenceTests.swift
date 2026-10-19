@@ -92,3 +92,30 @@ struct PersistenceTests {
         #expect(shell.stage.bubbles.last === bubble)
     }
 }
+
+@MainActor
+struct AutosaveDriftTests {
+    @Test func driftingIsNotAChangeButDraggingIs() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "honu-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appending(path: "state.json")
+        let shell = Shell(size: CGSize(width: 1200, height: 800), storeURL: url)
+        shell.start(AppID("notes"))
+        let bubble = try #require(shell.stage.bubbles.first)
+        // Let it land, open, and be saved.
+        for frame in 0...120 {
+            shell.tick(at: 1000 + Double(frame) / 60)
+        }
+        shell.save()
+        try FileManager.default.removeItem(at: url)
+
+        bubble.center.x += 3
+        shell.save()
+        #expect(!FileManager.default.fileExists(atPath: url.path()), "saved a drift")
+
+        shell.dragBubble(bubble, by: CGSize(width: 100, height: 0), pointer: bubble.center)
+        shell.endBubbleDrag(pointer: bubble.center)
+        shell.save()
+        #expect(FileManager.default.fileExists(atPath: url.path()), "lost a drag")
+    }
+}

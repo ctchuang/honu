@@ -7,6 +7,17 @@ private struct SavedState: Codable {
     var bubbles: [SavedBubble] = []
     /// Each microapp's items, as the JSON it saved, by microapp id.
     var apps: [String: String] = [:]
+
+    /// The same without where the bubbles are, to tell real changes from drifting.
+    var unplaced: SavedState {
+        var state = self
+        state.bubbles = bubbles.map {
+            var bubble = $0
+            bubble.offset = .zero
+            return bubble
+        }
+        return state
+    }
 }
 
 private struct SavedBubble: Codable {
@@ -31,11 +42,20 @@ final class Autosave {
 
     /// Where it saves.
     private let url: URL
+    /// What was last saved, apart from where the bubbles are.
     private var lastSaved: Data?
     private var lastCheck = -TimeInterval.infinity
+    /// Whether a bubble was moved on purpose since the last save. Bubbles
+    /// drifting idly are not a change worth writing, but a dragged one is.
+    private var isMoved = false
 
     init(url: URL) {
         self.url = url
+    }
+
+    /// Notes that a bubble was dragged somewhere, so its place is saved.
+    func moved() {
+        isMoved = true
     }
 
     /// Saves if a second has passed since the last check and anything changed.
@@ -49,12 +69,17 @@ final class Autosave {
         lastCheck = now()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        guard let data = try? encoder.encode(state(of: shell)), data != lastSaved else { return }
+        let state = state(of: shell)
+        guard let data = try? encoder.encode(state),
+            let unplaced = try? encoder.encode(state.unplaced),
+            unplaced != lastSaved || isMoved
+        else { return }
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
-            lastSaved = data
+            lastSaved = unplaced
+            isMoved = false
         } catch {
             // Try again at the next check.
         }
@@ -89,7 +114,11 @@ final class Autosave {
         guard let data = try? Data(contentsOf: url),
             let state = try? JSONDecoder().decode(SavedState.self, from: data)
         else { return }
-        lastSaved = data
+        lastSaved = try? {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+            return try encoder.encode(state.unplaced)
+        }()
         let center = Self.center(of: shell.stage.size)
         if let offset = state.turtle {
             shell.turtle.move(to: CGPoint(x: center.x + offset.x, y: center.y + offset.y))
