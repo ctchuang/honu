@@ -57,6 +57,29 @@ struct ItemIDs {
     }
 }
 
+/// Something a microapp asks of the bubbles showing its items.
+enum Effect: Equatable {
+    /// Every bubble showing the target plays the motion.
+    case motion(ViewTarget, Motion)
+}
+
+/// What a microapp gets to work with while it catches up: a way to ask
+/// things of the bubbles showing its items.
+@MainActor
+final class Context {
+    let app: AppID
+    private(set) var effects: [Effect] = []
+
+    init(app: AppID) {
+        self.app = app
+    }
+
+    /// Has every bubble showing `item` play `motion`.
+    func play(_ motion: Motion, for item: ItemID) {
+        effects.append(.motion(ViewTarget(app: app, item: item), motion))
+    }
+}
+
 /// A microapp: it keeps its items and makes the views that show them.
 @MainActor
 protocol MicroApp: AnyObject {
@@ -72,6 +95,13 @@ protocol MicroApp: AnyObject {
 
     /// The label of the bubbles showing `item`.
     func title(of item: ItemID) -> String
+
+    /// Whether `item` is being worked on, which makes its bubbles breathe.
+    func isBusy(_ item: ItemID) -> Bool
+
+    /// Catches up on work done in the background, asking things of the
+    /// bubbles through `context`. Called many times a second.
+    func update(_ context: Context)
 
     /// What one new bubble showing `item` keeps for itself apart from the
     /// item's data, such as a draft or whether it still has to take the
@@ -96,6 +126,8 @@ protocol MicroApp: AnyObject {
 }
 
 extension MicroApp {
+    func isBusy(_ item: ItemID) -> Bool { false }
+    func update(_ context: Context) {}
     func newViewState(for item: ItemID, fresh: Bool) -> AnyObject? { nil }
 }
 
@@ -123,6 +155,19 @@ final class Registry {
 
     func remove(_ target: ViewTarget) {
         app(target.app)?.remove(target.item)
+    }
+
+    func isBusy(_ target: ViewTarget) -> Bool {
+        app(target.app)?.isBusy(target.item) ?? false
+    }
+
+    /// Lets every microapp catch up, returning what they ask of their bubbles.
+    func update() -> [Effect] {
+        apps.flatMap { app in
+            let context = Context(app: app.id)
+            app.update(context)
+            return context.effects
+        }
     }
 }
 

@@ -42,6 +42,7 @@ struct StageView: View {
                         .opacity(bubble.isHidden ? 0 : 1)
                         .allowsHitTesting(bubble.isGrabbable)
                         .position(bubble.center)
+                        .offset(bubble.motionOffset)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

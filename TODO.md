@@ -7,7 +7,6 @@ this prototype. Bring these over:
 
 - Ask AI streaming answers from Claude through the Messages API, with the panel growing
   to fit the answer.
-- Breathing while busy, and the `Rise` and `Wobble` gestures.
 - Type-ahead: text typed while a new bubble flies out of the turtle goes into it.
 - Click-through on the actual bubble shape rather than its bounding rectangle.
 
@@ -29,9 +28,10 @@ chat window. The turtle, the octopus, notes, and saving across launches are back
 - **Bumping bubbles shares their context**: dragging one bubble into another hands
   both to Claude, to compare them or find what links them. The collision physics
   gives the gesture, and Liquid Glass already shows bubbles merging.
-- **Physics shows status**: bubbles breathe while Claude works, float up when the answer
-  is in, and wobble when something needs the user. Every kind of bubble should report its
-  state the same way.
+- **Physics shows status** (started): bubbles breathe while busy, rise when something
+  finishes, and wobble when the user is needed (`MicroApp.isBusy`, `Context.play`). Every
+  kind of bubble should report its state the same way; the Web microapp could breathe
+  while a page loads.
 - **Space as memory**: bubbles that sit together belong to the same project, now that
   bubbles and where they sit are saved across launches (`Sources/Honu/Persistence.swift`).
 - **Confirm before side effects**: before Claude sends mail, changes a file, or runs a

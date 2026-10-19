@@ -166,6 +166,7 @@ final class Shell {
         // A long pause, such as while the Mac slept, moves nothing far.
         let dt = min(time - (lastTick ?? time), 1.0 / 30)
         lastTick = time
+        updateApps()
         stage.step(time: time, dt: dt)
         for id in octopus.forget() {
             if let bubble = stage.remove(id), !stage.shows(bubble.target) {
@@ -173,6 +174,25 @@ final class Shell {
             }
         }
         autosave.tick(self)
+    }
+
+    /// Lets the microapps catch up, shows on each bubble what its item is
+    /// doing (it breathes while busy), and plays the motions they ask for.
+    private func updateApps() {
+        for effect in registry.update() {
+            switch effect {
+            case .motion(let target, let motion):
+                for bubble in stage.bubbles where bubble.target == target {
+                    bubble.play(motion)
+                }
+            }
+        }
+        for bubble in stage.bubbles {
+            let busy = registry.isBusy(bubble.target)
+            if bubble.isBusy != busy {
+                bubble.isBusy = busy
+            }
+        }
     }
 
     /// Saves now, as when quitting.

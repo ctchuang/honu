@@ -21,8 +21,13 @@ struct BubbleView: View {
         content(app: app, appearance: appearance, title: title)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(shape)
-            .glassEffect(glassStyle(appearance), in: shape)
-            .glassEffectID(bubble.id, in: glass)
+            .background {
+                // Only the glass breathes, so the content holds still.
+                Color.clear
+                    .glassEffect(glassStyle(appearance), in: shape)
+                    .glassEffectID(bubble.id, in: glass)
+                    .padding(-bubble.swell)
+            }
             .onTapGesture(count: 2) { shell.stage.toggle(bubble) }
             .gesture(drag)
     }
