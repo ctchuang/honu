@@ -101,7 +101,9 @@ final class Autosave {
                 isOpen: $0.isOpen)
         }
         for app in shell.registry.apps {
-            if let data = app.save(), let json = String(data: data, encoding: .utf8) {
+            if let data = app.save().flatMap(Self.canonical),
+                let json = String(data: data, encoding: .utf8)
+            {
                 state.apps[app.id.rawValue] = json
             }
         }
@@ -143,6 +145,15 @@ final class Autosave {
                 app.remove(item)
             }
         }
+    }
+
+    /// `json` with its object keys sorted. `JSONEncoder` may order keys
+    /// differently from one call to the next, which would look like a change.
+    static func canonical(_ json: Data) -> Data? {
+        guard let object = try? JSONSerialization.jsonObject(with: json, options: .fragmentsAllowed)
+        else { return json }
+        return try? JSONSerialization.data(
+            withJSONObject: object, options: [.sortedKeys, .fragmentsAllowed])
     }
 
     private static func center(of size: CGSize) -> CGPoint {

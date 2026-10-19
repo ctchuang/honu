@@ -119,3 +119,12 @@ struct AutosaveDriftTests {
         #expect(FileManager.default.fileExists(atPath: url.path()), "lost a drag")
     }
 }
+
+struct CanonicalJSONTests {
+    @Test @MainActor func keyOrderDoesNotCount() throws {
+        let a = try #require(Autosave.canonical(Data(#"[{"text":"","id":{"rawValue":1}}]"#.utf8)))
+        let b = try #require(Autosave.canonical(Data(#"[{"id":{"rawValue":1},"text":""}]"#.utf8)))
+        #expect(a == b)
+        #expect(Autosave.canonical(Data("not json".utf8)) == Data("not json".utf8))
+    }
+}
