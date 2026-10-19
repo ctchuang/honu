@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Honu is a macOS app written in Swift 6 with **SwiftUI** (hosted in AppKit) — an experiment in desktop GUI design that departs from macOS conventions. Liquid Glass bubbles float directly on the real desktop, above all other windows. It starts with only a pixel-art turtle in the bottom-left corner; clicking it opens a menu whose items make it spit out bubbles (a note, a question for Claude whose answer streams in, or a web page that can also play YouTube videos), and dragging a bubble calls up a pixel-art octopus that deletes it if dropped on. It needs macOS 26 or newer, for Liquid Glass (`glassEffect`) and SwiftUI's `WebView`. The turtle's place, the bubbles, and their items persist across launches in `~/Library/Application Support/Honu/state.json` (delete it to reset).
+Honu is a macOS app written in Swift 6 with **SwiftUI** (hosted in AppKit) — an experiment in desktop GUI design that departs from macOS conventions. Liquid Glass bubbles float directly on the real desktop, above all other windows. It starts with only a pixel-art turtle in the bottom-left corner; clicking it opens a menu whose items make it spit out bubbles (a note, a question for Claude whose answer streams in, or a web page that can also play YouTube videos), and dragging a bubble calls up a pixel-art octopus that deletes it if dropped on. It needs macOS 26 or newer, for Liquid Glass (`glassEffect`) and SwiftUI's `WebView`. The turtle's place, the bubbles, and their items persist across launches in `~/Library/Application Support/Honu/state.json` (delete it to reset), or in the file `HONU_STORE` names, so a development run can keep bubbles of its own.
 
 Honu was first written in Rust with egui; that version is in the git history before the switch to Swift.
 
@@ -13,6 +13,7 @@ Honu was first written in Rust with egui; that version is in the git history bef
 ```sh
 swift build                  # build
 swift run                    # build and launch; bubbles float on the real desktop (quit with ⌘Q)
+HONU_STORE=/tmp/honu.json swift run   # same, saving to a store of its own
 swift build -c release       # optimized build
 swift test                   # run the tests in Tests/HonuTests
 swift test --filter <name>   # run tests whose name matches

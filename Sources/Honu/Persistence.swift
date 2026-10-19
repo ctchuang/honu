@@ -34,6 +34,12 @@ private struct SavedBubble: Codable {
 /// their shape.
 @MainActor
 final class Autosave {
+    /// Where Honu saves: `HONU_STORE` if set, so a development run can keep
+    /// its own bubbles, otherwise the user's Application Support folder.
+    static var storeURL: URL {
+        ProcessInfo.processInfo.environment["HONU_STORE"].map { URL(filePath: $0) } ?? defaultURL
+    }
+
     static let defaultURL = URL.applicationSupportDirectory
         .appending(path: "Honu", directoryHint: .isDirectory)
         .appending(path: "state.json")

@@ -37,7 +37,7 @@ final class Shell {
     /// A shell for a screen of `size`, saving to and restoring from
     /// `storeURL`, whose microapps share `services`.
     init(
-        size: CGSize, storeURL: URL = Autosave.defaultURL, services: Services = .live()
+        size: CGSize, storeURL: URL = Autosave.storeURL, services: Services = .live()
     ) {
         autosave = Autosave(url: storeURL)
         registry = Registry([NotesApp(), AskApp(services: services), WebApp()])
