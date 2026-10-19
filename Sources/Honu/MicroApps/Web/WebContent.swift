@@ -43,12 +43,6 @@ struct WebContent: View {
                 .frame(maxWidth: 420)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            if draft.focusPending {
-                draft.focusPending = false
-                focused = true
-                placeCursorAtEnd()
-            }
-        }
+        .takesFocus(draft, $focused)
     }
 }

@@ -185,5 +185,5 @@ extension MicroApp {
 /// (`MicroApp.typeAhead`), so no keystroke is lost while it flies out.
 @MainActor
 protocol FocusTaking: AnyObject {
-    var focusPending: Bool { get }
+    var focusPending: Bool { get set }
 }

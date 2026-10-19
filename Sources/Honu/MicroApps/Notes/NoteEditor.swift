@@ -37,12 +37,6 @@ struct NoteEditor: View {
                         .allowsHitTesting(false)
                 }
             }
-            .onAppear {
-                if state.focusPending {
-                    state.focusPending = false
-                    focused = true
-                    placeCursorAtEnd()
-                }
-            }
+            .takesFocus(state, $focused)
     }
 }

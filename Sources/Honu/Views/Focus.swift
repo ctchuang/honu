@@ -1,4 +1,17 @@
-import AppKit
+import SwiftUI
+
+extension View {
+    /// Gives the field bound to `focused` the keyboard focus when the view
+    /// appears, if its bubble's `state` still has to take it, and only once.
+    func takesFocus(_ state: some FocusTaking, _ focused: FocusState<Bool>.Binding) -> some View {
+        onAppear {
+            guard state.focusPending else { return }
+            state.focusPending = false
+            focused.wrappedValue = true
+            placeCursorAtEnd()
+        }
+    }
+}
 
 /// Puts the cursor at the end of the text in the field that just took the
 /// focus, rather than selecting it all, so typing carries on where it stops.
