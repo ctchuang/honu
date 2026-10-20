@@ -5,7 +5,7 @@ import Foundation
 /// keeping their ids, so new ids come after restored ones.
 struct ItemTable<Value> {
     /// Each item's value.
-    private(set) var byID: [ItemID: Value] = [:]
+    private var byID: [ItemID: Value] = [:]
     private var ids = ItemIDs()
 
     subscript(item: ItemID) -> Value? {
@@ -14,6 +14,12 @@ struct ItemTable<Value> {
 
     /// Every item, oldest first.
     var items: [ItemID] { byID.keys.sorted() }
+
+    /// Every item with its value, oldest first, so what is done with each
+    /// happens in the same order every time.
+    var entries: [(id: ItemID, value: Value)] {
+        byID.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+    }
 
     /// Adds an item holding `value`, returning its id.
     mutating func insert(_ value: Value) -> ItemID {
@@ -34,7 +40,7 @@ struct ItemTable<Value> {
 
     /// The items, oldest first, as a JSON array of what `saved` makes of each.
     func save<Saved: Encodable>(_ saved: (ItemID, Value) -> Saved) -> Data? {
-        try? JSONEncoder().encode(items.compactMap { id in byID[id].map { saved(id, $0) } })
+        try? JSONEncoder().encode(entries.map { saved($0.id, $0.value) })
     }
 
     /// Takes back the items `save` wrote, as `restored` makes them from each

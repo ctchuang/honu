@@ -88,7 +88,7 @@ final class MakerApp: MicroApp {
     /// page has loaded.
     func update(_ context: Context) {
         let time = now()
-        for (item, microapp) in microapps.byID.sorted(by: { $0.key < $1.key }) {
+        for (item, microapp) in microapps.entries {
             if microapp.poll(services.claude, at: time) == .needsAttention {
                 context.play(.wobble, for: item)
             }
@@ -201,7 +201,7 @@ final class MakerApp: MicroApp {
                     draft: saved.draft, size: size, error: saved.error)
             )
         }
-        let kept = Set(microapps.byID.values.map(\.folder.name))
+        let kept = Set(microapps.entries.map(\.value.folder.name))
         let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path())) ?? []
         for name in names where !kept.contains(name) && UUID(uuidString: name) != nil {
             folder(named: name).trash()

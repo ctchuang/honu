@@ -59,7 +59,7 @@ final class AskApp: MicroApp {
     /// Takes in whatever the answer streams have delivered. A chat's bubbles
     /// rise when its answer is in, and wobble when something needs the user.
     func update(_ context: Context) {
-        for (item, chat) in chats.byID {
+        for (item, chat) in chats.entries {
             switch chat.poll() {
             case .answered: context.play(.rise, for: item)
             case .needsAttention: context.play(.wobble, for: item)
