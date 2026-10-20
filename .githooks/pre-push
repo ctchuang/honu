@@ -1,0 +1,45 @@
+#!/bin/sh
+# Runs the lint and tests CI runs, before a push that changes Swift code.
+# Turn it on once per clone with: git config core.hooksPath .githooks
+# Skip it for one push with: git push --no-verify
+set -eu
+
+zero=0000000000000000000000000000000000000000
+swift_changed=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue  # deleting a branch
+    if [ "$remote_sha" = "$zero" ]; then
+        base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
+    else
+        base=$remote_sha
+    fi
+    if [ -z "$base" ] || git diff --name-only "$base" "$local_sha" \
+        | grep -qE '^(Sources/|Tests/|Package\.(swift|resolved)$|\.swift-format$)'; then
+        swift_changed=yes
+    fi
+done
+[ -z "$swift_changed" ] && exit 0
+
+echo "pre-push: swift format lint --strict" >&2
+swift format lint --strict -r Sources Tests Package.swift
+
+echo "pre-push: swift test" >&2
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
+status=0
+swift test >"$log" 2>&1 || status=$?
+# With the Command Line Tools alone, SwiftPM sometimes fails to hand the compiler
+# Swift Testing's macro plugin; pass it by hand, as CLAUDE.md says.
+if [ "$status" -ne 0 ] && grep -q "plugin for module 'TestingMacros' not found" "$log"; then
+    echo "pre-push: retrying with Swift Testing's plugin path" >&2
+    status=0
+    swift test -Xswiftc -plugin-path \
+        -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing \
+        >"$log" 2>&1 || status=$?
+fi
+if [ "$status" -eq 0 ]; then
+    grep "Test run with" "$log" >&2 || true
+else
+    cat "$log" >&2
+fi
+exit "$status"

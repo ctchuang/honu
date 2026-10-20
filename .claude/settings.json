@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.swift) [ -f \"$f\" ] && { swift format lint --strict \"$f\" 1>&2 || exit 2; } ;; esac; exit 0",
+            "timeout": 60,
+            "statusMessage": "Linting Swift"
+          }
+        ]
+      }
+    ]
+  }
+}

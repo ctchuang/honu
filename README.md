@@ -67,7 +67,12 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
 swift test                                           # run the tests
 swift format lint --strict -r Sources Tests Package.swift   # lint
 swift format -i -r Sources Tests Package.swift     # format
+git config core.hooksPath .githooks                  # lint and test before each push
 ```
+
+The pre-push hook in `.githooks/` runs the lint and the tests when a push changes
+Swift code (`git push --no-verify` skips it). Claude Code also lints each Swift file
+it edits, through the hook in `.claude/settings.json`.
 
 ## License
 
