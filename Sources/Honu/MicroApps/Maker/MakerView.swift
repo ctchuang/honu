@@ -9,8 +9,6 @@ struct MakerView: View {
     let state: FocusRequestState
     @FocusState private var focused: Bool
 
-    static let error = Color(red: 0.85, green: 0.3, blue: 0.25)
-
     var body: some View {
         switch microapp.status {
         case .describing(let error):
@@ -30,7 +28,7 @@ struct MakerView: View {
     private func describing(error: String?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let error {
-                Text(error).foregroundStyle(Self.error).lineLimit(3)
+                Text(error).foregroundStyle(Color.error).lineLimit(3)
             }
             TextField(
                 "Describe a microapp, such as a pomodoro timer", text: Bindable(microapp).draft,
@@ -130,7 +128,7 @@ struct ChangeBar: View {
             if let notice = microapp.notice {
                 Text(notice)
                     .font(.caption)
-                    .foregroundStyle(MakerView.error)
+                    .foregroundStyle(Color.error)
                     .lineLimit(1)
                     .help(notice)
             }

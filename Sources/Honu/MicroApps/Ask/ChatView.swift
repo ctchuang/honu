@@ -7,7 +7,6 @@ struct ChatView: View {
     let state: FocusRequestState
     @FocusState private var focused: Bool
 
-    private static let error = Color(red: 0.75, green: 0.24, blue: 0.2)
     private static let ink = AskApp.ink
 
     var body: some View {
@@ -38,7 +37,7 @@ struct ChatView: View {
     private func questionForm(error: String?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let error {
-                Text(error).foregroundStyle(Self.error)
+                Text(error).foregroundStyle(Color.error)
             }
             TextField("Ask Claude…", text: Bindable(chat).question)
                 .textFieldStyle(.plain)
@@ -69,7 +68,7 @@ struct ChatView: View {
                     Text("Thinking…").foregroundStyle(Self.ink.opacity(0.6))
                 }
             case .failed(let message):
-                Text(message).foregroundStyle(Self.error)
+                Text(message).foregroundStyle(Color.error)
             default:
                 EmptyView()
             }
