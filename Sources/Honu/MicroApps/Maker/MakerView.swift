@@ -81,8 +81,8 @@ struct WritingPreview: View {
 }
 
 /// The bar below a running microapp: a field for asking Claude to change
-/// it, a button to fix the errors it reported, and one to undo the last
-/// change. While Claude writes, it shows how far it has got.
+/// it, with a button that sends it, a button to fix the errors it reported,
+/// and one to undo the last change. While Claude writes, it shows how far it has got.
 struct ChangeBar: View {
     let app: MakerApp
     let item: ItemID
@@ -103,6 +103,12 @@ struct ChangeBar: View {
                 Spacer()
             } else {
                 changeField
+                Button("Go", systemImage: "play.fill") { app.change(item) }
+                    .labelStyle(.iconOnly)
+                    .disabled(
+                        microapp.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                    .help("Ask Claude to change the microapp as you say")
                 if !microapp.problems.isEmpty {
                     let count = microapp.problems.count
                     Button("Fix", systemImage: "exclamationmark.triangle.fill") { app.fix(item) }
@@ -135,7 +141,7 @@ struct ChangeBar: View {
                     .lineLimit(1)
                     .help(notice)
             }
-            TextField("Ask Claude to change it…", text: Bindable(microapp).draft)
+            TextField("How would you like to change this microapp?", text: Bindable(microapp).draft)
                 .textFieldStyle(.plain)
                 .onSubmit { app.change(item) }
         }
