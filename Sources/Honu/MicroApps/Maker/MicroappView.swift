@@ -3,7 +3,7 @@ import SwiftUI
 import WebKit
 
 /// Runs a microapp: its folder's page, served at `honu-app://`, with
-/// `window.honu` to save its state. It loads the page again for each new
+/// `window.honu` to save its state in `dataURL`. It loads the page again for each new
 /// `version`, and tells `app` when the page has loaded, what errors it
 /// reports, and what size it asks for.
 struct MicroappView: View {
@@ -11,11 +11,11 @@ struct MicroappView: View {
     // Spelled out instead of `@State`, whose macro ships only with Xcode.
     private let runner: State<MicroappRunner>
 
-    init(app: MakerApp, item: ItemID, folder: URL, version: Int) {
+    init(app: MakerApp, item: ItemID, folder: URL, dataURL: URL, version: Int) {
         self.version = version
         runner = State(
             initialValue: MicroappRunner(
-                folder: folder,
+                folder: folder, dataURL: dataURL,
                 onLoad: { [weak app] in app?.loaded(item) },
                 onProblem: { [weak app] in app?.report($0, in: item) },
                 onResize: { [weak app] in app?.resize(item, to: $0) }))
@@ -44,21 +44,23 @@ struct MicroappView: View {
 @MainActor
 final class MicroappRunner {
     let folder: URL
+    let dataURL: URL
     let onLoad: () -> Void
     private let onProblem: (String) -> Void
     private let onResize: (CGSize) -> Void
 
     init(
-        folder: URL, onLoad: @escaping () -> Void, onProblem: @escaping (String) -> Void,
-        onResize: @escaping (CGSize) -> Void
+        folder: URL, dataURL: URL, onLoad: @escaping () -> Void,
+        onProblem: @escaping (String) -> Void, onResize: @escaping (CGSize) -> Void
     ) {
         self.folder = folder
+        self.dataURL = dataURL
         self.onLoad = onLoad
         self.onProblem = onProblem
         self.onResize = onResize
     }
 
-    lazy var bridge = Bridge(folder: folder, onProblem: onProblem, onResize: onResize)
+    lazy var bridge = Bridge(dataURL: dataURL, onProblem: onProblem, onResize: onResize)
 
     lazy var page: WebPage = {
         var configuration = WebPage.Configuration()

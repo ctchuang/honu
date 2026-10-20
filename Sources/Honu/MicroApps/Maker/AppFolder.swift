@@ -9,6 +9,8 @@ struct AppFolder: Equatable {
     var name: String { url.lastPathComponent }
     var pageURL: URL { url.appending(path: "index.html") }
     var historyURL: URL { url.appending(path: "history", directoryHint: .isDirectory) }
+    /// Where the page's state is saved.
+    var dataURL: URL { url.appending(path: "data.json") }
 
     /// The page, if one has been written.
     func page() -> String? {

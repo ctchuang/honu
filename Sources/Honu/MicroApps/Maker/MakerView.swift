@@ -19,7 +19,7 @@ struct MakerView: View {
             VStack(spacing: 0) {
                 MicroappView(
                     app: app, item: item, folder: microapp.folder.url,
-                    version: microapp.version)
+                    dataURL: microapp.folder.dataURL, version: microapp.version)
                 ChangeBar(app: app, item: item, microapp: microapp)
             }
         }

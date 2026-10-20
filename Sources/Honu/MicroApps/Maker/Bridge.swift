@@ -2,7 +2,7 @@ import Foundation
 import WebKit
 
 /// The Swift side of `window.honu`, what a microapp's page can ask of Honu:
-/// to load and save its state in `data.json` in its folder, to fetch from
+/// to load and save its state in its data file, to fetch from
 /// the web without the page's CORS limits, and to resize its panel. It also
 /// hears of the page's errors.
 @MainActor
@@ -16,22 +16,21 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
     /// The longest error kept, in characters.
     static let problemLimit = 600
 
-    let folder: URL
+    /// Where the page's state is saved.
+    let dataURL: URL
     /// Called with each error the page reports.
     private let onProblem: (String) -> Void
     /// Called with the size the page asks for.
     private let onResize: (CGSize) -> Void
 
     init(
-        folder: URL, onProblem: @escaping (String) -> Void = { _ in },
+        dataURL: URL, onProblem: @escaping (String) -> Void = { _ in },
         onResize: @escaping (CGSize) -> Void = { _ in }
     ) {
-        self.folder = folder
+        self.dataURL = dataURL
         self.onProblem = onProblem
         self.onResize = onResize
     }
-
-    private var dataURL: URL { folder.appending(path: "data.json") }
 
     /// A user content controller that gives a page `window.honu` and reports
     /// its errors here.
@@ -58,6 +57,8 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
         case "save":
             let state = body["state"] as? String ?? "null"
             do {
+                try FileManager.default.createDirectory(
+                    at: dataURL.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try Data(state.utf8).write(to: dataURL, options: .atomic)
                 return (nil, nil)
             } catch {
