@@ -21,6 +21,14 @@ extension Shell {
             ]
     }
 
+    /// Where the launcher is, while it is open: at the point the turtle was
+    /// clicked, moved as far as it takes to keep it on screen.
+    var launcherFrame: CGRect? {
+        guard case .launcher(let point) = popup else { return nil }
+        let size = LauncherView.size(for: launcherTiles.count)
+        return CGRect(origin: menuCorner(of: size, at: point, in: stage.size), size: size)
+    }
+
     /// How `bubble` looks, as its microapp says.
     func appearance(of bubble: Bubble) -> Appearance {
         registry.appearance(of: bubble.target) ?? Appearance()

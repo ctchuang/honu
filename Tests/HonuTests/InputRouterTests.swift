@@ -29,6 +29,25 @@ struct InputRouterTests {
         #expect(!router.handle(.rightPress(at: CGPoint(x: 900, y: 100)), typing: false))
     }
 
+    @Test func rightClickingTheLauncherGoesOnToItsTiles() throws {
+        let shell = makeShell()
+        let router = InputRouter(shell: shell)
+        let turtle = shell.turtle.center
+        shell.clickTurtle(at: turtle)
+        let frame = try #require(shell.launcherFrame)
+        #expect(frame.size == LauncherView.size(for: shell.launcherTiles.count))
+
+        // Even where the launcher covers the turtle.
+        let overTurtle = try #require(
+            [turtle, CGPoint(x: frame.minX + 4, y: frame.minY + 4)].first {
+                frame.contains($0) && shell.turtle.contains($0)
+            })
+        for point in [overTurtle, CGPoint(x: frame.midX, y: frame.midY)] {
+            #expect(!router.handle(.rightPress(at: point), typing: false))
+            #expect(shell.popup == .launcher(at: turtle))
+        }
+    }
+
     @Test func aPressRaisesTheBubbleButGoesOn() {
         let shell = makeShell()
         let target = ViewTarget(app: AppID("notes"), item: ItemID(rawValue: 1))
