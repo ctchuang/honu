@@ -114,6 +114,7 @@ struct MakerTests {
         #expect(scheme.file(at: URL(string: "honu-app://A1/instances/X.json")!) == nil)
         #expect(scheme.file(at: URL(string: "honu-app://A1/Instances/X.json")!) == nil)
         #expect(scheme.file(at: URL(string: "honu-app://A1/img/../instances/X.json")!) == nil)
+        #expect(scheme.file(at: URL(string: "honu-app://A1/%69nstances/X.json")!) == nil)
         #expect(scheme.file(at: URL(string: "honu-app://A1/instances")!) == nil)
         #expect(scheme.file(at: URL(string: "honu-app://A1/instances-list.js")!) != nil)
         #expect(
