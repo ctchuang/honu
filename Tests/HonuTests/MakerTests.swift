@@ -366,23 +366,6 @@ struct MakerTests {
                 })
     }
 
-    @Test func anInstanceLaunchedToModifyTakesTheFocusAndTypeAhead() throws {
-        let maker = app()
-        let first = made(maker, "a clock", answer("Clock"))
-        let microapp = try #require(maker.microapp(of: first))
-        let item = try #require(maker.launch(microapp.folder.name, toModify: true))
-        let state = maker.newViewState(for: item, fresh: true)
-        #expect(state.focusPending)
-        #expect(!maker.newViewState(for: item, fresh: true).focusPending, "asked twice")
-
-        maker.typeAhead("make it", into: item, viewState: state)
-        #expect(microapp.draft == "make it")
-        // Nothing is typed into a microapp Claude is changing.
-        maker.change(item)
-        maker.typeAhead(" blue", into: item, viewState: state)
-        #expect(microapp.draft == "make it")
-    }
-
     @Test func aWithdrawnMicroappLeavesTheLibraryUntilReinstated() throws {
         let maker = app()
         let item = made(maker, "a clock", answer("Clock"))

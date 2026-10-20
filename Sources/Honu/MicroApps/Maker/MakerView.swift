@@ -23,7 +23,7 @@ struct MakerView: View {
                 MicroappView(
                     app: app, item: item, folder: microapp.folder.url,
                     dataURL: instance.dataURL, version: microapp.version)
-                ChangeBar(app: app, item: item, microapp: microapp, state: state)
+                ChangeBar(app: app, item: item, microapp: microapp)
             }
         }
     }
@@ -82,14 +82,11 @@ struct WritingPreview: View {
 
 /// The bar below a running microapp: a field for asking Claude to change
 /// it, a button to fix the errors it reported, and one to undo the last
-/// change. While Claude writes, it shows how far it has got. Its field
-/// takes the focus when the instance was launched to be changed.
+/// change. While Claude writes, it shows how far it has got.
 struct ChangeBar: View {
     let app: MakerApp
     let item: ItemID
     let microapp: GeneratedApp
-    let state: FocusRequestState
-    @FocusState private var focused: Bool
 
     static let height: CGFloat = 40
 
@@ -140,9 +137,7 @@ struct ChangeBar: View {
             }
             TextField("Ask Claude to change it…", text: Bindable(microapp).draft)
                 .textFieldStyle(.plain)
-                .focused($focused)
                 .onSubmit { app.change(item) }
-                .takesFocus(state, $focused)
         }
     }
 }
