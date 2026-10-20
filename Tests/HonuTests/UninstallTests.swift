@@ -94,6 +94,43 @@ struct UninstallTests {
         #expect(bubbles(of: microapp, in: shell).allSatisfy { $0.isSwallowed })
     }
 
+    @Test func uninstallingFromATilesMenuSwallowsTheTile() throws {
+        let (shell, microapp) = try shellWithMicroapp()
+        let name = microapp.folder.name
+        let tile = try #require(shell.launcherTiles.first { $0.kind == .installed(name) })
+        shell.clickTurtle(at: shell.turtle.center)
+        let center = CGPoint(x: 200, y: 600)
+
+        shell.uninstall(tile, from: center, at: 10)
+        #expect(shell.popup == nil)
+        let swallowed = try #require(shell.swallowedTile)
+        #expect(swallowed.tile == tile && swallowed.flight.from == center)
+        #expect(swallowed.flight.after(0).scale == 1)
+        #expect(!hasTile(name, in: shell))
+        #expect(bubbles(of: microapp, in: shell).allSatisfy { $0.isSwallowed })
+
+        shell.undoDelete()
+        #expect(hasTile(name, in: shell))
+    }
+
+    @Test func modifyingLaunchesAnInstanceThatTakesTheFocusAndTypeAhead() throws {
+        let (shell, microapp) = try shellWithMicroapp()
+        shell.clickTurtle(at: shell.turtle.center)
+        shell.modify(microapp.folder.name)
+        #expect(shell.popup == nil)
+        let shown = bubbles(of: microapp, in: shell)
+        #expect(shown.count == 2)
+        let state = try #require(shown.last?.viewState as? FocusRequestState)
+        #expect(state.focusPending)
+        #expect(shell.type("make it blue"))
+        #expect(microapp.draft == "make it blue")
+
+        // A plain launch leaves the focus alone.
+        shell.launch(microapp.folder.name)
+        let plain = try #require(bubbles(of: microapp, in: shell).last?.viewState)
+        #expect((plain as? FocusRequestState)?.focusPending == false)
+    }
+
     @Test func aTileDroppedElsewhereGoesBack() throws {
         let (shell, microapp) = try shellWithMicroapp()
         let name = microapp.folder.name

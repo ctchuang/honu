@@ -175,6 +175,15 @@ final class Shell {
         spit(item, of: maker)
     }
 
+    /// Closes the launcher and starts a new instance of the installed
+    /// microapp whose folder is named `name`, to ask Claude to change it:
+    /// its bubble opens with the cursor in its change field.
+    func modify(_ name: String) {
+        popup = nil
+        guard let item = maker.launch(name, toModify: true) else { return }
+        spit(item, of: maker)
+    }
+
     /// Has the turtle spit out a bubble showing `item`, just made, which
     /// opens into its panel when it lands and takes what is typed until then.
     private func spit(_ item: ItemID, of app: any MicroApp) {
@@ -281,18 +290,27 @@ final class Shell {
         guard let (tile, _) = tileDrag else { return }
         tileDrag = nil
         octopus.isEager = false
-        if octopus.inReach(pointer), case .installed(let name) = tile.kind {
-            popup = nil
-            swallowedTile = (
-                tile,
-                Flight(
-                    kind: .swallow(fromScale: Self.eagerTileScale), from: pointer,
-                    to: octopus.mouth),
-                time
-            )
-            uninstall(name, at: time)
+        if octopus.inReach(pointer) {
+            uninstall(tile, from: pointer, scale: Self.eagerTileScale, at: time)
         }
         octopus.summon(false, turtle: turtle.center)
+    }
+
+    /// Uninstalls the microapp of launcher `tile`, at `center` and drawn at
+    /// `scale`, at `time`: the launcher closes, and the tile goes down the
+    /// octopus's mouth with the microapp's bubbles.
+    func uninstall(
+        _ tile: LauncherTile, from center: CGPoint, scale: CGFloat = 1,
+        at time: TimeInterval = now()
+    ) {
+        guard case .installed(let name) = tile.kind else { return }
+        popup = nil
+        swallowedTile = (
+            tile,
+            Flight(kind: .swallow(fromScale: scale), from: center, to: octopus.mouth),
+            time
+        )
+        uninstall(name, at: time)
     }
 
     /// Uninstalls the microapp whose folder is named `name`: its tile leaves
