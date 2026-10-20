@@ -26,16 +26,16 @@
 
 ### Basic
 
-- Add a launcher with stock apps: in progress, following the plan in
-  `docs/Launcher.md`, whose steps are marked (done) as they land.
+- Finish the launcher (`docs/Launcher.md`, whose steps are marked
+  (done) as they land): a right-click menu on a tile with Modify… and
+  Uninstall (step 5), then typing to filter the tiles. Uninstalling by
+  dragging a tile to the octopus is done.
 - Rename the 'Ask AI' to an always-on 'Ask Claude' bubble, migrate it
   to Web-based.
 - Migrate the existing YouTube app to Web-based.
 - Add a stock Facebook app.
 - Migrate the existing Note app to Web-based (managed in the same way
   as other microspps).
-- Uninstall and modify a microapp from the launcher (planned in
-  `docs/Launcher.md`).
 - Add more stock apps in a subfolder as examples.
 
 ### Memory

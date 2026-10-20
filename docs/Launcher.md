@@ -294,7 +294,7 @@ lint on their own.
   back the tile and the bubbles; forgetting deletes the folder; quitting
   while withdrawn finishes the uninstall.
 
-### Step 7: Docs
+### Step 7: Docs (done)
 
 - `CLAUDE.md`: the launcher, `Popup`, the system menu, `GeneratedApp`
   and `Instance`, the new folder layout, and `InputRouter`'s new rules.
