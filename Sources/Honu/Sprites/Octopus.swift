@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// The pixel-art octopus that deletes bubbles. It rises from the bottom edge
-/// while a bubble is being dragged, in the corner away from the turtle, and
-/// stays out of sight the rest of the time, offering in a speech bubble to
-/// take the dragged bubble to recycle. A bubble dropped on it is
-/// swallowed. For a few seconds afterwards the octopus waits with the bubble
-/// still inside, and clicking it (or pressing ⌘Z) spits the bubble back to
-/// where it was picked up, so a slip of the hand loses nothing.
+/// The pixel-art octopus that deletes bubbles, and uninstalls microapps. It
+/// rises from the bottom edge while a bubble or a launcher tile is being
+/// dragged, in the corner away from the turtle, and stays out of sight the
+/// rest of the time, offering in a speech bubble to take what is dragged. A
+/// bubble dropped on it is swallowed; a tile dropped on it is swallowed with
+/// every bubble of its microapp. For a few seconds afterwards the octopus
+/// waits with them still inside, and clicking it (or pressing ⌘Z) spits them
+/// back to where they were, so a slip of the hand loses nothing.
 @Observable
 @MainActor
 final class Octopus {
@@ -64,12 +65,27 @@ final class Octopus {
     /// The gap between the hint and the top of the octopus.
     nonisolated static let hintGap: CGFloat = 6
 
-    /// A bubble the octopus swallowed, and where it was picked up, to return
-    /// it there. The bubble itself stays on the stage, out of sight.
+    /// What the octopus swallowed in one gulp: bubbles, each with where it
+    /// was, to return it there, and the microapp uninstalled with them, if
+    /// any. The bubbles themselves stay on the stage, out of sight.
     struct Swallowed {
-        let bubble: BubbleID
-        let home: CGPoint
+        struct Morsel: Equatable {
+            let bubble: BubbleID
+            let home: CGPoint
+        }
+
+        let morsels: [Morsel]
+        /// The folder name of the microapp uninstalled.
+        let microapp: String?
         let at: TimeInterval
+
+        var bubbles: [BubbleID] { morsels.map(\.bubble) }
+    }
+
+    /// What is being dragged to it, which its speech bubble names.
+    enum Offer {
+        case bubble
+        case microapp
     }
 
     let stageSize: CGSize
@@ -77,14 +93,16 @@ final class Octopus {
     private(set) var isUp = false
     /// Whether it sits in the bottom-right corner rather than the bottom-left.
     private(set) var isRight = true
-    /// Whether a bubble is being dragged, which calls the octopus up.
+    /// Whether a bubble or a tile is being dragged, which calls the octopus up.
     private(set) var isSummoned = false
+    /// What it offers to take while summoned.
+    private(set) var offer = Offer.bubble
     /// Whether a bubble is held over it, ready to be dropped.
     var isEager = false
     private var spatAt = -TimeInterval.infinity
     /// Until when swallowed bubbles can be brought back.
     private(set) var undoUntil = -TimeInterval.infinity
-    /// Bubbles swallowed recently enough to be brought back, the latest last.
+    /// What was swallowed recently enough to be brought back, the latest last.
     private(set) var stomach: [Swallowed] = []
 
     init(stageSize: CGSize) {
@@ -109,8 +127,8 @@ final class Octopus {
 
     var canUndo: Bool { !stomach.isEmpty }
 
-    /// Whether it says it can take the dragged bubble to recycle: while
-    /// summoned, in place of the undo hint.
+    /// Whether it says it can take what is dragged: while summoned, in place
+    /// of the undo hint.
     var offersHelp: Bool { isUp && isSummoned }
 
     /// Whether it shows the "Click to undo" hint, which takes clicks.
@@ -122,8 +140,12 @@ final class Octopus {
     }
 
     /// Calls the octopus up while `summoned`, as while a bubble is dragged,
-    /// rising in the corner farther from the turtle at `turtle`.
-    func summon(_ summoned: Bool, turtle: CGPoint) {
+    /// rising in the corner farther from the turtle at `turtle`, offering to
+    /// take `offer`.
+    func summon(_ summoned: Bool, turtle: CGPoint, offer: Offer = .bubble) {
+        if summoned {
+            self.offer = offer
+        }
         if summoned != isSummoned {
             withAnimation(.spring(duration: 0.35, bounce: 0.4)) { isSummoned = summoned }
         }
@@ -174,13 +196,21 @@ final class Octopus {
 
     /// Swallows `bubble`, which was picked up at `home`, at `time`.
     func swallow(_ bubble: BubbleID, home: CGPoint, at time: TimeInterval = now()) {
-        stomach.append(Swallowed(bubble: bubble, home: home, at: time))
+        swallow([Swallowed.Morsel(bubble: bubble, home: home)], at: time)
+    }
+
+    /// Swallows `morsels` in one gulp at `time`, with the microapp whose
+    /// folder is named `microapp`, if it is uninstalling one.
+    func swallow(
+        _ morsels: [Swallowed.Morsel], microapp: String? = nil, at time: TimeInterval = now()
+    ) {
+        stomach.append(Swallowed(morsels: morsels, microapp: microapp, at: time))
         undoUntil = time + Self.swallowSeconds + Self.undoSeconds
         rise()
     }
 
-    /// Spits out the latest swallowed bubble, returning it; it should fly
-    /// back to where it was picked up from `mouth`.
+    /// Spits out what it swallowed last, returning it; its bubbles should
+    /// fly back to where they were from `mouth`.
     func spitBack(at time: TimeInterval = now()) -> Swallowed? {
         guard let swallowed = stomach.popLast() else { return nil }
         spatAt = time
@@ -190,11 +220,11 @@ final class Octopus {
         return swallowed
     }
 
-    /// Forgets bubbles too old to bring back at `time`, returning them; they
-    /// are now deleted for good.
-    func forget(at time: TimeInterval = now()) -> [BubbleID] {
+    /// Forgets what is too old to bring back at `time`, returning it; it is
+    /// now deleted for good.
+    func forget(at time: TimeInterval = now()) -> [Swallowed] {
         guard canUndo, time >= undoUntil else { return [] }
-        let gone = stomach.map(\.bubble)
+        let gone = stomach
         stomach = []
         rise()
         return gone

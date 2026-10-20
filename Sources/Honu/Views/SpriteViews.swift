@@ -30,7 +30,8 @@ struct TurtleView: View {
 }
 
 /// The pixel-art octopus, risen from the bottom edge while wanted, with a
-/// speech bubble offering to recycle the dragged bubble, and its "Click to
+/// speech bubble offering to recycle the dragged bubble or uninstall the
+/// dragged tile's microapp, and its "Click to
 /// undo" hint while a swallowed bubble can still come back.
 struct OctopusView: View {
     let shell: Shell
@@ -48,7 +49,7 @@ struct OctopusView: View {
         }
         .overlay(alignment: octopus.isRight ? .topTrailing : .topLeading) {
             if octopus.offersHelp {
-                offer(eager: octopus.isEager, right: octopus.isRight)
+                offer(octopus.offer, eager: octopus.isEager, right: octopus.isRight)
                     .above(gap: Octopus.hintGap)
             }
         }
@@ -67,11 +68,13 @@ struct OctopusView: View {
         .offset(x: octopus.origin.x, y: octopus.origin.y + (octopus.isUp ? 0 : octopus.hiddenDrop))
     }
 
-    /// A comic speech bubble whose tail points down at the octopus's middle,
-    /// lined up with its side nearer the screen edge so it stays on screen.
-    private func offer(eager: Bool, right: Bool) -> some View {
+    /// A comic speech bubble offering to take what is dragged, whose tail
+    /// points down at the octopus's middle, lined up with its side nearer
+    /// the screen edge so it stays on screen.
+    private func offer(_ offer: Octopus.Offer, eager: Bool, right: Bool) -> some View {
         let tail = shell.octopus.size.width / 2
-        return Text(eager ? "Let go, I'll recycle it!" : "Drop it on me to recycle!")
+        let doing = offer == .bubble ? "recycle" : "uninstall"
+        return Text(eager ? "Let go, I'll \(doing) it!" : "Drop it on me to \(doing)!")
             .font(.system(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(Color(rgb: 48, 22, 40))
             .fixedSize()

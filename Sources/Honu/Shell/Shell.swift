@@ -250,9 +250,12 @@ final class Shell {
 
     /// Has the octopus spit back the bubble it swallowed last, if it still can.
     func undoDelete() {
-        guard let swallowed = octopus.spitBack(), let bubble = stage.bubble(swallowed.bubble)
-        else { return }
-        stage.spitBack(bubble, from: octopus.mouth, to: swallowed.home)
+        guard let swallowed = octopus.spitBack() else { return }
+        for morsel in swallowed.morsels {
+            if let bubble = stage.bubble(morsel.bubble) {
+                stage.spitBack(bubble, from: octopus.mouth, to: morsel.home)
+            }
+        }
     }
 
     /// Catches up on what happens over time: moves the bubbles, deletes for
@@ -264,7 +267,7 @@ final class Shell {
         lastTick = time
         updateApps()
         stage.step(time: time, dt: dt)
-        for id in octopus.forget() {
+        for id in octopus.forget().flatMap(\.bubbles) {
             undoManagers[id] = nil
             if let bubble = stage.remove(id), !stage.shows(bubble.target) {
                 registry.remove(bubble.target)

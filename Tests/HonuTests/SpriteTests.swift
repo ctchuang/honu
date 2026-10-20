@@ -141,14 +141,36 @@ struct OctopusTests {
         #expect(octopus.contains(hint, at: time + 1), "hint does not take clicks")
 
         let spat = octopus.spitBack(at: time + 1)
-        #expect(spat?.bubble == bubble && spat?.home == home)
+        #expect(spat?.morsels == [Octopus.Swallowed.Morsel(bubble: bubble, home: home)])
         #expect(!octopus.contains(hint, at: time + 1), "hint takes clicks with nothing to undo")
         #expect(!octopus.canUndo)
 
         octopus.swallow(bubble, home: home, at: time + 2)
-        #expect(octopus.forget(at: time + 2 + Octopus.undoSeconds + 1) == [bubble])
+        #expect(
+            octopus.forget(at: time + 2 + Octopus.undoSeconds + 1).flatMap(\.bubbles) == [bubble])
         #expect(!octopus.canUndo, "kept the bubble too long")
         #expect(octopus.spitBack(at: time + 10) == nil)
+    }
+
+    @Test func aMicroappIsSwallowedWithItsBubblesInOneGulp() {
+        let octopus = Octopus(stageSize: screen)
+        octopus.summon(true, turtle: turtle, offer: .microapp)
+        #expect(octopus.offer == .microapp)
+        let morsels = [
+            Octopus.Swallowed.Morsel(bubble: BubbleID(rawValue: 1), home: CGPoint(x: 1, y: 1)),
+            Octopus.Swallowed.Morsel(bubble: BubbleID(rawValue: 2), home: CGPoint(x: 2, y: 2)),
+        ]
+        octopus.swallow(morsels, microapp: "A1", at: 1000)
+        octopus.summon(false, turtle: turtle)
+        #expect(octopus.canUndo)
+        let spat = octopus.spitBack(at: 1001)
+        #expect(spat?.morsels == morsels && spat?.microapp == "A1")
+
+        // Even a microapp with no bubble open can be brought back.
+        octopus.swallow([], microapp: "B2", at: 1002)
+        #expect(octopus.canUndo)
+        let gone = octopus.forget(at: 1002 + Octopus.undoSeconds + 1)
+        #expect(gone.map(\.microapp) == ["B2"] && gone.flatMap(\.bubbles).isEmpty)
     }
 
     @Test func picksTheCornerOnlyWhileOutOfSight() {
