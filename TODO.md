@@ -26,10 +26,7 @@
 
 ### Basic
 
-- Finish the launcher (`docs/Launcher.md`, whose steps are marked
-  (done) as they land): a right-click menu on a tile with Modify… and
-  Uninstall (step 5), then typing to filter the tiles. Uninstalling by
-  dragging a tile to the octopus is done.
+- Type to filter the launcher's tiles (`docs/Launcher.md`, Later).
 - Rename the 'Ask AI' to an always-on 'Ask Claude' bubble, migrate it
   to Web-based.
 - Migrate the existing YouTube app to Web-based.
