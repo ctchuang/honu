@@ -86,6 +86,9 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
 
 ## Development
 
+Work happens on the `dev` branch; `main` is kept stable. Please open pull requests
+against `dev`, not `main`.
+
 ```sh
 swift test                                           # run the tests
 swift format lint --strict -r Sources Tests Package.swift   # lint
