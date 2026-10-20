@@ -1,34 +1,10 @@
 import SwiftUI
 
-/// What one bubble showing a chat keeps for itself.
-@MainActor
-final class ChatViewState: FocusTaking {
-    /// Whether the next text field shown should take the keyboard focus.
-    var focusPending: Bool
-    /// The chat's `focusRequests` this view has answered.
-    private var focusRequestsSeen = 0
-
-    init(focusPending: Bool) {
-        self.focusPending = focusPending
-    }
-
-    /// Notes any new request of the chat for the focus, and returns whether
-    /// the field shown now should take it, which it then does.
-    func focusDue(after focusRequests: Int) -> Bool {
-        if focusRequestsSeen != focusRequests {
-            focusRequestsSeen = focusRequests
-            focusPending = true
-        }
-        defer { focusPending = false }
-        return focusPending
-    }
-}
-
 /// Shows a chat: a field for the question, then the answer as it streams in.
 struct ChatView: View {
     let app: AskApp
     let chat: Chat
-    let state: ChatViewState
+    let state: FocusRequestState
     @FocusState private var focused: Bool
 
     private static let error = Color(red: 0.75, green: 0.24, blue: 0.2)
@@ -47,8 +23,7 @@ struct ChatView: View {
         }
         .defaultScrollAnchor(.bottom)
         .scrollIndicators(.automatic)
-        .onAppear(perform: takeFocusIfDue)
-        .onChange(of: chat.focusRequests) { takeFocusIfDue() }
+        .takesFocus(state, requests: chat.focusRequests, $focused)
     }
 
     @ViewBuilder
@@ -99,14 +74,6 @@ struct ChatView: View {
             default:
                 EmptyView()
             }
-        }
-    }
-
-    /// Puts the cursor in the field shown, once per request for the focus.
-    private func takeFocusIfDue() {
-        if state.focusDue(after: chat.focusRequests) {
-            focused = true
-            placeCursorAtEnd()
         }
     }
 }

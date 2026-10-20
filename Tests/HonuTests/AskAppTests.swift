@@ -109,7 +109,9 @@ struct AskAppTests {
         let asks = app()
         let item = ask(asks, "Why?")
         let chat = asks.chats[item]!
-        let (a, b) = (ChatViewState(focusPending: false), ChatViewState(focusPending: false))
+        let (a, b) = (
+            FocusRequestState(focusPending: false), FocusRequestState(focusPending: false)
+        )
         #expect(!a.focusDue(after: chat.focusRequests), "took the focus with nothing new")
 
         claude.streams[0].send(.failed("Overloaded"))
@@ -117,7 +119,7 @@ struct AskAppTests {
         #expect(a.focusDue(after: chat.focusRequests) && b.focusDue(after: chat.focusRequests))
         #expect(!a.focusDue(after: chat.focusRequests), "took the focus twice for one request")
         // A new chat's own view takes it once to begin with.
-        let fresh = ChatViewState(focusPending: true)
+        let fresh = FocusRequestState(focusPending: true)
         #expect(fresh.focusDue(after: 0) && !fresh.focusDue(after: 0))
     }
 

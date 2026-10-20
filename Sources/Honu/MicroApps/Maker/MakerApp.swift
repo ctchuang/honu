@@ -101,18 +101,18 @@ final class MakerApp: MicroApp {
 
     /// A new microapp is to be described, so its bubble starts with the
     /// cursor in the field.
-    func newViewState(for item: ItemID, fresh: Bool) -> MakerViewState {
-        MakerViewState(focusPending: fresh)
+    func newViewState(for item: ItemID, fresh: Bool) -> FocusRequestState {
+        FocusRequestState(focusPending: fresh)
     }
 
-    func content(of item: ItemID, viewState: MakerViewState) -> some View {
+    func content(of item: ItemID, viewState: FocusRequestState) -> some View {
         if let microapp = microapps[item] {
             MakerView(app: self, item: item, microapp: microapp, state: viewState)
         }
     }
 
     /// Text typed before the description field took the focus goes into it.
-    func typeAhead(_ text: String, into item: ItemID, viewState: MakerViewState) {
+    func typeAhead(_ text: String, into item: ItemID, viewState: FocusRequestState) {
         guard let microapp = microapps[item], case .describing = microapp.status else { return }
         microapp.draft += text
     }

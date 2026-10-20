@@ -1,36 +1,12 @@
 import SwiftUI
 
-/// What one bubble showing a microapp keeps for itself.
-@MainActor
-final class MakerViewState: FocusTaking {
-    /// Whether the next text field shown should take the keyboard focus.
-    var focusPending: Bool
-    /// The microapp's `focusRequests` this view has answered.
-    private var focusRequestsSeen = 0
-
-    init(focusPending: Bool) {
-        self.focusPending = focusPending
-    }
-
-    /// Notes any new request of the microapp for the focus, and returns
-    /// whether the field shown now should take it, which it then does.
-    func focusDue(after focusRequests: Int) -> Bool {
-        if focusRequestsSeen != focusRequests {
-            focusRequestsSeen = focusRequests
-            focusPending = true
-        }
-        defer { focusPending = false }
-        return focusPending
-    }
-}
-
 /// Shows a microapp: a field to describe it, then what Claude writes, then
 /// the page running, with a bar below for asking for changes.
 struct MakerView: View {
     let app: MakerApp
     let item: ItemID
     let microapp: GeneratedApp
-    let state: MakerViewState
+    let state: FocusRequestState
     @FocusState private var focused: Bool
 
     static let error = Color(red: 0.85, green: 0.3, blue: 0.25)
@@ -72,16 +48,7 @@ struct MakerView: View {
         .padding(.horizontal, 6)
         .padding(.top, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear(perform: takeFocusIfDue)
-        .onChange(of: microapp.focusRequests) { takeFocusIfDue() }
-    }
-
-    /// Puts the cursor in the field, once per request for the focus.
-    private func takeFocusIfDue() {
-        if state.focusDue(after: microapp.focusRequests) {
-            focused = true
-            placeCursorAtEnd()
-        }
+        .takesFocus(state, requests: microapp.focusRequests, $focused)
     }
 }
 

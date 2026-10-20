@@ -1,5 +1,31 @@
 import SwiftUI
 
+/// A bubble's view state whose field takes the focus when the bubble first
+/// shows a new item, and again each time the item asks for it, as when the
+/// user has to type again after a failure: once per request, in every view.
+@MainActor
+final class FocusRequestState: FocusTaking {
+    /// Whether the next text field shown should take the keyboard focus.
+    var focusPending: Bool
+    /// The item's `focusRequests` this view has answered.
+    private var focusRequestsSeen = 0
+
+    init(focusPending: Bool) {
+        self.focusPending = focusPending
+    }
+
+    /// Notes any new request of the item for the focus, and returns whether
+    /// the field shown now should take it, which it then does.
+    func focusDue(after focusRequests: Int) -> Bool {
+        if focusRequestsSeen != focusRequests {
+            focusRequestsSeen = focusRequests
+            focusPending = true
+        }
+        defer { focusPending = false }
+        return focusPending
+    }
+}
+
 extension View {
     /// Gives the field bound to `focused` the keyboard focus when the view
     /// appears, if its bubble's `state` still has to take it, and only once.
@@ -10,6 +36,20 @@ extension View {
             focused.wrappedValue = true
             placeCursorAtEnd()
         }
+    }
+
+    /// Gives the field bound to `focused` the keyboard focus once per request
+    /// of the item for it, which `requests` counts, as `state` says is due.
+    func takesFocus(
+        _ state: FocusRequestState, requests: Int, _ focused: FocusState<Bool>.Binding
+    ) -> some View {
+        let take = { (requests: Int) in
+            guard state.focusDue(after: requests) else { return }
+            focused.wrappedValue = true
+            placeCursorAtEnd()
+        }
+        return onAppear { take(requests) }
+            .onChange(of: requests) { _, requests in take(requests) }
     }
 }
 
