@@ -46,7 +46,7 @@ struct LauncherView: View {
 /// One tile of the launcher, highlighted while hovered. Clicking it starts
 /// what it starts. An installed microapp's tile can be dragged to the
 /// octopus, to uninstall it; the others wobble, to show they stay. It also
-/// has a menu, on a right click, for changing or uninstalling its microapp.
+/// has a menu, on a right click, for uninstalling its microapp.
 private struct TileView: View {
     let shell: Shell
     let tile: LauncherTile
@@ -97,8 +97,7 @@ private struct TileView: View {
 
     /// The tile's menu: none but for an installed microapp's.
     @ViewBuilder private var menu: some View {
-        if case .installed(let name) = tile.kind {
-            Button("Modify…") { shell.modify(name) }
+        if case .installed = tile.kind {
             Button("Uninstall") { shell.uninstall(tile, from: center.wrappedValue) }
         }
     }

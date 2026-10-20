@@ -175,15 +175,6 @@ final class Shell {
         spit(item, of: maker)
     }
 
-    /// Closes the launcher and starts a new instance of the installed
-    /// microapp whose folder is named `name`, to ask Claude to change it:
-    /// its bubble opens with the cursor in its change field.
-    func modify(_ name: String) {
-        popup = nil
-        guard let item = maker.launch(name, toModify: true) else { return }
-        spit(item, of: maker)
-    }
-
     /// Has the turtle spit out a bubble showing `item`, just made, which
     /// opens into its panel when it lands and takes what is typed until then.
     private func spit(_ item: ItemID, of app: any MicroApp) {
