@@ -13,13 +13,22 @@ struct ShellView: View {
             StageView(shell: shell)
             OctopusView(shell: shell)
             TurtleView(shell: shell)
-            if let point = shell.menu {
+            if let popup = shell.popup {
                 // Pressing anywhere outside the menu closes it.
                 Color.black.opacity(0.001)
-                    .onTapGesture { shell.closeMenu() }
-                let corner = TurtleMenu.corner(at: point, in: shell.stage.size)
-                TurtleMenu(shell: shell)
-                    .offset(x: corner.x, y: corner.y)
+                    .onTapGesture { shell.closePopup() }
+                switch popup {
+                case .menu(let point):
+                    let size = CGSize(width: TurtleMenu.width, height: TurtleMenu.estimatedHeight)
+                    let corner = menuCorner(of: size, at: point, in: shell.stage.size)
+                    TurtleMenu(shell: shell)
+                        .offset(x: corner.x, y: corner.y)
+                case .system(let point):
+                    let size = CGSize(width: SystemMenu.width, height: SystemMenu.estimatedHeight)
+                    let corner = menuCorner(of: size, at: point, in: shell.stage.size)
+                    SystemMenu()
+                        .offset(x: corner.x, y: corner.y)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

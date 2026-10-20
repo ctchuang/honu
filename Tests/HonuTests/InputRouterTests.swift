@@ -9,7 +9,7 @@ struct InputRouterTests {
         .key(text: text, unmodified: text, command: command, control: control)
     }
 
-    @Test func rightClickingTheTurtleOpensTheMenuAndEscapeClosesIt() throws {
+    @Test func rightClickingTheTurtleOpensTheSystemMenuAndEscapeClosesIt() throws {
         let shell = makeShell()
         let router = InputRouter(shell: shell)
         let turtle = shell.turtle.center
@@ -17,14 +17,15 @@ struct InputRouterTests {
         #expect(!router.handle(.escape, typing: false), "took Escape with no menu open")
 
         #expect(router.handle(.rightPress(at: turtle), typing: false))
-        #expect(shell.menu != nil)
+        #expect(shell.popup == .system(at: turtle))
         #expect(router.handle(.escape, typing: false))
-        #expect(shell.menu == nil)
+        #expect(shell.popup == nil)
 
-        // Right-clicking elsewhere closes the menu, and is taken only then.
-        #expect(router.handle(.rightPress(at: turtle), typing: false))
+        // Right-clicking elsewhere closes a menu, and is taken only then.
+        shell.clickTurtle(at: turtle)
+        #expect(shell.popup == .menu(at: turtle))
         #expect(router.handle(.rightPress(at: CGPoint(x: 900, y: 100)), typing: false))
-        #expect(shell.menu == nil)
+        #expect(shell.popup == nil)
         #expect(!router.handle(.rightPress(at: CGPoint(x: 900, y: 100)), typing: false))
     }
 

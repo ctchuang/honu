@@ -14,7 +14,7 @@ enum InputEvent: Equatable {
 
 /// Turns the events SwiftUI's gestures do not cover into calls on the shell:
 /// presses on content (raising that bubble), right-clicks on the turtle
-/// (opening its menu), Escape (closing it), text typed while no field has
+/// (opening the system menu), Escape (closing a menu), text typed while no field has
 /// the focus (type-ahead), and ⌘Z (undoing a delete).
 @MainActor
 struct InputRouter {
@@ -30,20 +30,20 @@ struct InputRouter {
             shell.press(at: point)
             return false
         case .rightPress(let point):
-            // Right-clicking the turtle opens its menu as clicking does;
-            // right-clicking anywhere else closes it.
+            // Right-clicking the turtle opens the system menu; right-clicking
+            // anywhere else closes whichever menu is open.
             if shell.turtle.contains(point) {
-                shell.clickTurtle(at: point)
+                shell.rightClickTurtle(at: point)
                 return true
             }
-            if shell.menu != nil {
-                shell.closeMenu()
+            if shell.popup != nil {
+                shell.closePopup()
                 return true
             }
             return false
         case .escape:
-            guard shell.menu != nil else { return false }
-            shell.closeMenu()
+            guard shell.popup != nil else { return false }
+            shell.closePopup()
             return true
         case .key(let text, let unmodified, let command, let control):
             // Text typed while no field has the focus goes to the newest bubble,

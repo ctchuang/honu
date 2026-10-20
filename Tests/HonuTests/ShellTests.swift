@@ -27,13 +27,15 @@ struct ShellTests {
             ])
     }
 
-    @Test func theMenuStaysOnScreen() {
+    @Test func aMenuStaysOnScreen() {
         let screen = CGSize(width: 1200, height: 800)
+        let size = CGSize(width: 190, height: 120)
         #expect(
-            TurtleMenu.corner(at: CGPoint(x: 100, y: 200), in: screen) == CGPoint(x: 100, y: 200))
-        let corner = TurtleMenu.corner(at: CGPoint(x: 1190, y: 790), in: screen)
-        #expect(corner.x + TurtleMenu.width < screen.width)
-        #expect(corner.y + TurtleMenu.estimatedHeight < screen.height)
+            menuCorner(of: size, at: CGPoint(x: 100, y: 200), in: screen)
+                == CGPoint(x: 100, y: 200))
+        let corner = menuCorner(of: size, at: CGPoint(x: 1190, y: 790), in: screen)
+        #expect(corner.x + size.width < screen.width)
+        #expect(corner.y + size.height < screen.height)
     }
 
     @Test func aBubbleShowsWhatItsMicroappSays() throws {

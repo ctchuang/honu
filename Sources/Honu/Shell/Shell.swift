@@ -2,11 +2,18 @@ import SwiftUI
 
 /// What is under a point, from the top layer down.
 enum Hit {
-    case menu
+    case popup
     case turtle
     case octopus
     case bubble(Bubble)
     case nothing
+}
+
+/// What the turtle has open, where it was clicked: its menu on a click, or
+/// the system menu on a right click.
+enum Popup: Equatable {
+    case menu(at: CGPoint)
+    case system(at: CGPoint)
 }
 
 /// The shell: the whole app inside the window. It wires the microapps, the
@@ -19,8 +26,8 @@ final class Shell {
     let stage: Stage
     let turtle: Turtle
     let octopus: Octopus
-    /// Where the turtle was clicked to open its menu, if it is open.
-    private(set) var menu: CGPoint?
+    /// What the turtle has open, if anything.
+    private(set) var popup: Popup?
     /// The newest bubble the turtle spat out, which takes text typed before
     /// its field takes the focus.
     @ObservationIgnored private var typeAheadTarget: BubbleID?
@@ -57,14 +64,14 @@ final class Shell {
     /// Whether the user is in the middle of something that takes every click,
     /// like a native menu: a click outside an open menu only closes it.
     var takesEveryClick: Bool {
-        menu != nil || stage.isDragging || turtleDragStart != nil
+        popup != nil || stage.isDragging || turtleDragStart != nil
     }
 
-    /// What is under `point`: the open menu takes everything, then the turtle
+    /// What is under `point`: an open menu takes everything, then the turtle
     /// and the octopus, then the bubbles.
     func hit(_ point: CGPoint) -> Hit {
-        if menu != nil {
-            .menu
+        if popup != nil {
+            .popup
         } else if turtle.contains(point) {
             .turtle
         } else if octopus.contains(point) {
@@ -88,11 +95,18 @@ final class Shell {
     /// Opens the turtle's menu at `point`, with a little hop.
     func clickTurtle(at point: CGPoint) {
         turtle.hop()
-        menu = point
+        popup = .menu(at: point)
     }
 
-    func closeMenu() {
-        menu = nil
+    /// Opens the system menu at `point`, with a little hop.
+    func rightClickTurtle(at point: CGPoint) {
+        turtle.hop()
+        popup = .system(at: point)
+    }
+
+    /// Closes whichever menu is open.
+    func closePopup() {
+        popup = nil
     }
 
     func dragTurtle(by translation: CGSize) {
@@ -108,7 +122,7 @@ final class Shell {
 
     /// Carries out the menu item for microapp `app`.
     func choose(_ app: AppID) {
-        menu = nil
+        popup = nil
         start(app)
     }
 
