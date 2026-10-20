@@ -81,6 +81,13 @@ final class MakerApp: MicroApp {
         return instances.insert(Instance(app: microapp))
     }
 
+    /// Starts a new instance of the installed microapp whose folder is
+    /// named `name`, its page running at once.
+    func launch(_ name: String) -> ItemID? {
+        guard let microapp = library.first(where: { $0.folder.name == name }) else { return nil }
+        return instances.insert(Instance(app: microapp))
+    }
+
     func appearance(of item: ItemID) -> Appearance {
         guard let instance = instances[item] else { return Appearance() }
         let microapp = instance.app
@@ -129,9 +136,14 @@ final class MakerApp: MicroApp {
     }
 
     /// A new microapp is to be described, so its bubble starts with the
-    /// cursor in the field.
+    /// cursor in the field; a new instance of one already made has no field
+    /// to take what is typed.
     func newViewState(for item: ItemID, fresh: Bool) -> FocusRequestState {
-        FocusRequestState(focusPending: fresh)
+        var describing = false
+        if case .describing = microapp(of: item)?.status {
+            describing = true
+        }
+        return FocusRequestState(focusPending: fresh && describing)
     }
 
     func content(of item: ItemID, viewState: FocusRequestState) -> some View {

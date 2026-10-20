@@ -131,8 +131,8 @@ instance is deleted. It is a UUID rather than the item id, which
 restarts with a new store, as app folders are.
 
 `honu.load` and `honu.save` read and write the instance's own file. The
-store keeps the installed apps (folder, description) in order, and each
-instance (its app, its data file, its draft, the size its page asked
+store keeps the microapps (folder, description, draft) in order, and
+each instance (its microapp, its data file, the size its page asked
 for). A store saved before the launcher loads as one installed app per
 microapp, each with one instance holding the old `data.json`, moved
 to `instances/` in its folder.
@@ -189,7 +189,7 @@ lint on their own.
 - `Views/LauncherView.swift` replaces `TurtleMenu`: a glass panel of
   tiles (symbol and label), in a grid with a fixed column count.
 - `Shell+Views.swift`: `MenuChoice` becomes `LauncherTile` (`id`,
-  `label`, `symbol`, and `kind`: `.stock(AppID)`, `.installed(AppUUID)`,
+  `label`, `symbol`, and `kind`: `.stock(AppID)`, `.installed(String)`,
   `.make`); `menuChoices` becomes `launcherTiles`. `MicroApp` gains
   `launcherSymbol`.
 - `choose` takes a tile. `.stock` and `.make` call `start` as today.
@@ -198,7 +198,7 @@ lint on their own.
 - Tests: tile order and kinds; choosing a tile starts an item and a
   bubble.
 
-### Step 3: Split the Maker's model into installed apps and instances
+### Step 3: Split the Maker's model into installed apps and instances (done)
 
 **3a. Data per instance**
 
@@ -210,42 +210,45 @@ lint on their own.
 - Tests: two instances of one app save and load apart; the scheme
   refuses `instances/`.
 
-**3b. `InstalledApp` and `Instance`**
+**3b. `GeneratedApp` and `Instance`**
 
-- `InstalledApp` (new) takes from `GeneratedApp` what belongs to the
-  app: `folder`, `description`, `meta`, `version`, `status`, the Claude
-  stream, `written`, `notice`, `problems`, `canRevert`, and the fixing
-  timers.
-- `Instance` (the item): its app's UUID, its data UUID, `draft`, `size`,
-  and, before installing, the `InstalledApp` it is making (not yet in
-  the library).
-- `MakerApp` keeps `library` (installed apps in order, by UUID) and
-  `ItemTable<Instance>`. `appearance`, `title`, `isBusy`, and `update`
-  go through an instance to its app; `update` plays a motion for every
-  instance of an app whose page loaded or whose writing failed.
-- An app joins the library when its first page has been written.
+- `GeneratedApp` stays the microapp: `folder`, `description`, `draft`
+  (shared, as the change bar is), `meta`, `version`, `status`, the
+  Claude stream, `written`, `notice`, `problems`, `canRevert`, and the
+  fixing timers. `hasPage` says whether its first page is written.
+- `Instance` (new, the item): its `GeneratedApp`, its data UUID
+  (`dataURL`), and the size its page asked for, which a new page resets.
+- `MakerApp` keeps `apps` (every microapp, oldest first) and
+  `ItemTable<Instance>`; `library` is the apps with a page, the installed
+  ones. `appearance`, `title`, `isBusy`, and `update` go through an
+  instance to its microapp; `update` polls each microapp once and plays a
+  motion for every instance of one whose page loaded or whose writing
+  failed.
 - `remove(item)` deletes the instance's data file; it trashes the folder
-  only for an app never installed.
-- Tests (`MakerTests`): installing on the first page; a change reaches
-  every instance; removing an instance keeps the app.
+  only for a microapp never installed, with its last instance.
+- The saved JSON becomes `{ apps: [...], instances: [...] }`.
+- Tests (`MakerTests`): installing on the first page; removing an
+  instance keeps the app, also after a relaunch.
 
-**3c. Saving, and loading old stores**
+**3c. Loading old stores**
 
-- The saved JSON becomes `{ library: [...], instances: [...] }`.
-- Loading the old array form: each microapp becomes an installed app
-  (if it has a page) and one instance; its `data.json` moves to
+- Loading the old array form: each microapp becomes one with one
+  instance, keeping its item id; its `data.json` moves to
   `instances/<new uuid>.json` in its folder.
-- Loading trashes folders no installed app or pending instance has, and
-  data files no instance has.
-- Tests (`MakerTests`, `PersistenceTests`): round trip; old form
-  migrates with its data; stray folders and data files go.
+- Loading trashes folders no microapp has, and deletes data files no
+  instance has.
+- Tests (`MakerTests`): old form migrates with its data; stray data
+  files go.
 
 **3d. Launching an installed app**
 
-- `MakerApp.launch(_ app: AppUUID) -> ItemID`: a new instance, running.
-- `Shell.start` takes what to start (a microapp or an installed app), so
-  both spit a bubble and take type-ahead the same way.
-- Tests: launching twice gives two instances with their own data.
+- `MakerApp.launch(_ name: String) -> ItemID?`: a new instance of the
+  installed microapp in the folder `name`, running.
+- `Shell.launch(_:)` and `Shell.start(_:)` both spit a bubble through
+  `spit`. A new instance of a microapp already made takes no type-ahead,
+  having no field for it.
+- Tests: launching twice gives two instances with their own data; a
+  change reaches every instance and they all rise.
 
 ### Step 4: Installed apps in the launcher
 
@@ -281,7 +284,7 @@ lint on their own.
 
 ### Step 7: Docs
 
-- `CLAUDE.md`: the launcher, `Popup`, the system menu, `InstalledApp`
+- `CLAUDE.md`: the launcher, `Popup`, the system menu, `GeneratedApp`
   and `Instance`, the new folder layout, and `InputRouter`'s new rules.
 - `README.md`: how to use the turtle.
 - `TODO.md`: check off the launcher and modifying and uninstalling

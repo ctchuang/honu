@@ -335,6 +335,36 @@ struct MakerTests {
         #expect(!FileManager.default.fileExists(atPath: stray.path()))
     }
 
+    @Test func anInstalledMicroappLaunchesAsManyTimesAsAskedEachWithItsOwnData() throws {
+        let maker = app()
+        let first = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: first))
+        #expect(maker.launch("no such folder") == nil)
+        let second = try #require(maker.launch(microapp.folder.name))
+        let third = try #require(maker.launch(microapp.folder.name))
+        #expect(maker.items == [first, second, third])
+        #expect(maker.microapp(of: second) === microapp)
+        #expect(maker.instances[second]?.dataURL != maker.instances[third]?.dataURL)
+        #expect(maker.title(of: third) == "Clock")
+        #expect(!maker.newViewState(for: second, fresh: true).focusPending)
+
+        // A change made in one instance shows in all of them, and they all rise.
+        microapp.draft = "make it blue"
+        maker.change(second)
+        claude.streams[1].send(.text(answer("Blue Clock")))
+        claude.streams[1].send(.done)
+        _ = update(maker)
+        #expect(
+            [first, second, third].map { maker.title(of: $0) }
+                == Array(repeating: "Blue Clock", count: 3))
+        maker.loaded(third)
+        #expect(
+            update(maker)
+                == [first, second, third].map {
+                    .motion(ViewTarget(app: maker.id, item: $0), .rise)
+                })
+    }
+
     @Test func aMicroappIsInstalledOnceItsFirstPageIsWritten() throws {
         let maker = app()
         let item = maker.create()

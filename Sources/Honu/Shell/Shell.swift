@@ -149,7 +149,20 @@ final class Shell {
     /// bubble showing it, which opens into its panel when it lands.
     func start(_ id: AppID) {
         guard let app = registry.app(id) else { return }
-        let bubble = addBubble(showing: app.create(), of: app, at: turtle.center, fresh: true)
+        spit(app.create(), of: app)
+    }
+
+    /// Starts a new instance of the installed microapp whose folder is named
+    /// `name`, and has the turtle spit out a bubble showing it.
+    func launch(_ name: String) {
+        guard let item = maker.launch(name) else { return }
+        spit(item, of: maker)
+    }
+
+    /// Has the turtle spit out a bubble showing `item`, just made, which
+    /// opens into its panel when it lands and takes what is typed until then.
+    private func spit(_ item: ItemID, of app: any MicroApp) {
+        let bubble = addBubble(showing: item, of: app, at: turtle.center, fresh: true)
         stage.spitPanel(bubble, from: turtle.spit())
         typeAheadTarget = bubble.id
     }
