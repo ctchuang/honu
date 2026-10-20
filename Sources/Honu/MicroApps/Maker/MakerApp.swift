@@ -208,9 +208,3 @@ final class MakerApp: MicroApp {
         }
     }
 }
-
-extension CGSize {
-    fileprivate static func + (a: CGSize, b: CGSize) -> CGSize {
-        CGSize(width: a.width + b.width, height: a.height + b.height)
-    }
-}
