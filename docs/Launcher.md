@@ -97,8 +97,9 @@ gesture is out of scope here.
   - **Uninstall**: asks to confirm, then uninstalls (below).
 - Dragging an installed app's tile out of the launcher calls up the
   octopus, whose speech bubble offers to uninstall it; letting go with the
-  pointer within its reach uninstalls it. Built-in tiles and **+** do not
-  drag.
+  pointer within its reach uninstalls it; elsewhere the tile goes back.
+  Built-in tiles and **+** do not drag: they wobble, to show they cannot
+  be removed.
 
 **Installed apps**
 
@@ -113,9 +114,12 @@ gesture is out of scope here.
 - Deleting an instance's bubble (feeding it to the octopus) deletes only
   that instance's data, once the octopus forgets it. The app stays
   installed.
-- Uninstalling an app has the octopus swallow every open bubble of it,
-  deletes its instances, and moves its folder to the Trash. Uninstalling
-  cannot be undone with ⌘Z.
+- Uninstalling an app has the octopus swallow it and every open bubble
+  of it, and its tile leaves the launcher. As with a deleted bubble, the
+  octopus keeps them for `undoSeconds`: clicking it or ⌘Z spits the
+  bubbles back where they were and puts the tile back. Once the octopus
+  forgets, the instances are deleted and the folder goes to the Trash.
+  Quitting before then finishes the uninstall.
 
 **Storage**
 
@@ -265,22 +269,30 @@ lint on their own.
   `Popup.tileMenu`.
 - Modify…: `launch`, with the instance's view state asking to focus the
   change field.
-- Uninstall: a confirmation, then `Shell.uninstall(_:)`: swallow every
-  bubble of the app's instances (no undo), remove the instances, remove
-  the app from the library, trash its folder.
+- Uninstall: a confirmation, then `Shell.uninstall(_:)` (from step 6).
 - Tests (`ShellTests`): uninstalling clears the app, its instances,
   their bubbles, and its tile.
 
 ### Step 6: Drag a tile to the octopus to uninstall
 
-- Dragging an installed tile beyond `summonDistance` summons the
-  octopus, with the speech bubble saying it will uninstall; the tile
-  follows the pointer above the launcher.
-- Letting go within `reach` calls `uninstall`; elsewhere the tile goes
-  back.
-- Reuse `Octopus.summon`, `reach`, and `SpeechBubble` with the text as a
-  parameter.
-- Tests: a drop in reach uninstalls; a drop outside does not.
+- `Octopus`: a `Swallowed` holds the bubbles swallowed together, each
+  with its home, and the microapp uninstalled with them, if any.
+  `forget` returns what it forgets.
+- `MakerApp`: `withdraw(_:)` takes a microapp out of the library while
+  the octopus keeps it, `reinstate(_:)` puts it back, and `uninstall(_:)`
+  deletes it, its instances, and its folder. A withdrawn microapp is not
+  saved, so quitting finishes the uninstall.
+- `Shell.uninstall(_:)`: withdraws the microapp and has the octopus
+  swallow it with every bubble of it. `undoDelete` reinstates it and
+  spits the bubbles back; `tick` uninstalls it once the octopus forgets.
+- `Shell.dragTile` and `endTileDrag`: dragging an installed tile beyond
+  `summonDistance` summons the octopus, whose speech bubble says it will
+  uninstall; the tile follows the pointer above the launcher. Letting go
+  within `reach` uninstalls and closes the launcher; elsewhere the tile
+  goes back. Built-in tiles and **+** wobble instead.
+- Tests: a drop in reach uninstalls, one outside does not; undo brings
+  back the tile and the bubbles; forgetting deletes the folder; quitting
+  while withdrawn finishes the uninstall.
 
 ### Step 7: Docs
 
