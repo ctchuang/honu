@@ -30,6 +30,17 @@ struct ShellView: View {
                         .offset(x: corner.x, y: corner.y)
                 }
             }
+            if let (tile, pointer) = shell.tileDrag {
+                // The dragged tile follows the pointer, above everything.
+                TileFace(tile: tile)
+                    .glassEffect(
+                        .regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .scaleEffect(shell.octopus.isEager ? 0.7 : 1)
+                    .animation(.spring(duration: 0.25), value: shell.octopus.isEager)
+                    .position(pointer)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .coordinateSpace(.named(Self.space))

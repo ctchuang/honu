@@ -48,6 +48,9 @@ final class Shell {
     let maker: MakerApp
     /// What the turtle has open, if anything.
     private(set) var popup: Popup?
+    /// The launcher tile being dragged toward the octopus, and where the
+    /// pointer is.
+    private(set) var tileDrag: (tile: LauncherTile, pointer: CGPoint)?
     /// The newest bubble the turtle spat out, which takes text typed before
     /// its field takes the focus.
     @ObservationIgnored private var typeAheadTarget: BubbleID?
@@ -122,9 +125,14 @@ final class Shell {
         popup = .system(at: point)
     }
 
-    /// Closes whichever menu is open.
+    /// Closes whichever menu is open, letting go of any tile being dragged.
     func closePopup() {
         popup = nil
+        if tileDrag != nil {
+            tileDrag = nil
+            octopus.isEager = false
+            octopus.summon(false, turtle: turtle.center)
+        }
     }
 
     func dragTurtle(by translation: CGSize) {
@@ -244,6 +252,33 @@ final class Shell {
         if doomed {
             octopus.swallow(bubble.id, home: home)
             stage.swallow(bubble, into: octopus.mouth)
+        }
+        octopus.summon(false, turtle: turtle.center)
+    }
+
+    /// Drags launcher `tile`, picked up at `start`, with the pointer now at
+    /// `pointer`. Only an installed microapp's tile moves, calling up the
+    /// octopus to uninstall it once dragged far enough; returns whether it
+    /// does.
+    func dragTile(_ tile: LauncherTile, from start: CGPoint, to pointer: CGPoint) -> Bool {
+        guard case .installed = tile.kind else { return false }
+        tileDrag = (tile, pointer)
+        octopus.isEager = octopus.inReach(pointer)
+        let summoned = (pointer - start).length > Self.summonDistance
+        octopus.summon(summoned, turtle: turtle.center, offer: .microapp)
+        return true
+    }
+
+    /// Lets go of the dragged tile with the pointer at `pointer`: on the
+    /// octopus, its microapp is uninstalled and the launcher closes;
+    /// elsewhere, the tile goes back.
+    func endTileDrag(at pointer: CGPoint) {
+        guard let (tile, _) = tileDrag else { return }
+        tileDrag = nil
+        octopus.isEager = false
+        if octopus.inReach(pointer), case .installed(let name) = tile.kind {
+            popup = nil
+            uninstall(name)
         }
         octopus.summon(false, turtle: turtle.center)
     }

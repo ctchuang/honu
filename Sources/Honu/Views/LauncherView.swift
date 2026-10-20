@@ -32,7 +32,7 @@ struct LauncherView: View {
                 spacing: Self.spacing
             ) {
                 ForEach(tiles) { tile in
-                    TileView(tile: tile) { shell.choose(tile.kind) }
+                    TileView(shell: shell, tile: tile)
                 }
             }
             .padding(Self.padding)
@@ -43,35 +43,79 @@ struct LauncherView: View {
     }
 }
 
-/// One tile of the launcher: its symbol over its label, highlighted while
-/// hovered.
+/// One tile of the launcher, highlighted while hovered. Clicking it starts
+/// what it starts. An installed microapp's tile can be dragged to the
+/// octopus, to uninstall it; the others wobble, to show they stay.
 private struct TileView: View {
+    let shell: Shell
     let tile: LauncherTile
-    let action: () -> Void
     // Spelled out instead of `@State`, whose macro ships only with Xcode.
     private let hovered = State(initialValue: false)
+    /// Counts the wobbles, each played once.
+    private let wobbles = State(initialValue: 0)
+    /// Whether the current drag has already been refused with a wobble.
+    private let refused = State(initialValue: false)
+
+    init(shell: Shell, tile: LauncherTile) {
+        self.shell = shell
+        self.tile = tile
+    }
 
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: tile.symbol)
-                    .font(.system(size: 24))
-                    .frame(height: 28)
-                Text(tile.label)
-                    .font(.system(size: 11))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-            }
-            .padding(4)
-            .frame(width: LauncherView.tileSize, height: LauncherView.tileSize)
+        let dragged = shell.tileDrag?.tile == tile
+        TileFace(tile: tile)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(hovered.wrappedValue ? Color.accentColor.opacity(0.35) : .clear)
             )
+            .opacity(dragged ? 0.3 : 1)
             .contentShape(Rectangle())
+            .keyframeAnimator(initialValue: 0.0, trigger: wobbles.wrappedValue) { face, angle in
+                face.rotationEffect(.degrees(angle))
+            } keyframes: { _ in
+                KeyframeTrack {
+                    CubicKeyframe(-8, duration: 0.07)
+                    CubicKeyframe(7, duration: 0.1)
+                    CubicKeyframe(-4, duration: 0.09)
+                    CubicKeyframe(0, duration: 0.08)
+                }
+            }
+            .gesture(drag.exclusively(before: TapGesture().onEnded { shell.choose(tile.kind) }))
+            .help(tile.label)
+            .onHover { hovered.wrappedValue = $0 }
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named(ShellView.space))
+            .onChanged { value in
+                let moves = shell.dragTile(tile, from: value.startLocation, to: value.location)
+                if !moves && !refused.wrappedValue {
+                    refused.wrappedValue = true
+                    wobbles.wrappedValue += 1
+                }
+            }
+            .onEnded { value in
+                refused.wrappedValue = false
+                shell.endTileDrag(at: value.location)
+            }
+    }
+}
+
+/// What a launcher tile shows: its symbol over its label.
+struct TileFace: View {
+    let tile: LauncherTile
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: tile.symbol)
+                .font(.system(size: 24))
+                .frame(height: 28)
+            Text(tile.label)
+                .font(.system(size: 11))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
         }
-        .buttonStyle(.plain)
-        .help(tile.label)
-        .onHover { hovered.wrappedValue = $0 }
+        .padding(4)
+        .frame(width: LauncherView.tileSize, height: LauncherView.tileSize)
     }
 }

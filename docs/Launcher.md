@@ -273,7 +273,7 @@ lint on their own.
 - Tests (`ShellTests`): uninstalling clears the app, its instances,
   their bubbles, and its tile.
 
-### Step 6: Drag a tile to the octopus to uninstall
+### Step 6: Drag a tile to the octopus to uninstall (done)
 
 - `Octopus`: a `Swallowed` holds the bubbles swallowed together, each
   with its home, and the microapp uninstalled with them, if any.

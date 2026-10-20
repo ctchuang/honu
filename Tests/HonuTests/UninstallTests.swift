@@ -66,6 +66,47 @@ struct UninstallTests {
         #expect(!FileManager.default.fileExists(atPath: microapp.folder.url.path()))
     }
 
+    @Test func droppingATileOnTheOctopusUninstallsItsMicroapp() throws {
+        let (shell, microapp) = try shellWithMicroapp()
+        let name = microapp.folder.name
+        let tile = try #require(shell.launcherTiles.first { $0.kind == .installed(name) })
+        let start = CGPoint(x: 200, y: 600)
+        shell.clickTurtle(at: shell.turtle.center)
+
+        #expect(shell.dragTile(tile, from: start, to: CGPoint(x: 210, y: 600)))
+        #expect(!shell.octopus.isSummoned, "came up for a nudge")
+        #expect(shell.dragTile(tile, from: start, to: CGPoint(x: 600, y: 600)))
+        #expect(shell.octopus.isSummoned && shell.octopus.offer == .microapp)
+        #expect(shell.dragTile(tile, from: start, to: shell.octopus.middle))
+        #expect(shell.octopus.isEager)
+
+        shell.endTileDrag(at: shell.octopus.middle)
+        #expect(shell.tileDrag == nil && shell.popup == nil)
+        #expect(!hasTile(name, in: shell))
+        #expect(shell.octopus.canUndo)
+        #expect(bubbles(of: microapp, in: shell).allSatisfy { $0.isSwallowed })
+    }
+
+    @Test func aTileDroppedElsewhereGoesBack() throws {
+        let (shell, microapp) = try shellWithMicroapp()
+        let name = microapp.folder.name
+        let tile = try #require(shell.launcherTiles.first { $0.kind == .installed(name) })
+        shell.clickTurtle(at: shell.turtle.center)
+        #expect(shell.dragTile(tile, from: CGPoint(x: 200, y: 600), to: CGPoint(x: 600, y: 300)))
+        shell.endTileDrag(at: CGPoint(x: 600, y: 300))
+        #expect(shell.tileDrag == nil && !shell.octopus.isSummoned)
+        #expect(hasTile(name, in: shell))
+        #expect(shell.popup != nil)
+    }
+
+    @Test func builtInTilesDoNotDrag() throws {
+        let shell = makeShell()
+        for tile in shell.launcherTiles {
+            #expect(!shell.dragTile(tile, from: .zero, to: CGPoint(x: 500, y: 500)))
+        }
+        #expect(shell.tileDrag == nil && !shell.octopus.isSummoned)
+    }
+
     @Test func uninstallingLeavesOtherMicroappsAlone() throws {
         let (shell, clock) = try shellWithMicroapp("Clock")
         shell.choose(.make)
