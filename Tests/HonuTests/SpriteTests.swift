@@ -104,8 +104,11 @@ struct OctopusTests {
         #expect(middle.x > screen.width / 2, "not across from the turtle")
         #expect(octopus.origin.y + octopus.size.height <= screen.height)
 
+        #expect(octopus.offersHelp, "does not offer to recycle while summoned")
+
         octopus.summon(false, turtle: turtle)
         #expect(!octopus.inReach(middle), "still there after the drag")
+        #expect(!octopus.offersHelp)
     }
 
     @Test func onlyThePixelsDrawnAtTheTimeAreHit() throws {
@@ -132,6 +135,7 @@ struct OctopusTests {
         octopus.summon(false, turtle: turtle)
         #expect(octopus.forget(at: time + 1).isEmpty && octopus.canUndo)
         #expect(octopus.inReach(octopus.middle), "hid while it could undo")
+        #expect(octopus.showsUndoHint && !octopus.offersHelp)
         // The hint above it takes clicks too, but only while it applies.
         let hint = octopus.hintCenter(at: time + 1)
         #expect(octopus.contains(hint, at: time + 1), "hint does not take clicks")

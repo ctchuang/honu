@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The pixel-art octopus that deletes bubbles. It rises from the bottom edge
 /// while a bubble is being dragged, in the corner away from the turtle, and
-/// stays out of sight the rest of the time. A bubble dropped on it is
+/// stays out of sight the rest of the time, offering in a speech bubble to
+/// take the dragged bubble to recycle. A bubble dropped on it is
 /// swallowed. For a few seconds afterwards the octopus waits with the bubble
 /// still inside, and clicking it (or pressing ⌘Z) spits the bubble back to
 /// where it was picked up, so a slip of the hand loses nothing.
@@ -77,7 +78,7 @@ final class Octopus {
     /// Whether it sits in the bottom-right corner rather than the bottom-left.
     private(set) var isRight = true
     /// Whether a bubble is being dragged, which calls the octopus up.
-    private var isSummoned = false
+    private(set) var isSummoned = false
     /// Whether a bubble is held over it, ready to be dropped.
     var isEager = false
     private var spatAt = -TimeInterval.infinity
@@ -108,6 +109,13 @@ final class Octopus {
 
     var canUndo: Bool { !stomach.isEmpty }
 
+    /// Whether it says it can take the dragged bubble to recycle: while
+    /// summoned, in place of the undo hint.
+    var offersHelp: Bool { isUp && isSummoned }
+
+    /// Whether it shows the "Click to undo" hint, which takes clicks.
+    var showsUndoHint: Bool { canUndo && !isSummoned }
+
     /// Where swallowed bubbles go in and spat-out ones come out.
     var mouth: CGPoint {
         PixelGrid.point(Self.mouth, origin: origin)
@@ -116,7 +124,9 @@ final class Octopus {
     /// Calls the octopus up while `summoned`, as while a bubble is dragged,
     /// rising in the corner farther from the turtle at `turtle`.
     func summon(_ summoned: Bool, turtle: CGPoint) {
-        isSummoned = summoned
+        if summoned != isSummoned {
+            withAnimation(.spring(duration: 0.35, bounce: 0.4)) { isSummoned = summoned }
+        }
         if !isUp {
             // Only pick a corner while out of sight, so it never jumps sideways.
             isRight = turtle.x < stageSize.width / 2
@@ -154,7 +164,7 @@ final class Octopus {
     func contains(_ point: CGPoint, at time: TimeInterval = now()) -> Bool {
         guard isUp else { return false }
         let hint = hintCenter(at: time)
-        if canUndo && abs(point.x - hint.x) < Self.hintSize.width / 2
+        if showsUndoHint && abs(point.x - hint.x) < Self.hintSize.width / 2
             && abs(point.y - hint.y) < Self.hintSize.height / 2
         {
             return true
@@ -208,7 +218,7 @@ final class Octopus {
 
     /// How visible the undo hint is at `time`, fading out over its last second.
     func hintOpacity(at time: TimeInterval) -> Double {
-        canUndo ? min(max(undoUntil - time, 0), 1) : 0
+        showsUndoHint ? min(max(undoUntil - time, 0), 1) : 0
     }
 
     static func color(_ c: Character) -> Color? {

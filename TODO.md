@@ -42,12 +42,6 @@ Smaller improvements:
   done with them as MCP tools, so Claude can read and change them, and drive Honu
   through the same interface a microapp it generated would offer.
 
-## Sprites
-
-- **The octopus offers to help**: when the octopus rises, a little comic speech bubble
-  next to it says it can take the bubble to recycle, so it is clear what dropping a
-  bubble on it does.
-
 ## Project
 
 - **A web page for Honu**, hosted on GitHub Pages: a page that shows what Honu is
