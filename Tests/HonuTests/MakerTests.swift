@@ -82,7 +82,7 @@ struct MakerTests {
     /// answering with the page `answer`.
     private func made(_ maker: MakerApp, _ description: String, _ answer: String) -> ItemID {
         let item = maker.create()
-        maker.microapps[item]!.draft = description
+        maker.microapp(of: item)!.draft = description
         maker.make(item)
         claude.streams.last!.send(.text(answer))
         claude.streams.last!.send(.done)
@@ -131,7 +131,7 @@ struct MakerTests {
     @Test func claudeMakesTheMicroappDescribedAndItRisesOnceLoaded() throws {
         let maker = app()
         let item = maker.create()
-        let microapp = try #require(maker.microapps[item])
+        let microapp = try #require(maker.microapp(of: item))
         #expect(maker.title(of: item) == "Microapp")
         microapp.draft = "  a pomodoro timer "
         maker.make(item)
@@ -166,7 +166,7 @@ struct MakerTests {
     @Test func aMicroappNotMadeCanBeDescribedAgain() throws {
         let maker = app()
         let item = maker.create()
-        let microapp = try #require(maker.microapps[item])
+        let microapp = try #require(maker.microapp(of: item))
         microapp.draft = "a clock"
         maker.make(item)
         claude.streams[0].send(.text("Sorry, I can't."))
@@ -186,7 +186,7 @@ struct MakerTests {
     @Test func aChangeCanBeAskedForAndTakenBack() throws {
         let maker = app()
         let item = made(maker, "a clock", answer("Clock"))
-        let microapp = try #require(maker.microapps[item])
+        let microapp = try #require(maker.microapp(of: item))
         #expect(!microapp.canRevert)
         let first = microapp.version
 
@@ -214,7 +214,7 @@ struct MakerTests {
     @Test func aFailedChangeLeavesThePageAsItWas() throws {
         let maker = app()
         let item = made(maker, "a clock", answer("Clock"))
-        let microapp = try #require(maker.microapps[item])
+        let microapp = try #require(maker.microapp(of: item))
         microapp.draft = "make it blue"
         maker.change(item)
         claude.streams[1].send(.text("<!doctype html><html><body>Blu"))
@@ -230,7 +230,7 @@ struct MakerTests {
     @Test func errorsAsANewPageStartsAreFixedOnceWithoutAsking() throws {
         let maker = app()
         let item = made(maker, "a clock", answer("Clock"))
-        let microapp = try #require(maker.microapps[item])
+        let microapp = try #require(maker.microapp(of: item))
         microapp.report("error: x is not defined", at: 100)
         microapp.report("error: y is not defined", at: 100.5)
         #expect(microapp.problems.count == 2)
@@ -259,7 +259,7 @@ struct MakerTests {
     @Test func laterErrorsWaitForTheUser() throws {
         let maker = app()
         let item = made(maker, "a clock", answer("Clock"))
-        let microapp = try #require(maker.microapps[item])
+        let microapp = try #require(maker.microapp(of: item))
         _ = microapp.loaded(at: 100)
         microapp.report("error: x is not defined", at: 100 + GeneratedApp.fixWindow + 1)
         _ = microapp.poll(claude, at: 200)
@@ -272,10 +272,10 @@ struct MakerTests {
         let clock = made(maker, "a clock", answer("Clock"))
         maker.resize(clock, to: CGSize(width: 500, height: 5000))
         let unfinished = maker.create()
-        maker.microapps[unfinished]!.draft = "a timer"
+        maker.microapp(of: unfinished)!.draft = "a timer"
         maker.make(unfinished)
         let blank = maker.create()
-        maker.microapps[blank]!.draft = "a half-typed descr"
+        maker.microapp(of: blank)!.draft = "a half-typed descr"
         // A folder no microapp has, as of one deleted while Honu was not running.
         let stray = AppFolder(url: root.appending(path: UUID().uuidString))
         try stray.write("stray")
@@ -283,28 +283,70 @@ struct MakerTests {
         let restored = app()
         restored.load(try #require(maker.save()))
         #expect(restored.items == [clock, unfinished, blank])
-        let back = try #require(restored.microapps[clock])
+        let back = try #require(restored.microapp(of: clock))
         #expect(back.status == .running)
         #expect(back.description == "a clock")
-        #expect(back.size == CGSize(width: 500, height: 800))
+        #expect(restored.instances[clock]?.size == CGSize(width: 500, height: 800))
         #expect(restored.title(of: clock) == "Clock")
         #expect(
-            restored.microapps[unfinished]?.status
+            restored.microapp(of: unfinished)?.status
                 == .describing(error: "Honu quit before the microapp was finished."))
-        #expect(restored.microapps[unfinished]?.draft == "a timer")
-        #expect(restored.microapps[blank]?.draft == "a half-typed descr")
+        #expect(restored.microapp(of: unfinished)?.draft == "a timer")
+        #expect(restored.microapp(of: blank)?.draft == "a half-typed descr")
         #expect(!FileManager.default.fileExists(atPath: stray.url.path()))
         #expect(back.folder.page() != nil)
     }
 
-    @Test func aDeletedMicroappsFolderGoesToTheTrash() throws {
+    @Test func aMicroappIsInstalledOnceItsFirstPageIsWritten() throws {
+        let maker = app()
+        let item = maker.create()
+        let microapp = try #require(maker.microapp(of: item))
+        #expect(maker.library.isEmpty)
+        microapp.draft = "a clock"
+        maker.make(item)
+        #expect(maker.library.isEmpty, "installed before its page was written")
+        claude.streams[0].send(.text(answer("Clock")))
+        claude.streams[0].send(.done)
+        _ = update(maker)
+        #expect(maker.library.map { $0 === microapp } == [true])
+    }
+
+    @Test func deletingAnInstanceKeepsAnInstalledMicroappButNotWhatItSaved() throws {
         let maker = app()
         let item = made(maker, "a clock", answer("Clock"))
-        let folder = try #require(maker.microapps[item]?.folder)
-        #expect(FileManager.default.fileExists(atPath: folder.url.path()))
+        let instance = try #require(maker.instances[item])
+        try FileManager.default.createDirectory(
+            at: instance.app.folder.instancesURL, withIntermediateDirectories: true)
+        try Data("1".utf8).write(to: instance.dataURL)
         maker.remove(item)
-        #expect(!FileManager.default.fileExists(atPath: folder.url.path()))
         #expect(maker.items.isEmpty)
+        #expect(maker.library.count == 1)
+        #expect(instance.app.folder.page() != nil)
+        #expect(!FileManager.default.fileExists(atPath: instance.dataURL.path()))
+
+        // It is still there after a relaunch, with no instance.
+        let restored = app()
+        restored.load(try #require(maker.save()))
+        #expect(restored.items.isEmpty)
+        #expect(restored.library.map(\.description) == ["a clock"])
+        #expect(FileManager.default.fileExists(atPath: instance.app.folder.url.path()))
+    }
+
+    @Test func aMicroappNeverMadeGoesToTheTrashWithItsBubble() throws {
+        let maker = app()
+        let item = maker.create()
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "a clock"
+        maker.make(item)
+        claude.streams[0].send(.text("<!doctype html><html><body>Clo"))
+        claude.streams[0].close()
+        _ = update(maker)
+        #expect(microapp.status != .running)
+        try FileManager.default.createDirectory(
+            at: microapp.folder.url, withIntermediateDirectories: true)
+        maker.remove(item)
+        #expect(maker.apps.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: microapp.folder.url.path()))
     }
 }
 

@@ -1,10 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// The Maker microapp: any number of microapps Claude writes. In a new one's
+/// The Maker microapp: any number of microapps Claude writes, each running
+/// in any number of instances, the items its bubbles show. In a new one's
 /// bubble you describe what you want; Claude writes a web page that does it,
 /// which then runs in the bubble, and which you can ask Claude to change.
-/// Each microapp keeps its page, and what the page saves, in a folder of its
+/// Once its first page is written, a microapp is installed: it stays,
+/// whether or not any instance of it does, and can be launched again. Each
+/// microapp keeps its page, and what each instance saves, in a folder of its
 /// own.
 @Observable
 @MainActor
@@ -28,10 +31,13 @@ final class MakerApp: MicroApp {
 
     /// Where the microapps' folders are.
     let root: URL
-    /// The model: each microapp.
-    private(set) var microapps = ItemTable<GeneratedApp>()
+    /// Every microapp, oldest first: those installed, and those still being
+    /// described or made.
+    private(set) var apps: [GeneratedApp] = []
+    /// The model: each instance, by the item it is.
+    private(set) var instances = ItemTable<Instance>()
     @ObservationIgnored let services: Services
-    /// Microapps whose new page has loaded since the last `update`, whose
+    /// Instances whose new page has loaded since the last `update`, whose
     /// bubbles rise.
     @ObservationIgnored private var risen: Set<ItemID> = []
 
@@ -53,14 +59,31 @@ final class MakerApp: MicroApp {
         AppFolder(url: root.appending(path: name, directoryHint: .isDirectory))
     }
 
-    /// Starts a microapp with nothing described yet. Its folder is made when
-    /// its first page is written.
+    /// The installed microapps, the ones whose first page has been written,
+    /// in the order they were made.
+    var library: [GeneratedApp] { apps.filter(\.hasPage) }
+
+    /// The microapp `item` runs.
+    func microapp(of item: ItemID) -> GeneratedApp? {
+        instances[item]?.app
+    }
+
+    /// The instances of `microapp`, oldest first.
+    func items(of microapp: GeneratedApp) -> [ItemID] {
+        instances.entries.filter { $0.value.app === microapp }.map(\.id)
+    }
+
+    /// Starts a microapp with nothing described yet, in one instance. Its
+    /// folder is made when its first page is written.
     func create() -> ItemID {
-        microapps.insert(GeneratedApp(folder: folder(named: UUID().uuidString)))
+        let microapp = GeneratedApp(folder: folder(named: UUID().uuidString))
+        apps.append(microapp)
+        return instances.insert(Instance(app: microapp))
     }
 
     func appearance(of item: ItemID) -> Appearance {
-        guard let microapp = microapps[item] else { return Appearance() }
+        guard let instance = instances[item] else { return Appearance() }
+        let microapp = instance.app
         let symbol = microapp.meta.symbol.flatMap {
             NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil ? nil : $0
         }
@@ -69,28 +92,33 @@ final class MakerApp: MicroApp {
             case .describing: Self.describingSize
             case .writing(.making): Self.writingSize
             case .writing, .running:
-                (microapp.size ?? Self.defaultPageSize) + Self.chrome
+                (instance.size ?? Self.defaultPageSize) + Self.chrome
             }
         return Appearance(symbol: symbol ?? Self.defaultSymbol, panelSize: panel)
     }
 
     func title(of item: ItemID) -> String {
-        guard let microapp = microapps[item] else { return Self.emptyLabel }
-        return shortLabel(microapp.meta.title ?? microapp.description ?? Self.emptyLabel)
+        guard let microapp = microapp(of: item) else { return Self.emptyLabel }
+        return Self.name(of: microapp)
+    }
+
+    /// What `microapp` is called: its page's title, or else its description.
+    static func name(of microapp: GeneratedApp) -> String {
+        shortLabel(microapp.meta.title ?? microapp.description ?? emptyLabel)
     }
 
     /// Whether Claude is writing a microapp's page.
     func isBusy(_ item: ItemID) -> Bool {
-        microapps[item]?.isBusy ?? false
+        microapp(of: item)?.isBusy ?? false
     }
 
     /// Takes in what Claude has written, and fixes pages' errors when due.
-    /// A microapp's bubbles wobble when writing fails, and rise when a new
-    /// page has loaded.
+    /// The bubbles of every instance of a microapp wobble when writing it
+    /// fails, and rise when its new page has loaded.
     func update(_ context: Context) {
         let time = now()
-        for (item, microapp) in microapps.entries {
-            if microapp.poll(services.claude, at: time) == .needsAttention {
+        for microapp in apps where microapp.poll(services.claude, at: time) == .needsAttention {
+            for item in items(of: microapp) {
                 context.play(.wobble, for: item)
             }
         }
@@ -107,102 +135,137 @@ final class MakerApp: MicroApp {
     }
 
     func content(of item: ItemID, viewState: FocusRequestState) -> some View {
-        if let microapp = microapps[item] {
-            MakerView(app: self, item: item, microapp: microapp, state: viewState)
+        if let instance = instances[item] {
+            MakerView(app: self, item: item, instance: instance, state: viewState)
         }
     }
 
     /// Text typed before the description field took the focus goes into it.
     func typeAhead(_ text: String, into item: ItemID, viewState: FocusRequestState) {
-        guard let microapp = microapps[item], case .describing = microapp.status else { return }
+        guard let microapp = microapp(of: item), case .describing = microapp.status else { return }
         microapp.draft += text
     }
 
     // MARK: What the views ask for
 
     func make(_ item: ItemID) {
-        microapps[item]?.make(services.claude)
+        microapp(of: item)?.make(services.claude)
     }
 
     func change(_ item: ItemID) {
-        microapps[item]?.change(services.claude)
+        microapp(of: item)?.change(services.claude)
     }
 
     func fix(_ item: ItemID) {
-        microapps[item]?.fix(services.claude)
+        microapp(of: item)?.fix(services.claude)
     }
 
     func revert(_ item: ItemID) {
-        microapps[item]?.revert()
+        microapp(of: item)?.revert()
     }
 
-    /// Notes that a microapp's page loaded; a new one rises.
+    /// Notes that an instance's page loaded; a new page rises in every
+    /// instance of its microapp.
     func loaded(_ item: ItemID) {
-        if microapps[item]?.loaded(at: now()) == true {
-            risen.insert(item)
+        guard let microapp = microapp(of: item) else { return }
+        if microapp.loaded(at: now()) {
+            risen.formUnion(items(of: microapp))
         }
     }
 
     func report(_ problem: String, in item: ItemID) {
-        microapps[item]?.report(problem, at: now())
+        microapp(of: item)?.report(problem, at: now())
     }
 
     func resize(_ item: ItemID, to size: CGSize) {
-        microapps[item]?.resize(to: size)
+        instances[item]?.resize(to: size)
     }
 
     // MARK: Keeping microapps
 
-    /// Forgets a microapp, stopping Claude, and moves its folder to the Trash.
+    /// Forgets an instance and deletes what it saved. A microapp never
+    /// installed goes with its last instance: Claude stops, and its folder
+    /// goes to the Trash.
     func remove(_ item: ItemID) {
-        guard let microapp = microapps[item] else { return }
-        microapp.cancel()
-        microapp.folder.trash()
-        microapps.remove(item)
+        guard let instance = instances[item] else { return }
+        instances.remove(item)
         risen.remove(item)
+        instance.deleteData()
+        let microapp = instance.app
+        if !microapp.hasPage, items(of: microapp).isEmpty {
+            microapp.cancel()
+            microapp.folder.trash()
+            apps.removeAll { $0 === microapp }
+        }
     }
 
-    var items: [ItemID] { microapps.items }
+    var items: [ItemID] { instances.items }
+
+    /// What is saved between launches: each microapp, and each instance.
+    private struct Saved: Codable {
+        var apps: [SavedMicroapp]
+        var instances: [SavedInstance]
+    }
 
     /// A microapp as saved between launches. Its page is in its folder, and
     /// what the page says about itself is read from there.
     private struct SavedMicroapp: Codable {
-        var id: ItemID
         var folder: String
         var description: String?
         var draft: String
-        var width: CGFloat?
-        var height: CGFloat?
         /// Why Claude stopped, if it did.
         var error: String?
     }
 
-    func save() -> Data? {
-        microapps.save { id, microapp in
-            SavedMicroapp(
-                id: id, folder: microapp.folder.name, description: microapp.description,
-                draft: microapp.draft, width: microapp.size?.width,
-                height: microapp.size?.height, error: microapp.savedError)
-        }
+    /// An instance as saved between launches, naming its microapp by folder.
+    private struct SavedInstance: Codable {
+        var id: ItemID
+        var folder: String
+        var data: UUID
+        var width: CGFloat?
+        var height: CGFloat?
     }
 
-    /// Takes back the saved microapps, and moves to the Trash the folders
-    /// of microapps no longer kept, such as one deleted while Honu was not
-    /// running to see it.
+    func save() -> Data? {
+        let saved = Saved(
+            apps: apps.map {
+                SavedMicroapp(
+                    folder: $0.folder.name, description: $0.description, draft: $0.draft,
+                    error: $0.savedError)
+            },
+            instances: instances.entries.map { id, instance in
+                SavedInstance(
+                    id: id, folder: instance.app.folder.name, data: instance.dataID,
+                    width: instance.size?.width, height: instance.size?.height)
+            })
+        return try? JSONEncoder().encode(saved)
+    }
+
+    /// Takes back the saved microapps and instances. A microapp not
+    /// installed that no instance runs is forgotten, and folders no
+    /// microapp has, such as one deleted while Honu was not running to see
+    /// it, go to the Trash.
     func load(_ data: Data) {
-        guard (try? JSONDecoder().decode([SavedMicroapp].self, from: data)) != nil else { return }
-        microapps.load(data, as: SavedMicroapp.self) { saved in
-            let size = saved.width.flatMap { width in
-                saved.height.map { CGSize(width: width, height: $0) }
-            }
-            return (
-                saved.id,
-                GeneratedApp(
-                    folder: folder(named: saved.folder), description: saved.description,
-                    draft: saved.draft, size: size, error: saved.error)
-            )
+        guard let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return }
+        var byFolder: [String: GeneratedApp] = [:]
+        for microapp in saved.apps where byFolder[microapp.folder] == nil {
+            byFolder[microapp.folder] = GeneratedApp(
+                folder: folder(named: microapp.folder), description: microapp.description,
+                draft: microapp.draft, error: microapp.error)
         }
-        let kept = Set(microapps.entries.map(\.value.folder.name))
+        for instance in saved.instances {
+            guard let microapp = byFolder[instance.folder] else { continue }
+            let size = instance.width.flatMap { width in
+                instance.height.map { CGSize(width: width, height: $0) }
+            }
+            instances.restore(
+                instance.id, Instance(app: microapp, dataID: instance.data, size: size))
+        }
+        let running = Set(instances.entries.map { ObjectIdentifier($0.value.app) })
+        apps = saved.apps.compactMap { byFolder.removeValue(forKey: $0.folder) }.filter {
+            $0.hasPage || running.contains(ObjectIdentifier($0))
+        }
+        let kept = Set(apps.map(\.folder.name))
         let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path())) ?? []
         for name in names where !kept.contains(name) && UUID(uuidString: name) != nil {
             folder(named: name).trash()

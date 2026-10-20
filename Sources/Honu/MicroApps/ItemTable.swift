@@ -38,6 +38,12 @@ struct ItemTable<Value> {
         byID[item] = nil
     }
 
+    /// Puts back `item`, one restored from a previous launch, holding `value`.
+    mutating func restore(_ item: ItemID, _ value: Value) {
+        ids.skip(past: item)
+        byID[item] = value
+    }
+
     /// The items, oldest first, as a JSON array of what `saved` makes of each.
     func save<Saved: Encodable>(_ saved: (ItemID, Value) -> Saved) -> Data? {
         try? JSONEncoder().encode(entries.map { saved($0.id, $0.value) })
@@ -51,8 +57,7 @@ struct ItemTable<Value> {
         let saved = (try? JSONDecoder().decode([Saved].self, from: data)) ?? []
         for item in saved {
             let (id, value) = restored(item)
-            ids.skip(past: id)
-            byID[id] = value
+            restore(id, value)
         }
     }
 }

@@ -3,6 +3,7 @@ import Observation
 
 /// One microapp Claude writes: what the user asked for, its page in its
 /// folder, and Claude at work on it, making it, changing it, or fixing it.
+/// It runs in any number of `Instance`s, which all show its page.
 @Observable
 @MainActor
 final class GeneratedApp {
@@ -41,8 +42,6 @@ final class GeneratedApp {
     private(set) var status: Status
     /// What the page says about itself.
     private(set) var meta = PageMeta()
-    /// The size the page asked for, last with `honu.resize`.
-    private(set) var size: CGSize?
     /// Counts the pages written, so views know to load the new one.
     private(set) var version = 0
     /// Claude's answer so far.
@@ -67,13 +66,9 @@ final class GeneratedApp {
     /// Whether the page was just written, so its bubbles rise once it loads.
     @ObservationIgnored private var isNew = false
 
-    /// A microapp in `folder`, with the page there, if one was written, at
-    /// the size it last asked for. A microapp saved while Claude was writing
-    /// comes back with why it stopped.
-    init(
-        folder: AppFolder, description: String? = nil, draft: String = "",
-        size: CGSize? = nil, error: String? = nil
-    ) {
+    /// A microapp in `folder`, with the page there, if one was written. A
+    /// microapp saved while Claude was writing comes back with why it stopped.
+    init(folder: AppFolder, description: String? = nil, draft: String = "", error: String? = nil) {
         self.folder = folder
         self.description = description
         self.draft = draft
@@ -81,9 +76,6 @@ final class GeneratedApp {
             status = .running
             notice = error
             show(page)
-            if let size {
-                resize(to: size)
-            }
         } else {
             status = .describing(error: error)
         }
@@ -92,6 +84,14 @@ final class GeneratedApp {
     var isBusy: Bool {
         if case .writing = status { return true }
         return false
+    }
+
+    /// Whether its first page has been written, so it can be launched.
+    var hasPage: Bool {
+        switch status {
+        case .describing, .writing(.making): false
+        case .writing, .running: true
+        }
     }
 
     /// Why Claude stopped, as saved: a page still being written when Honu
@@ -232,15 +232,9 @@ final class GeneratedApp {
         }
     }
 
-    /// Takes the size the page asked for, within limits.
-    func resize(to size: CGSize) {
-        self.size = AppSource.clamped(size)
-    }
-
     /// Shows `page`: what it says about itself, and a new version to load.
     private func show(_ page: String) {
         meta = AppSource.meta(of: page)
-        size = meta.size
         problems = []
         firstProblemAt = nil
         loadedAt = nil

@@ -1,20 +1,27 @@
 import Foundation
 
-/// A microapp's folder: its page (`index.html`), what it saves
-/// (`data.json`, written by `Bridge`), and the pages it had before each
-/// change (`history/1.html`, `2.html`, …), so a change can be undone.
+/// A microapp's folder: its page (`index.html`), what each of its instances
+/// saves (`instances/<uuid>.json`, written by `Bridge`), and the pages it had
+/// before each change (`history/1.html`, `2.html`, …), so a change can be
+/// undone.
 struct AppFolder: Equatable {
     let url: URL
 
     var name: String { url.lastPathComponent }
     var pageURL: URL { url.appending(path: "index.html") }
     var historyURL: URL { url.appending(path: "history", directoryHint: .isDirectory) }
-    /// Where the page's state is saved.
-    var dataURL: URL { url.appending(path: "data.json") }
+    /// Where the page's state was saved before a microapp could run more
+    /// than once.
+    var oldDataURL: URL { url.appending(path: "data.json") }
     /// Where each instance of the microapp saves its state, which the page
     /// is never served.
     var instancesURL: URL { url.appending(path: Self.instances, directoryHint: .isDirectory) }
     static let instances = "instances"
+
+    /// Where the instance `id` names saves its page's state.
+    func dataURL(for id: UUID) -> URL {
+        instancesURL.appending(path: "\(id.uuidString).json")
+    }
 
     /// The page, if one has been written.
     func page() -> String? {

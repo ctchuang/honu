@@ -1,13 +1,16 @@
 import SwiftUI
 
-/// Shows a microapp: a field to describe it, then what Claude writes, then
-/// the page running, with a bar below for asking for changes.
+/// Shows an instance of a microapp: a field to describe it, then what
+/// Claude writes, then the page running, with a bar below for asking for
+/// changes.
 struct MakerView: View {
     let app: MakerApp
     let item: ItemID
-    let microapp: GeneratedApp
+    let instance: Instance
     let state: FocusRequestState
     @FocusState private var focused: Bool
+
+    private var microapp: GeneratedApp { instance.app }
 
     var body: some View {
         switch microapp.status {
@@ -19,7 +22,7 @@ struct MakerView: View {
             VStack(spacing: 0) {
                 MicroappView(
                     app: app, item: item, folder: microapp.folder.url,
-                    dataURL: microapp.folder.dataURL, version: microapp.version)
+                    dataURL: instance.dataURL, version: microapp.version)
                 ChangeBar(app: app, item: item, microapp: microapp)
             }
         }
