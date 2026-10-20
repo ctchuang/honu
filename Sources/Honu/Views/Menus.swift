@@ -39,8 +39,6 @@ struct MenuItem: View {
     let label: String
     var isChecked = false
     let action: () -> Void
-    // Spelled out instead of `@State`, whose macro ships only with Xcode.
-    private let hovered = State(initialValue: false)
 
     var body: some View {
         Button(action: action) {
@@ -54,13 +52,36 @@ struct MenuItem: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(hovered.wrappedValue ? Color.accentColor.opacity(0.35) : .clear)
-            )
+            .hoverHighlight(cornerRadius: 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovered.wrappedValue = $0 }
+    }
+}
+
+/// Highlights a menu item or launcher tile while the pointer is over it.
+private struct HoverHighlight: ViewModifier {
+    let cornerRadius: CGFloat
+    // Spelled out instead of `@State`, whose macro ships only with Xcode.
+    private let hovered = State(initialValue: false)
+
+    init(cornerRadius: CGFloat) {
+        self.cornerRadius = cornerRadius
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(hovered.wrappedValue ? Color.accentColor.opacity(0.35) : .clear)
+            )
+            .onHover { hovered.wrappedValue = $0 }
+    }
+}
+
+extension View {
+    /// Puts a rounded highlight behind the view while the pointer is over it.
+    func hoverHighlight(cornerRadius: CGFloat) -> some View {
+        modifier(HoverHighlight(cornerRadius: cornerRadius))
     }
 }

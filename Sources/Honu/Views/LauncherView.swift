@@ -51,7 +51,6 @@ private struct TileView: View {
     let shell: Shell
     let tile: LauncherTile
     // Spelled out instead of `@State`, whose macro ships only with Xcode.
-    private let hovered = State(initialValue: false)
     /// Counts the wobbles, each played once.
     private let wobbles = State(initialValue: 0)
     /// Whether the current drag has already been refused with a wobble.
@@ -67,10 +66,7 @@ private struct TileView: View {
     var body: some View {
         let dragged = shell.tileDrag?.tile == tile
         TileFace(tile: tile)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(hovered.wrappedValue ? Color.accentColor.opacity(0.35) : .clear)
-            )
+            .hoverHighlight(cornerRadius: 12)
             .opacity(dragged ? 0.3 : 1)
             .contentShape(Rectangle())
             .keyframeAnimator(initialValue: 0.0, trigger: wobbles.wrappedValue) { face, angle in
@@ -85,7 +81,6 @@ private struct TileView: View {
             }
             .gesture(drag.exclusively(before: TapGesture().onEnded { shell.choose(tile.kind) }))
             .help(tile.label)
-            .onHover { hovered.wrappedValue = $0 }
             .contextMenu { menu }
             .onGeometryChange(for: CGPoint.self) { proxy in
                 let frame = proxy.frame(in: .named(ShellView.space))
