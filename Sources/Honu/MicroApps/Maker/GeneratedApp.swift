@@ -173,7 +173,8 @@ final class GeneratedApp {
             return fail("The page couldn't be saved: \(error.localizedDescription)")
         }
         written = ""
-        if job == .changing {
+        // What was asked for is done; a fix leaves alone what is being typed.
+        if job != .fixing {
             draft = ""
         }
         status = .running
