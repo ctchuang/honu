@@ -7,7 +7,8 @@ import SwiftUI
 @MainActor
 final class AskApp: MicroApp {
     let id = AppID("ask")
-    let menuLabel = "Ask AI"
+    let launcherLabel = "Ask AI"
+    let launcherSymbol = "bubble.left.and.text.bubble.right"
     /// Asking Claude is to become feeding a bubble to the turtle, so Ask AI
     /// leaves the menu; chats already made stay.
     let isLaunchable = false

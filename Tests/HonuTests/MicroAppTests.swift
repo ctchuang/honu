@@ -8,7 +8,8 @@ import Testing
 @MainActor
 private final class Counters: MicroApp {
     let id = AppID("counters")
-    let menuLabel = "Count"
+    let launcherLabel = "Count"
+    let launcherSymbol = "number"
     var counts: [ItemID: Int] = [:]
     private var ids = ItemIDs()
 
@@ -63,7 +64,7 @@ struct MicroAppTests {
     @Test func registryRoutesToTheMicroappOfEachTarget() {
         let counters = Counters()
         let registry = Registry([counters])
-        #expect(registry.apps.map(\.menuLabel) == ["Count"])
+        #expect(registry.apps.map(\.launcherLabel) == ["Count"])
 
         let target = ViewTarget(app: counters.id, item: counters.create())
         #expect(registry.title(of: target) == "0")

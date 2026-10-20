@@ -20,11 +20,24 @@ struct ShellTests {
         #expect(shell.undoManager(for: second) !== history)
     }
 
-    @Test func theMenuListsTheMicroappsInOrderButAskAI() {
-        #expect(
-            makeShell().menuChoices.map(\.label) == [
-                "Add Note", "Open Web Page", "Make a Microapp",
-            ])
+    @Test func theLauncherListsTheBuiltInMicroappsButAskAIThenPlus() {
+        let tiles = makeShell().launcherTiles
+        #expect(tiles.map(\.kind) == [.stock(AppID("notes")), .stock(AppID("web")), .make])
+        #expect(tiles.map(\.label) == ["Note", "Web Page", "New Microapp"])
+        #expect(tiles.last?.symbol == "plus")
+    }
+
+    @Test func choosingATileStartsAnItemAndClosesTheLauncher() throws {
+        let shell = makeShell()
+        shell.clickTurtle(at: shell.turtle.center)
+        shell.choose(.make)
+        #expect(shell.popup == nil)
+        let bubble = try #require(shell.stage.bubbles.last)
+        #expect(bubble.target.app == shell.maker.id)
+        #expect(shell.maker.items == [bubble.target.item])
+
+        shell.choose(.stock(AppID("notes")))
+        #expect(shell.stage.bubbles.last?.target.app == AppID("notes"))
     }
 
     @Test func aMenuStaysOnScreen() {

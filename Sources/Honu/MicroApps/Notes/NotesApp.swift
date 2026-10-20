@@ -7,7 +7,8 @@ import SwiftUI
 @MainActor
 final class NotesApp: MicroApp {
     let id = AppID("notes")
-    let menuLabel = "Add Note"
+    let launcherLabel = "Note"
+    let launcherSymbol = "note.text"
 
     /// The model: each note's text.
     private(set) var notes = ItemTable<String>()

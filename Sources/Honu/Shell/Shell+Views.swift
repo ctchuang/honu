@@ -2,15 +2,17 @@ import SwiftUI
 
 /// What the views ask of the shell, so they never reach into the microapps.
 extension Shell {
-    /// One item of the turtle's menu, which starts a new item in a microapp.
-    struct MenuChoice: Identifiable {
-        let id: AppID
-        let label: String
-    }
-
-    /// The turtle's menu items, one per microapp it lists.
-    var menuChoices: [MenuChoice] {
-        registry.apps.filter(\.isLaunchable).map { MenuChoice(id: $0.id, label: $0.menuLabel) }
+    /// The turtle's launcher tiles: a tile for each built-in microapp it
+    /// lists, then **+** for making a new microapp.
+    var launcherTiles: [LauncherTile] {
+        let stock = registry.apps.filter { $0.isLaunchable && $0.id != maker.id }.map {
+            LauncherTile(kind: .stock($0.id), label: $0.launcherLabel, symbol: $0.launcherSymbol)
+        }
+        return stock
+            + [
+                LauncherTile(
+                    kind: .make, label: maker.launcherLabel, symbol: maker.launcherSymbol)
+            ]
     }
 
     /// How `bubble` looks, as its microapp says.

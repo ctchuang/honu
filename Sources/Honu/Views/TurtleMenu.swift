@@ -11,8 +11,8 @@ struct TurtleMenu: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(shell.menuChoices) { choice in
-                MenuItem(label: choice.label) { shell.choose(choice.id) }
+            ForEach(shell.launcherTiles) { tile in
+                MenuItem(label: tile.label) { shell.choose(tile.kind) }
             }
         }
         .padding(6)

@@ -57,7 +57,8 @@ struct MotionTests {
 @MainActor
 private final class Worker: MicroApp {
     let id = AppID("worker")
-    let menuLabel = "Work"
+    let launcherLabel = "Work"
+    let launcherSymbol = "hammer"
     var items: [ItemID] = [ItemID(rawValue: 1)]
     var busy = true
 

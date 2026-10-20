@@ -10,7 +10,8 @@ import SwiftUI
 @MainActor
 final class MakerApp: MicroApp {
     let id = AppID("maker")
-    let menuLabel = "Make a Microapp"
+    let launcherLabel = "New Microapp"
+    let launcherSymbol = "plus"
 
     /// The label of a microapp not yet described.
     static let emptyLabel = "Microapp"

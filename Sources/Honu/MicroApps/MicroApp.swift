@@ -155,8 +155,10 @@ extension ItemViews where ViewState == NoViewState {
 protocol MicroApp: ItemStore, ItemLook, ItemViews {
     var id: AppID { get }
 
-    /// The turtle's menu item that starts a new item.
-    var menuLabel: String { get }
+    /// The label of its tile in the turtle's launcher, which starts a new item.
+    var launcherLabel: String { get }
+    /// The SF Symbol on its tile.
+    var launcherSymbol: String { get }
 
     /// Whether the turtle's menu lists it. One that is not keeps its items
     /// and their bubbles, but starts no new ones.

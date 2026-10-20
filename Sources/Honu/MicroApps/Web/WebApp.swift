@@ -7,7 +7,8 @@ import WebKit
 @MainActor
 final class WebApp: MicroApp {
     let id = AppID("web")
-    let menuLabel = "Open Web Page"
+    let launcherLabel = "Web Page"
+    let launcherSymbol = "safari"
 
     /// The model: each page's address, empty until one is entered.
     private(set) var pages = ItemTable<String>()

@@ -16,6 +16,22 @@ enum Popup: Equatable {
     case system(at: CGPoint)
 }
 
+/// One tile of the turtle's launcher, which starts something new.
+struct LauncherTile: Identifiable, Equatable {
+    enum Kind: Hashable {
+        /// A new item of a built-in microapp.
+        case stock(AppID)
+        /// A new microapp, to be described.
+        case make
+    }
+
+    let kind: Kind
+    let label: String
+    let symbol: String
+
+    var id: Kind { kind }
+}
+
 /// The shell: the whole app inside the window. It wires the microapps, the
 /// stage of bubbles, the turtle and its menu, and the octopus together, and
 /// routes what the user does between them.
@@ -26,6 +42,8 @@ final class Shell {
     let stage: Stage
     let turtle: Turtle
     let octopus: Octopus
+    /// The microapp that makes microapps, which the launcher's **+** starts.
+    let maker: MakerApp
     /// What the turtle has open, if anything.
     private(set) var popup: Popup?
     /// The newest bubble the turtle spat out, which takes text typed before
@@ -49,10 +67,8 @@ final class Shell {
         size: CGSize, storeURL: URL = Autosave.storeURL, services: Services = .live()
     ) {
         autosave = Autosave(url: storeURL)
-        registry = Registry([
-            NotesApp(), AskApp(services: services), WebApp(),
-            MakerApp(root: MakerApp.root(for: storeURL), services: services),
-        ])
+        maker = MakerApp(root: MakerApp.root(for: storeURL), services: services)
+        registry = Registry([NotesApp(), AskApp(services: services), WebApp(), maker])
         stage = Stage(size: size)
         turtle = Turtle(stageSize: size)
         octopus = Octopus(stageSize: size)
@@ -120,10 +136,13 @@ final class Shell {
         save()
     }
 
-    /// Carries out the menu item for microapp `app`.
-    func choose(_ app: AppID) {
+    /// Carries out the launcher tile `tile`.
+    func choose(_ tile: LauncherTile.Kind) {
         popup = nil
-        start(app)
+        switch tile {
+        case .stock(let app): start(app)
+        case .make: start(maker.id)
+        }
     }
 
     /// Starts a new item in microapp `id` and has the turtle spit out a
