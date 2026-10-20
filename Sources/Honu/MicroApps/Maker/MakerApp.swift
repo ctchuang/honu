@@ -43,6 +43,9 @@ final class MakerApp: MicroApp {
     /// Instances whose new page has loaded since the last `update`, whose
     /// bubbles rise.
     @ObservationIgnored private var risen: Set<ItemID> = []
+    /// Instances launched to be changed, whose bubble's change field takes
+    /// the focus, until the bubble is made.
+    @ObservationIgnored private var toModify: Set<ItemID> = []
 
     init(root: URL, services: Services) {
         self.root = root
@@ -87,10 +90,15 @@ final class MakerApp: MicroApp {
     }
 
     /// Starts a new instance of the installed microapp whose folder is
-    /// named `name`, its page running at once.
-    func launch(_ name: String) -> ItemID? {
+    /// named `name`, its page running at once. One launched `toModify` it
+    /// has the cursor in its change field, as soon as its bubble opens.
+    func launch(_ name: String, toModify modify: Bool = false) -> ItemID? {
         guard let microapp = library.first(where: { $0.folder.name == name }) else { return nil }
-        return instances.insert(Instance(app: microapp))
+        let item = instances.insert(Instance(app: microapp))
+        if modify {
+            toModify.insert(item)
+        }
+        return item
     }
 
     func appearance(of item: ItemID) -> Appearance {
@@ -153,7 +161,8 @@ final class MakerApp: MicroApp {
         if case .describing = microapp(of: item)?.status {
             describing = true
         }
-        return FocusRequestState(focusPending: fresh && describing)
+        let modifying = toModify.remove(item) != nil
+        return FocusRequestState(focusPending: fresh && (describing || modifying))
     }
 
     func content(of item: ItemID, viewState: FocusRequestState) -> some View {
@@ -162,10 +171,14 @@ final class MakerApp: MicroApp {
         }
     }
 
-    /// Text typed before the description field took the focus goes into it.
+    /// Text typed before the description field or the change field took
+    /// the focus goes into it.
     func typeAhead(_ text: String, into item: ItemID, viewState: FocusRequestState) {
-        guard let microapp = microapp(of: item), case .describing = microapp.status else { return }
-        microapp.draft += text
+        guard let microapp = microapp(of: item) else { return }
+        switch microapp.status {
+        case .describing, .running: microapp.draft += text
+        case .writing: break
+        }
     }
 
     // MARK: What the views ask for
