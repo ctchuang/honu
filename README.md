@@ -19,6 +19,10 @@ them out; drag a bubble to the octopus to remove it.
 Ask the turtle to make a new microapp in moments, or to change one you
 already have.
 
+![Three microapps Claude made floating on the desktop (a world clock, a
+Pomodoro timer, and a habit tracker with a change request typed into its
+bar) beside the turtle's launcher](docs/images/demo.jpg)
+
 > **TODO:** drag bubbles onto the turtle to give Claude their contents as context.
 
 ## Quick start in 30 seconds
