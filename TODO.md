@@ -55,3 +55,7 @@ Smaller improvements:
   to build and run it.
 - **Install microapps on their own**: microapps are compiled into Honu and listed in
   `Shell.init` today; let a microapp be installed separately, without rebuilding Honu.
+- **Support iPad**: iPadOS has no desktop to float over, so the bubbles would live in
+  Honu's own window there; the models and SwiftUI views could be shared, while the
+  AppKit hosting (`FloatingWindow`, `ClickThrough`, the event monitor) needs a UIKit
+  counterpart, and dragging and the turtle's menu need to work by touch.
