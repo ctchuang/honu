@@ -55,6 +55,21 @@
 
 ## Project
 
+- **A downloadable app**: today `swift build -c release` makes a bare
+  executable, which opens a Terminal window from the Finder, has no
+  Info.plist, icon, or bundle id, and stops at `Bundle.module` (the Dock
+  icon in `AppDelegate`) when moved without its `Honu_Honu.bundle`.
+  - Load the icon some other way than `Bundle.module`, such as an
+    `.icns` in the app's `Contents/Resources` (`CFBundleIconFile`).
+  - Add `scripts/package-app.sh`: a release build, assembled into
+    `Honu.app` with an Info.plist and the icon, ad-hoc signed, and
+    zipped.
+  - Attach `Honu-<version>.zip` to the GitHub release (v0.1 has only
+    the source).
+  - Without notarization (an Apple Developer account), Gatekeeper warns
+    of an unidentified developer on first launch: right-click and Open,
+    or `xattr -d com.apple.quarantine`. Say so in the README.
+
 - **A web page for Honu**, hosted on GitHub Pages: a page that shows
   what Honu is (bubbles on the desktop, the turtle and the octopus)
   with a short demo video, and how to build and run it.
