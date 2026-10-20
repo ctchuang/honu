@@ -110,6 +110,12 @@ struct MakerTests {
                 == "/tmp/microapps/A1/img/a.png")
         #expect(scheme.file(at: URL(string: "honu-app://A1/../B2/data.json")!) == nil)
         #expect(scheme.file(at: URL(string: "honu-app://A1/%2E%2E/B2/data.json")!) == nil)
+        // What the instances saved stays out of reach of the page.
+        #expect(scheme.file(at: URL(string: "honu-app://A1/instances/X.json")!) == nil)
+        #expect(scheme.file(at: URL(string: "honu-app://A1/Instances/X.json")!) == nil)
+        #expect(scheme.file(at: URL(string: "honu-app://A1/img/../instances/X.json")!) == nil)
+        #expect(scheme.file(at: URL(string: "honu-app://A1/instances")!) == nil)
+        #expect(scheme.file(at: URL(string: "honu-app://A1/instances-list.js")!) != nil)
         #expect(
             scheme.file(at: URL(string: "honu-app://A1/a%20b.png")!)?.path(percentEncoded: false)
                 == "/tmp/microapps/A1/a b.png")

@@ -4,7 +4,8 @@ import WebKit
 
 /// Serves a microapp's folder at `honu-app://<folder name>/`, so each
 /// microapp has an origin of its own, a secure context, and relative links
-/// to the files beside its page.
+/// to the files beside its page. It never serves what its instances saved
+/// (`instances/`): a page reads only its own, through `honu.load`.
 struct MicroappScheme: URLSchemeHandler {
     static let scheme = "honu-app"
 
@@ -30,13 +31,17 @@ struct MicroappScheme: URLSchemeHandler {
         }
     }
 
-    /// The file in the folder `url` names, if it stays inside the folder.
+    /// The file in the folder `url` names, if it stays inside the folder
+    /// and out of `instances/`.
     func file(at url: URL) -> URL? {
         let path = url.path(percentEncoded: false)
         let name = path.isEmpty || path == "/" ? "index.html" : String(path.dropFirst())
         let file = folder.appending(path: name).standardizedFileURL
-        let inside = file.path().hasPrefix(folder.standardizedFileURL.path())
-        return inside ? file : nil
+        let root = folder.standardizedFileURL.pathComponents
+        guard file.pathComponents.starts(with: root) else { return nil }
+        // Compared without case, as the Mac's file system usually is.
+        let top = file.pathComponents.dropFirst(root.count).first?.lowercased()
+        return top == AppFolder.instances ? nil : file
     }
 
     private static func response(_ url: URL, _ status: Int, _ type: String) -> URLResponse {

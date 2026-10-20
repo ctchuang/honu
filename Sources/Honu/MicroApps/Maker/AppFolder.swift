@@ -11,6 +11,10 @@ struct AppFolder: Equatable {
     var historyURL: URL { url.appending(path: "history", directoryHint: .isDirectory) }
     /// Where the page's state is saved.
     var dataURL: URL { url.appending(path: "data.json") }
+    /// Where each instance of the microapp saves its state, which the page
+    /// is never served.
+    var instancesURL: URL { url.appending(path: Self.instances, directoryHint: .isDirectory) }
+    static let instances = "instances"
 
     /// The page, if one has been written.
     func page() -> String? {
