@@ -23,6 +23,10 @@ To change a microapp, type what you want into the bar at its bottom.
 Pomodoro timer, and a habit tracker with a change request typed into its
 bar) beside the turtle's launcher](docs/images/demo.jpg)
 
+![Making a tally counter: Claude writes it from a one-line description, the
+turtle opens a second instance with a count of its own, and a change typed
+into the bar below restyles both at once](docs/images/demo.gif)
+
 > **TODO:** drag bubbles onto the turtle to give Claude their contents as context.
 
 ## Quick start in 30 seconds
