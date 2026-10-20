@@ -36,6 +36,9 @@ final class MakerApp: MicroApp {
     private(set) var apps: [GeneratedApp] = []
     /// The model: each instance, by the item it is.
     private(set) var instances = ItemTable<Instance>()
+    /// Microapps being uninstalled, by folder name, while the octopus can
+    /// still bring them back: they are out of the library, and not saved.
+    private(set) var withdrawn: Set<String> = []
     @ObservationIgnored let services: Services
     /// Instances whose new page has loaded since the last `update`, whose
     /// bubbles rise.
@@ -60,8 +63,10 @@ final class MakerApp: MicroApp {
     }
 
     /// The installed microapps, the ones whose first page has been written,
-    /// in the order they were made.
-    var library: [GeneratedApp] { apps.filter(\.hasPage) }
+    /// in the order they were made, but those being uninstalled.
+    var library: [GeneratedApp] {
+        apps.filter { $0.hasPage && !withdrawn.contains($0.folder.name) }
+    }
 
     /// The microapp `item` runs.
     func microapp(of item: ItemID) -> GeneratedApp? {
@@ -216,6 +221,32 @@ final class MakerApp: MicroApp {
         }
     }
 
+    /// Takes the installed microapp whose folder is named `name` out of the
+    /// library, to be uninstalled unless it is reinstated.
+    func withdraw(_ name: String) {
+        guard library.contains(where: { $0.folder.name == name }) else { return }
+        withdrawn.insert(name)
+    }
+
+    /// Puts a withdrawn microapp back in the library.
+    func reinstate(_ name: String) {
+        withdrawn.remove(name)
+    }
+
+    /// Deletes the microapp whose folder is named `name` and every instance
+    /// of it, stopping Claude, and moves its folder to the Trash.
+    func uninstall(_ name: String) {
+        withdrawn.remove(name)
+        guard let microapp = apps.first(where: { $0.folder.name == name }) else { return }
+        for item in items(of: microapp) {
+            instances.remove(item)
+            risen.remove(item)
+        }
+        microapp.cancel()
+        microapp.folder.trash()
+        apps.removeAll { $0 === microapp }
+    }
+
     var items: [ItemID] { instances.items }
 
     /// What is saved between launches: each microapp, and each instance.
@@ -243,14 +274,17 @@ final class MakerApp: MicroApp {
         var height: CGFloat?
     }
 
+    /// Saves the microapps and their instances, but those being uninstalled,
+    /// so quitting finishes uninstalling them.
     func save() -> Data? {
+        let kept = { (microapp: GeneratedApp) in !self.withdrawn.contains(microapp.folder.name) }
         let saved = Saved(
-            apps: apps.map {
+            apps: apps.filter(kept).map {
                 SavedMicroapp(
                     folder: $0.folder.name, description: $0.description, draft: $0.draft,
                     error: $0.savedError)
             },
-            instances: instances.entries.map { id, instance in
+            instances: instances.entries.filter { kept($0.value.app) }.map { id, instance in
                 SavedInstance(
                     id: id, folder: instance.app.folder.name, data: instance.dataID,
                     width: instance.size?.width, height: instance.size?.height)

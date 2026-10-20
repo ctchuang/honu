@@ -366,6 +366,43 @@ struct MakerTests {
                 })
     }
 
+    @Test func aWithdrawnMicroappLeavesTheLibraryUntilReinstated() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let name = try #require(maker.microapp(of: item)).folder.name
+        maker.withdraw(name)
+        #expect(maker.library.isEmpty)
+        #expect(maker.launch(name) == nil)
+        #expect(maker.items == [item], "withdrawing deleted an instance")
+        maker.reinstate(name)
+        #expect(maker.library.count == 1)
+    }
+
+    @Test func uninstallingDeletesTheMicroappItsInstancesAndItsFolder() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        _ = maker.launch(microapp.folder.name)
+        maker.withdraw(microapp.folder.name)
+        maker.uninstall(microapp.folder.name)
+        #expect(maker.apps.isEmpty && maker.items.isEmpty && maker.withdrawn.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: microapp.folder.url.path()))
+    }
+
+    @Test func quittingWhileAMicroappIsWithdrawnFinishesUninstallingIt() throws {
+        let maker = app()
+        let clock = made(maker, "a clock", answer("Clock"))
+        let timer = made(maker, "a timer", answer("Timer"))
+        let folder = try #require(maker.microapp(of: clock)).folder
+        maker.withdraw(folder.name)
+
+        let restored = app()
+        restored.load(try #require(maker.save()))
+        #expect(restored.items == [timer])
+        #expect(restored.library.map(\.description) == ["a timer"])
+        #expect(!FileManager.default.fileExists(atPath: folder.url.path()))
+    }
+
     @Test func aMicroappIsInstalledOnceItsFirstPageIsWritten() throws {
         let maker = app()
         let item = maker.create()
