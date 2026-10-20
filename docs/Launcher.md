@@ -93,8 +93,11 @@ gesture is out of scope here.
     Microapp does today.
 - Right-clicking an installed app's tile opens a small menu:
   - **Modify…**: launches a new instance with the cursor in its change
-    field, to ask Claude for a change.
-  - **Uninstall**: asks to confirm, then uninstalls (below).
+    field, to ask Claude for a change; what is typed before it lands goes
+    into the field.
+  - **Uninstall**: uninstalls at once (below), the tile going down the
+    octopus's mouth. It asks nothing, since the octopus can bring the app
+    back, as for a tile dragged to it.
 - Dragging an installed app's tile out of the launcher calls up the
   octopus, whose speech bubble offers to uninstall it; letting go with the
   pointer within its reach uninstalls it; elsewhere the tile goes back.
@@ -261,17 +264,20 @@ lint on their own.
 - Tests: a tile appears once the first page is written, and not before;
   choosing it launches an instance.
 
-### Step 5: Modify and Uninstall from a tile
+### Step 5: Modify and Uninstall from a tile (done)
 
 - Right-clicking an installed tile opens a small menu (Modify…,
-  Uninstall). Try SwiftUI's `contextMenu` in the floating window first;
-  if it misbehaves, route the right click through `InputRouter` to a
-  `Popup.tileMenu`.
-- Modify…: `launch`, with the instance's view state asking to focus the
-  change field.
-- Uninstall: a confirmation, then `Shell.uninstall(_:)` (from step 6).
-- Tests (`ShellTests`): uninstalling clears the app, its instances,
-  their bubbles, and its tile.
+  Uninstall): SwiftUI's `contextMenu` on the tile. `InputRouter` lets
+  right-clicks within the launcher (`Shell.launcherFrame`) go on to it,
+  even where the launcher covers the turtle.
+- Modify…: `Shell.modify`, launching with `MakerApp.launch(_:toModify:)`,
+  whose view state has the change field take the focus; type-ahead goes
+  into the draft while the page runs. A microapp's draft is cleared once
+  it is made, so the field starts empty.
+- Uninstall: no confirmation, since it can be undone;
+  `Shell.uninstall(_:from:)` sends the tile down the octopus's mouth from
+  where it is, as a drop does.
+- Tests (`MakerTests`, `UninstallTests`, `InputRouterTests`).
 
 ### Step 6: Drag a tile to the octopus to uninstall (done)
 
