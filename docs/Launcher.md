@@ -250,7 +250,7 @@ lint on their own.
 - Tests: launching twice gives two instances with their own data; a
   change reaches every instance and they all rise.
 
-### Step 4: Installed apps in the launcher
+### Step 4: Installed apps in the launcher (done)
 
 - `launcherTiles` lists the Maker's library between the built-in apps
   and **+**, with each app's symbol and name.

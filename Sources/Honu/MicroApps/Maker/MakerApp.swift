@@ -91,9 +91,6 @@ final class MakerApp: MicroApp {
     func appearance(of item: ItemID) -> Appearance {
         guard let instance = instances[item] else { return Appearance() }
         let microapp = instance.app
-        let symbol = microapp.meta.symbol.flatMap {
-            NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil ? nil : $0
-        }
         let panel: CGSize =
             switch microapp.status {
             case .describing: Self.describingSize
@@ -101,7 +98,15 @@ final class MakerApp: MicroApp {
             case .writing, .running:
                 (instance.size ?? Self.defaultPageSize) + Self.chrome
             }
-        return Appearance(symbol: symbol ?? Self.defaultSymbol, panelSize: panel)
+        return Appearance(symbol: Self.symbol(of: microapp), panelSize: panel)
+    }
+
+    /// The SF Symbol of `microapp`: the one its page names, if it exists.
+    static func symbol(of microapp: GeneratedApp) -> String {
+        let named = microapp.meta.symbol.flatMap {
+            NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil ? nil : $0
+        }
+        return named ?? defaultSymbol
     }
 
     func title(of item: ItemID) -> String {

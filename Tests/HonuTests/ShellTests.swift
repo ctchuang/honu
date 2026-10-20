@@ -51,6 +51,39 @@ struct ShellTests {
         #expect(corner.y + size.height < screen.height)
     }
 
+    @Test func aMicroappGetsATileOnceMadeWhichLaunchesItAgain() throws {
+        let claude = FakeClaude()
+        let shell = makeShell(claude: claude)
+        shell.choose(.make)
+        let item = try #require(shell.maker.items.first)
+        let microapp = try #require(shell.maker.microapp(of: item))
+        microapp.draft = "a clock"
+        shell.maker.make(item)
+        shell.tick(at: 1)
+        #expect(shell.launcherTiles.count == 3, "a tile before the page was written")
+
+        claude.streams[0].send(
+            .text(
+                """
+                <!doctype html><html><head><title>Clock</title>
+                <meta name="honu-symbol" content="clock"></head><body></body></html>
+                """))
+        claude.streams[0].send(.done)
+        shell.tick(at: 2)
+        let tiles = shell.launcherTiles
+        #expect(tiles.map(\.label) == ["Note", "Web Page", "Clock", "New Microapp"])
+        #expect(
+            tiles[2]
+                == LauncherTile(
+                    kind: .installed(microapp.folder.name), label: "Clock", symbol: "clock"))
+
+        shell.choose(tiles[2].kind)
+        #expect(shell.maker.items.count == 2)
+        let bubble = try #require(shell.stage.bubbles.last)
+        #expect(shell.maker.microapp(of: bubble.target.item) === microapp)
+        #expect(shell.title(of: bubble) == "Clock")
+    }
+
     @Test func theLauncherGrowsWithItsTilesAndScrollsPastAFewRows() {
         let three = LauncherView.size(for: 3)
         let four = LauncherView.size(for: 4)

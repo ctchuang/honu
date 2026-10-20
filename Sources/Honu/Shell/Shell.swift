@@ -21,6 +21,8 @@ struct LauncherTile: Identifiable, Equatable {
     enum Kind: Hashable {
         /// A new item of a built-in microapp.
         case stock(AppID)
+        /// A new instance of the installed microapp whose folder is so named.
+        case installed(String)
         /// A new microapp, to be described.
         case make
     }
@@ -141,6 +143,7 @@ final class Shell {
         popup = nil
         switch tile {
         case .stock(let app): start(app)
+        case .installed(let name): launch(name)
         case .make: start(maker.id)
         }
     }
