@@ -1,12 +1,5 @@
 # TODO
 
-## Documentations
-
-- **Sample screenshot** - create a few microapps and put it in README
-- **Demo video** - show how to bump bubbles to the 'Ask Claude' bubble
-  in README.
-- Explain how to login in Claud Code in README.
-
 ### Misc
 
 - Remove mention of Liquid Glass in README
