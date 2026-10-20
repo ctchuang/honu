@@ -35,6 +35,7 @@
   as other microspps).
 - Design a way to uninstall a microapp.
 - Design a way to modify an existing microapp.
+- Add more stock apps in a subfolder as examples.
 
 ### Memory
 
