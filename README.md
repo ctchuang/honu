@@ -4,27 +4,29 @@
   <img src="docs/images/honu.svg" alt="Honu, a little green sea turtle" width="240">
 </p>
 
-A GUI and Human-Computer-Interface experiment on Mac OS, written in
-Swift with SwiftUI and Liquid Glass.
+An experiment in having Claude Code create microapps on the fly, right
+on your macOS desktop.
 
-> **Status:** experimental prototype. Expect breaking changes. 
+> **Status:** experimental prototype. Expect breaking changes.
+>
+> **Safety:** there is no protection against prompt injection.
 
 ## What it does
 
-Microapp bubbles float directly on your desktop, above other
-windows. A little pixel turtle spits them out. Drag the bubble to the
-octopus to remove it.
+Microapp bubbles float right on your desktop. A little turtle spits
+them out; drag a bubble to the octopus to remove it.
 
-## Getting started
+Ask the turtle to make a new microapp in moments, or to change one you
+already have.
 
-Honu needs **macOS 26** or newer and a Swift 6.2 toolchain. Xcode is not required: the
-Command Line Tools are enough.
+> **TODO:** drag bubbles onto the turtle to give Claude their contents as context.
 
-```sh
-xcode-select --install   # if you have neither Xcode nor the Command Line Tools
-swift run                # build and launch
-swift build -c release   # optimized build
-```
+## Quick start in 30 seconds
+
+If you already have Claude Code installed, start `claude` in this folder
+and ask it to run Honu. Claude will make sure everything works.
+
+## Getting started (longer version)
 
 ### Install Claude Code (for making microapps)
 
@@ -33,6 +35,16 @@ headless (`claude -p`) for each request, so it needs no API key: install Claude 
 run `claude` once in Terminal to sign in with your Claude account. Honu finds `claude` in
 your `PATH` or where it is usually installed, and leaves out any `ANTHROPIC_API_KEY` in its
 environment, so answers always come through your account.
+
+### Build and run
+
+Honu needs **macOS 26** or newer and a Swift 6.2 toolchain. Xcode is not required: the
+Command Line Tools are enough.
+
+```sh
+xcode-select --install   # if you have neither Xcode nor the Command Line Tools
+swift run                # build and launch
+```
 
 ### Floating on the desktop
 
@@ -80,6 +92,10 @@ git config core.hooksPath .githooks                  # lint and test before each
 The pre-push hook in `.githooks/` runs the lint and the tests when a push changes
 Swift code (`git push --no-verify` skips it). Claude Code also lints each Swift file
 it edits, through the hook in `.claude/settings.json`.
+
+```sh
+swift build -c release   # optimized build
+```
 
 ## License
 
