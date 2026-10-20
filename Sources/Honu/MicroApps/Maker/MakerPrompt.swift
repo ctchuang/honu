@@ -25,7 +25,8 @@ enum MakerPrompt {
         storage that lasts. `await honu.load()` returns what was saved last, or null the \
         first time, and `await honu.save(value)` saves any JSON value. Load when the page \
         starts and save after every change the user makes. Do not use localStorage, \
-        sessionStorage, cookies, or IndexedDB.
+        sessionStorage, cookies, or IndexedDB: the user can open the microapp several \
+        times at once, each with its own state in honu, but those would be shared.
 
         Network: the page may use the internet. Load libraries from a CDN such as \
         https://cdn.jsdelivr.net only when they help. Use only public services that need \
