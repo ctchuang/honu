@@ -248,9 +248,29 @@ final class Shell {
         octopus.summon(false, turtle: turtle.center)
     }
 
-    /// Has the octopus spit back the bubble it swallowed last, if it still can.
+    /// Uninstalls the microapp whose folder is named `name`: its tile leaves
+    /// the launcher, and the octopus swallows it with every bubble of it,
+    /// keeping them for a while in case the user takes it back.
+    func uninstall(_ name: String, at time: TimeInterval = now()) {
+        guard let microapp = maker.library.first(where: { $0.folder.name == name }) else { return }
+        maker.withdraw(name)
+        let targets = Set(maker.items(of: microapp).map { ViewTarget(app: maker.id, item: $0) })
+        var morsels: [Octopus.Swallowed.Morsel] = []
+        for bubble in stage.bubbles where targets.contains(bubble.target) && !bubble.isSwallowed {
+            morsels.append(Octopus.Swallowed.Morsel(bubble: bubble.id, home: bubble.destination))
+            stage.swallow(bubble, into: octopus.mouth)
+        }
+        octopus.swallow(morsels, microapp: name, at: time)
+        octopus.summon(false, turtle: turtle.center)
+    }
+
+    /// Has the octopus spit back what it swallowed last, if it still can:
+    /// a bubble, or a microapp with its bubbles, whose tile comes back.
     func undoDelete() {
         guard let swallowed = octopus.spitBack() else { return }
+        if let microapp = swallowed.microapp {
+            maker.reinstate(microapp)
+        }
         for morsel in swallowed.morsels {
             if let bubble = stage.bubble(morsel.bubble) {
                 stage.spitBack(bubble, from: octopus.mouth, to: morsel.home)
@@ -259,18 +279,23 @@ final class Shell {
     }
 
     /// Catches up on what happens over time: moves the bubbles, deletes for
-    /// good the bubbles the octopus forgets, and saves what changed. Called
-    /// many times a second.
+    /// good the bubbles and microapps the octopus forgets, and saves what
+    /// changed. Called many times a second.
     func tick(at time: TimeInterval = now()) {
         // A long pause, such as while the Mac slept, moves nothing far.
         let dt = min(time - (lastTick ?? time), 1.0 / 30)
         lastTick = time
         updateApps()
         stage.step(time: time, dt: dt)
-        for id in octopus.forget().flatMap(\.bubbles) {
-            undoManagers[id] = nil
-            if let bubble = stage.remove(id), !stage.shows(bubble.target) {
-                registry.remove(bubble.target)
+        for swallowed in octopus.forget(at: time) {
+            for id in swallowed.bubbles {
+                undoManagers[id] = nil
+                if let bubble = stage.remove(id), !stage.shows(bubble.target) {
+                    registry.remove(bubble.target)
+                }
+            }
+            if let microapp = swallowed.microapp {
+                maker.uninstall(microapp)
             }
         }
         autosave.tick(snapshot)
