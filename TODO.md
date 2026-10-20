@@ -26,15 +26,16 @@
 
 ### Basic
 
-- Add a launcher with stock apps.
+- Add a launcher with stock apps: in progress, following the plan in
+  `docs/Launcher.md`, whose steps are marked (done) as they land.
 - Rename the 'Ask AI' to an always-on 'Ask Claude' bubble, migrate it
   to Web-based.
 - Migrate the existing YouTube app to Web-based.
 - Add a stock Facebook app.
 - Migrate the existing Note app to Web-based (managed in the same way
   as other microspps).
-- Design a way to uninstall a microapp.
-- Design a way to modify an existing microapp.
+- Uninstall and modify a microapp from the launcher (planned in
+  `docs/Launcher.md`).
 - Add more stock apps in a subfolder as examples.
 
 ### Memory
