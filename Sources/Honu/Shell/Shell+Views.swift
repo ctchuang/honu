@@ -8,9 +8,9 @@ extension Shell {
         let label: String
     }
 
-    /// The turtle's menu items, one per microapp.
+    /// The turtle's menu items, one per microapp it lists.
     var menuChoices: [MenuChoice] {
-        registry.apps.map { MenuChoice(id: $0.id, label: $0.menuLabel) }
+        registry.apps.filter(\.isLaunchable).map { MenuChoice(id: $0.id, label: $0.menuLabel) }
     }
 
     /// How `bubble` looks, as its microapp says.

@@ -170,7 +170,7 @@ launcher.
 Each step is one or more commits that build, pass the tests, and pass the
 lint on their own.
 
-### Step 1: Split the turtle's clicks; drop Ask AI from the menu
+### Step 1: Split the turtle's clicks; drop Ask AI from the menu (done)
 
 - `Shell.menu: CGPoint?` becomes `popup: Popup?`, with `.launcher(at:)`
   and `.system(at:)`. Rename `Hit.menu`, `takesEveryClick`,

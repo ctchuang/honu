@@ -20,10 +20,10 @@ struct ShellTests {
         #expect(shell.undoManager(for: second) !== history)
     }
 
-    @Test func theMenuListsEveryMicroappInOrder() {
+    @Test func theMenuListsTheMicroappsInOrderButAskAI() {
         #expect(
             makeShell().menuChoices.map(\.label) == [
-                "Add Note", "Ask AI", "Open Web Page", "Make a Microapp",
+                "Add Note", "Open Web Page", "Make a Microapp",
             ])
     }
 

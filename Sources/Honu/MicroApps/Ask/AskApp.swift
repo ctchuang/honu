@@ -8,6 +8,9 @@ import SwiftUI
 final class AskApp: MicroApp {
     let id = AppID("ask")
     let menuLabel = "Ask AI"
+    /// Asking Claude is to become feeding a bubble to the turtle, so Ask AI
+    /// leaves the menu; chats already made stay.
+    let isLaunchable = false
 
     /// The model: each chat.
     private(set) var chats = ItemTable<Chat>()

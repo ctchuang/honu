@@ -158,12 +158,18 @@ protocol MicroApp: ItemStore, ItemLook, ItemViews {
     /// The turtle's menu item that starts a new item.
     var menuLabel: String { get }
 
+    /// Whether the turtle's menu lists it. One that is not keeps its items
+    /// and their bubbles, but starts no new ones.
+    var isLaunchable: Bool { get }
+
     /// Catches up on work done in the background, asking things of the
     /// bubbles through `context`. Called every frame.
     func update(_ context: Context)
 }
 
 extension MicroApp {
+    var isLaunchable: Bool { true }
+
     func update(_ context: Context) {}
 
     /// `content` for a view state the shell holds without its type. A bubble
