@@ -60,7 +60,8 @@ gesture is out of scope here.
    own data.
 4. As a user, I ask for a change in one bubble of a microapp, and every
    open bubble of it shows the new version, keeping its own data.
-5. As a user, I right-click a tile to modify or uninstall that microapp.
+5. As a user, I ask for a change in the bar below a microapp, and send it
+   with Return or its Go button; I right-click a tile to uninstall it.
 6. As a user, I drag a tile onto the octopus to uninstall it, as I drag a
    bubble onto it to delete it.
 7. As a user, I right-click the turtle to quit Honu.
@@ -91,13 +92,13 @@ gesture is out of scope here.
   - An installed app: its page runs at once (no description step).
   - **+**: a new microapp waiting for its description, as Make a
     Microapp does today.
-- Right-clicking an installed app's tile opens a small menu:
-  - **Modify…**: launches a new instance with the cursor in its change
-    field, to ask Claude for a change; what is typed before it lands goes
-    into the field.
-  - **Uninstall**: uninstalls at once (below), the tile going down the
-    octopus's mouth. It asks nothing, since the octopus can bring the app
-    back, as for a tile dragged to it.
+- Changes are asked for in the bar below a running microapp, not from
+  the launcher: its field asks "How would you like to change this
+  microapp?", and Return or its **Go** button (a play symbol) sends it.
+- Right-clicking an installed app's tile opens a small menu with
+  **Uninstall**, which uninstalls at once (below), the tile going down
+  the octopus's mouth. It asks nothing, since the octopus can bring the
+  app back, as for a tile dragged to it.
 - Dragging an installed app's tile out of the launcher calls up the
   octopus, whose speech bubble offers to uninstall it; letting go with the
   pointer within its reach uninstalls it; elsewhere the tile goes back.
@@ -264,16 +265,18 @@ lint on their own.
 - Tests: a tile appears once the first page is written, and not before;
   choosing it launches an instance.
 
-### Step 5: Modify and Uninstall from a tile (done)
+### Step 5: Change from the change bar, uninstall from a tile (done)
 
-- Right-clicking an installed tile opens a small menu (Modify…,
-  Uninstall): SwiftUI's `contextMenu` on the tile. `InputRouter` lets
+- The change bar asks "How would you like to change this microapp?" and
+  has a **Go** button that sends the change, as Return does. A
+  microapp's draft is cleared once it is made, so the field starts
+  empty. (A Modify… in the tile's menu, launching an instance with the
+  cursor in its change field, was tried and dropped: the bar is already
+  there.)
+- Right-clicking an installed tile opens a small menu with Uninstall:
+  SwiftUI's `contextMenu` on the tile. `InputRouter` lets
   right-clicks within the launcher (`Shell.launcherFrame`) go on to it,
   even where the launcher covers the turtle.
-- Modify…: `Shell.modify`, launching with `MakerApp.launch(_:toModify:)`,
-  whose view state has the change field take the focus; type-ahead goes
-  into the draft while the page runs. A microapp's draft is cleared once
-  it is made, so the field starts empty.
 - Uninstall: no confirmation, since it can be undone;
   `Shell.uninstall(_:from:)` sends the tile down the octopus's mouth from
   where it is, as a drop does.
@@ -305,7 +308,7 @@ lint on their own.
 - `CLAUDE.md`: the launcher, `Popup`, the system menu, `GeneratedApp`
   and `Instance`, the new folder layout, and `InputRouter`'s new rules.
 - `README.md`: how to use the turtle.
-- `TODO.md`: check off the launcher and modifying and uninstalling
+- `TODO.md`: check off the launcher and changing and uninstalling
   microapps.
 
 ### Later: Type to filter the launcher

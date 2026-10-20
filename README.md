@@ -52,10 +52,9 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
   bubble breathes while Claude works, rises when it is done, and wobbles when something
   needs you). Each click opens a new one, with its own data.
 - A microapp Claude has made gets a tile of its own and stays in the launcher. Ask
-  Claude to change it in the bar below it, and every open bubble of it changes. To
-  uninstall it, drag its tile to the octopus; the built-in tiles stay put.
-  **Right-click** its tile for **Modify…**, which opens a new one with the cursor in
-  that bar, and **Uninstall**.
+  Claude to change it in the bar below it (press Return or the **Go** button), and every
+  open bubble of it changes. To uninstall it, drag its tile to the octopus, or
+  **right-click** its tile and choose **Uninstall**; the built-in tiles stay put.
 - **Right-click** the turtle for **Exit**, which quits Honu.
 - **Drag** a bubble to move it, and **throw** it to let it glide. Idle bubbles drift, and
   crowded ones push each other apart. The bubble you press or drag comes to the top and
