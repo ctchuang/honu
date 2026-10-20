@@ -297,6 +297,44 @@ struct MakerTests {
         #expect(back.folder.page() != nil)
     }
 
+    @Test func microappsSavedBeforeInstancesComeBackWithTheirData() throws {
+        let folder = AppFolder(url: root.appending(path: UUID().uuidString))
+        try folder.write(answer("Clock"))
+        try Data(#"{"alarm":7}"#.utf8).write(to: folder.oldDataURL)
+        let old = """
+            [{"id":{"rawValue":3},"folder":"\(folder.name)","description":"a clock","draft":"",\
+            "width":500,"height":600}]
+            """
+
+        let maker = app()
+        maker.load(Data(old.utf8))
+        #expect(maker.items == [ItemID(rawValue: 3)])
+        let instance = try #require(maker.instances[ItemID(rawValue: 3)])
+        #expect(instance.app.description == "a clock")
+        #expect(instance.size == CGSize(width: 500, height: 600))
+        #expect(maker.library.count == 1)
+        #expect(!FileManager.default.fileExists(atPath: folder.oldDataURL.path()))
+        #expect(try String(contentsOf: instance.dataURL, encoding: .utf8) == #"{"alarm":7}"#)
+        #expect(maker.create() == ItemID(rawValue: 4))
+    }
+
+    @Test func whatNoInstanceSavedIsDeletedOnLoad() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let instance = try #require(maker.instances[item])
+        let folder = instance.app.folder
+        try FileManager.default.createDirectory(
+            at: folder.instancesURL, withIntermediateDirectories: true)
+        try Data("1".utf8).write(to: instance.dataURL)
+        let stray = folder.dataURL(for: UUID())
+        try Data("2".utf8).write(to: stray)
+
+        let restored = app()
+        restored.load(try #require(maker.save()))
+        #expect(FileManager.default.fileExists(atPath: instance.dataURL.path()))
+        #expect(!FileManager.default.fileExists(atPath: stray.path()))
+    }
+
     @Test func aMicroappIsInstalledOnceItsFirstPageIsWritten() throws {
         let maker = app()
         let item = maker.create()

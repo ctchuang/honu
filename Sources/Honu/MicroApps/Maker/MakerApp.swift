@@ -241,12 +241,51 @@ final class MakerApp: MicroApp {
         return try? JSONEncoder().encode(saved)
     }
 
+    /// A microapp as saved before a microapp could run more than once: the
+    /// one instance it had, and what the page saved in its folder.
+    private struct OldSavedMicroapp: Codable {
+        var id: ItemID
+        var folder: String
+        var description: String?
+        var draft: String
+        var width: CGFloat?
+        var height: CGFloat?
+        var error: String?
+    }
+
+    /// Takes in microapps saved before a microapp could run more than once:
+    /// each becomes a microapp with one instance, and what its page saved
+    /// moves to that instance's file.
+    private func upgrade(_ data: Data) -> Saved? {
+        guard let old = try? JSONDecoder().decode([OldSavedMicroapp].self, from: data) else {
+            return nil
+        }
+        var saved = Saved(apps: [], instances: [])
+        for microapp in old {
+            let instance = SavedInstance(
+                id: microapp.id, folder: microapp.folder, data: UUID(), width: microapp.width,
+                height: microapp.height)
+            saved.apps.append(
+                SavedMicroapp(
+                    folder: microapp.folder, description: microapp.description,
+                    draft: microapp.draft, error: microapp.error))
+            saved.instances.append(instance)
+            let folder = folder(named: microapp.folder)
+            let files = FileManager.default
+            guard files.fileExists(atPath: folder.oldDataURL.path()) else { continue }
+            try? files.createDirectory(at: folder.instancesURL, withIntermediateDirectories: true)
+            try? files.moveItem(at: folder.oldDataURL, to: folder.dataURL(for: instance.data))
+        }
+        return saved
+    }
+
     /// Takes back the saved microapps and instances. A microapp not
     /// installed that no instance runs is forgotten, and folders no
     /// microapp has, such as one deleted while Honu was not running to see
-    /// it, go to the Trash.
+    /// it, go to the Trash, as do the files of instances no longer kept.
     func load(_ data: Data) {
-        guard let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return }
+        guard let saved = (try? JSONDecoder().decode(Saved.self, from: data)) ?? upgrade(data)
+        else { return }
         var byFolder: [String: GeneratedApp] = [:]
         for microapp in saved.apps where byFolder[microapp.folder] == nil {
             byFolder[microapp.folder] = GeneratedApp(
@@ -266,9 +305,20 @@ final class MakerApp: MicroApp {
             $0.hasPage || running.contains(ObjectIdentifier($0))
         }
         let kept = Set(apps.map(\.folder.name))
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path())) ?? []
+        let files = FileManager.default
+        let names = (try? files.contentsOfDirectory(atPath: root.path())) ?? []
         for name in names where !kept.contains(name) && UUID(uuidString: name) != nil {
             folder(named: name).trash()
+        }
+        let saving = Set(instances.entries.map { $0.value.dataURL.standardizedFileURL })
+        for microapp in apps {
+            let folder = microapp.folder.instancesURL
+            for name in (try? files.contentsOfDirectory(atPath: folder.path())) ?? [] {
+                let file = folder.appending(path: name).standardizedFileURL
+                if !saving.contains(file) {
+                    try? files.removeItem(at: file)
+                }
+            }
         }
     }
 }
