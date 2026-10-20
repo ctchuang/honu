@@ -160,7 +160,7 @@ protocol MicroApp: ItemStore, ItemLook, ItemViews {
     /// The SF Symbol on its tile.
     var launcherSymbol: String { get }
 
-    /// Whether the turtle's menu lists it. One that is not keeps its items
+    /// Whether the turtle's launcher lists it. One that is not keeps its items
     /// and their bubbles, but starts no new ones.
     var isLaunchable: Bool { get }
 

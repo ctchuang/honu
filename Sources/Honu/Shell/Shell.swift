@@ -9,10 +9,10 @@ enum Hit {
     case nothing
 }
 
-/// What the turtle has open, where it was clicked: its menu on a click, or
-/// the system menu on a right click.
+/// What the turtle has open, where it was clicked: its launcher on a click,
+/// or the system menu on a right click.
 enum Popup: Equatable {
-    case menu(at: CGPoint)
+    case launcher(at: CGPoint)
     case system(at: CGPoint)
 }
 
@@ -33,7 +33,7 @@ struct LauncherTile: Identifiable, Equatable {
 }
 
 /// The shell: the whole app inside the window. It wires the microapps, the
-/// stage of bubbles, the turtle and its menu, and the octopus together, and
+/// stage of bubbles, the turtle and its launcher, and the octopus together, and
 /// routes what the user does between them.
 @Observable
 @MainActor
@@ -106,12 +106,12 @@ final class Shell {
         return true
     }
 
-    // MARK: The turtle and its menu
+    // MARK: The turtle and its launcher
 
-    /// Opens the turtle's menu at `point`, with a little hop.
+    /// Opens the turtle's launcher at `point`, with a little hop.
     func clickTurtle(at point: CGPoint) {
         turtle.hop()
-        popup = .menu(at: point)
+        popup = .launcher(at: point)
     }
 
     /// Opens the system menu at `point`, with a little hop.

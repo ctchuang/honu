@@ -1,6 +1,6 @@
 import Foundation
 
-/// The microapps, in the order the turtle's menu lists them.
+/// The microapps, in the order the turtle's launcher lists them.
 @MainActor
 final class Registry {
     let apps: [any MicroApp]

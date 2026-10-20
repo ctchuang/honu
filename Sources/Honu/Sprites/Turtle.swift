@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The pixel-art sea turtle that starts in the bottom-left corner of the
-/// desktop and can be dragged anywhere. Clicking it opens its menu, and it
+/// desktop and can be dragged anywhere. Clicking it opens its launcher, and it
 /// spits out the bubbles made from there.
 @Observable
 @MainActor

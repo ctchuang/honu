@@ -184,7 +184,7 @@ lint on their own.
 - Tests: `InputRouterTests` (right click opens the system menu, left
   click the launcher), `ShellTests` (no Ask AI choice).
 
-### Step 2: The launcher panel, with built-in apps and +
+### Step 2: The launcher panel, with built-in apps and + (done)
 
 - `Views/LauncherView.swift` replaces `TurtleMenu`: a glass panel of
   tiles (symbol and label), in a grid with a fixed column count.

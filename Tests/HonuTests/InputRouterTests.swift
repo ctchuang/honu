@@ -23,7 +23,7 @@ struct InputRouterTests {
 
         // Right-clicking elsewhere closes a menu, and is taken only then.
         shell.clickTurtle(at: turtle)
-        #expect(shell.popup == .menu(at: turtle))
+        #expect(shell.popup == .launcher(at: turtle))
         #expect(router.handle(.rightPress(at: CGPoint(x: 900, y: 100)), typing: false))
         #expect(shell.popup == nil)
         #expect(!router.handle(.rightPress(at: CGPoint(x: 900, y: 100)), typing: false))

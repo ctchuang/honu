@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Paints everything back to front: the bubbles, the octopus, the turtle,
-/// and the turtle's menu.
+/// and the turtle's launcher or menu.
 struct ShellView: View {
     let shell: Shell
 
@@ -18,10 +18,10 @@ struct ShellView: View {
                 Color.black.opacity(0.001)
                     .onTapGesture { shell.closePopup() }
                 switch popup {
-                case .menu(let point):
-                    let size = CGSize(width: TurtleMenu.width, height: TurtleMenu.estimatedHeight)
+                case .launcher(let point):
+                    let size = LauncherView.size(for: shell.launcherTiles.count)
                     let corner = menuCorner(of: size, at: point, in: shell.stage.size)
-                    TurtleMenu(shell: shell)
+                    LauncherView(shell: shell)
                         .offset(x: corner.x, y: corner.y)
                 case .system(let point):
                     let size = CGSize(width: SystemMenu.width, height: SystemMenu.estimatedHeight)

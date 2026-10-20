@@ -51,6 +51,16 @@ struct ShellTests {
         #expect(corner.y + size.height < screen.height)
     }
 
+    @Test func theLauncherGrowsWithItsTilesAndScrollsPastAFewRows() {
+        let three = LauncherView.size(for: 3)
+        let four = LauncherView.size(for: 4)
+        #expect(four.width > three.width)
+        #expect(four.height == three.height)
+        #expect(LauncherView.size(for: 9).width == four.width)
+        #expect(LauncherView.size(for: 9).height > four.height)
+        #expect(LauncherView.size(for: 40) == LauncherView.size(for: 12))
+    }
+
     @Test func aBubbleShowsWhatItsMicroappSays() throws {
         let shell = makeShell()
         shell.start(AppID("notes"))
