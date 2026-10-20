@@ -80,8 +80,15 @@ struct UninstallTests {
         #expect(shell.dragTile(tile, from: start, to: shell.octopus.middle))
         #expect(shell.octopus.isEager)
 
-        shell.endTileDrag(at: shell.octopus.middle)
+        shell.endTileDrag(at: shell.octopus.middle, time: 10)
         #expect(shell.tileDrag == nil && shell.popup == nil)
+        // The tile goes down the octopus's mouth, then is gone.
+        let swallowed = try #require(shell.swallowedTile)
+        #expect(swallowed.tile == tile && swallowed.flight.to == shell.octopus.mouth)
+        #expect(swallowed.flight.after(0).scale == Shell.eagerTileScale)
+        #expect(swallowed.flight.after(1).scale == 0)
+        shell.tick(at: 10 + Bubble.swallowSeconds)
+        #expect(shell.swallowedTile == nil)
         #expect(!hasTile(name, in: shell))
         #expect(shell.octopus.canUndo)
         #expect(bubbles(of: microapp, in: shell).allSatisfy { $0.isSwallowed })

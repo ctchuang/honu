@@ -32,17 +32,35 @@ struct ShellView: View {
             }
             if let (tile, pointer) = shell.tileDrag {
                 // The dragged tile follows the pointer, above everything.
-                TileFace(tile: tile)
-                    .glassEffect(
-                        .regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    )
-                    .scaleEffect(shell.octopus.isEager ? 0.7 : 1)
+                LooseTile(tile: tile)
+                    .scaleEffect(shell.octopus.isEager ? Shell.eagerTileScale : 1)
                     .animation(.spring(duration: 0.25), value: shell.octopus.isEager)
                     .position(pointer)
-                    .allowsHitTesting(false)
+            }
+            if let (tile, flight, start) = shell.swallowedTile {
+                // A tile dropped on the octopus goes down its mouth, as a
+                // bubble does.
+                TimelineView(.animation) { context in
+                    let flight = flight.after(context.date.timeIntervalSinceReferenceDate - start)
+                    LooseTile(tile: tile)
+                        .scaleEffect(flight.scale)
+                        .position(flight.position)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .coordinateSpace(.named(Self.space))
+    }
+}
+
+/// A launcher tile out of the launcher, on glass of its own, which takes no
+/// clicks.
+private struct LooseTile: View {
+    let tile: LauncherTile
+
+    var body: some View {
+        TileFace(tile: tile)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .allowsHitTesting(false)
     }
 }

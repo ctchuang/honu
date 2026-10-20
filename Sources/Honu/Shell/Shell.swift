@@ -51,6 +51,11 @@ final class Shell {
     /// The launcher tile being dragged toward the octopus, and where the
     /// pointer is.
     private(set) var tileDrag: (tile: LauncherTile, pointer: CGPoint)?
+    /// A tile dropped on the octopus, going down into its mouth along
+    /// `flight`, which started at `start`.
+    private(set) var swallowedTile: (tile: LauncherTile, flight: Flight, start: TimeInterval)?
+    /// How big a tile is drawn while held over the octopus.
+    static let eagerTileScale: CGFloat = 0.7
     /// The newest bubble the turtle spat out, which takes text typed before
     /// its field takes the focus.
     @ObservationIgnored private var typeAheadTarget: BubbleID?
@@ -269,16 +274,23 @@ final class Shell {
         return true
     }
 
-    /// Lets go of the dragged tile with the pointer at `pointer`: on the
-    /// octopus, its microapp is uninstalled and the launcher closes;
-    /// elsewhere, the tile goes back.
-    func endTileDrag(at pointer: CGPoint) {
+    /// Lets go of the dragged tile with the pointer at `pointer` at `time`:
+    /// on the octopus, the tile goes down its mouth, its microapp is
+    /// uninstalled, and the launcher closes; elsewhere, the tile goes back.
+    func endTileDrag(at pointer: CGPoint, time: TimeInterval = now()) {
         guard let (tile, _) = tileDrag else { return }
         tileDrag = nil
         octopus.isEager = false
         if octopus.inReach(pointer), case .installed(let name) = tile.kind {
             popup = nil
-            uninstall(name)
+            swallowedTile = (
+                tile,
+                Flight(
+                    kind: .swallow(fromScale: Self.eagerTileScale), from: pointer,
+                    to: octopus.mouth),
+                time
+            )
+            uninstall(name, at: time)
         }
         octopus.summon(false, turtle: turtle.center)
     }
@@ -322,6 +334,9 @@ final class Shell {
         lastTick = time
         updateApps()
         stage.step(time: time, dt: dt)
+        if let swallowed = swallowedTile, time - swallowed.start >= swallowed.flight.seconds {
+            swallowedTile = nil
+        }
         for swallowed in octopus.forget(at: time) {
             for id in swallowed.bubbles {
                 undoManagers[id] = nil

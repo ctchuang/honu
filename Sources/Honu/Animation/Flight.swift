@@ -15,6 +15,13 @@ struct Flight {
     /// Linear progress, from 0 to 1.
     var progress: Double = 0
 
+    /// The flight `elapsed` seconds after it started.
+    func after(_ elapsed: Double) -> Flight {
+        var flight = self
+        flight.progress = min(max(elapsed / seconds, 0), 1)
+        return flight
+    }
+
     var seconds: Double {
         switch kind {
         case .spawn: Bubble.spawnSeconds
