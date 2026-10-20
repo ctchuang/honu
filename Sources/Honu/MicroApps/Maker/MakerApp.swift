@@ -355,12 +355,22 @@ final class MakerApp: MicroApp {
         apps = saved.apps.compactMap { byFolder.removeValue(forKey: $0.folder) }.filter {
             $0.hasPage || running.contains(ObjectIdentifier($0))
         }
+        trashUnkeptFolders()
+        deleteUnkeptInstanceFiles()
+    }
+
+    /// Moves to the Trash the microapp folders no microapp has.
+    private func trashUnkeptFolders() {
         let kept = Set(apps.map(\.folder.name))
-        let files = FileManager.default
-        let names = (try? files.contentsOfDirectory(atPath: root.path())) ?? []
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path())) ?? []
         for name in names where !kept.contains(name) && UUID(uuidString: name) != nil {
             folder(named: name).trash()
         }
+    }
+
+    /// Deletes the files in the microapps' folders of instances no longer kept.
+    private func deleteUnkeptInstanceFiles() {
+        let files = FileManager.default
         let saving = Set(instances.entries.map { $0.value.dataURL.standardizedFileURL })
         for microapp in apps {
             let folder = microapp.folder.instancesURL
