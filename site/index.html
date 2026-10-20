@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Honu</title>
+  <meta name="description" content="Claude Code creates microapps on the fly, right on your macOS desktop.">
+  <meta property="og:title" content="Honu">
+  <meta property="og:description" content="Claude Code creates microapps on the fly, right on your macOS desktop.">
+  <meta property="og:image" content="https://openhonu.ai/images/demo.jpg">
+  <link rel="icon" href="images/honu.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #fbfaf7;
+      --text: #1d2421;
+      --muted: #5c6862;
+      --accent: #2f6f46;
+      --accent-text: #ffffff;
+      --card: #ffffff;
+      --border: #e4e6e1;
+      --code-bg: #f0f2ee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121614;
+        --text: #e8ece9;
+        --muted: #9aa69f;
+        --accent: #8fd6a0;
+        --accent-text: #10241a;
+        --card: #1a201d;
+        --border: #2a322e;
+        --code-bg: #1f2622;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 56px 16px 32px; }
+    header { text-align: center; }
+    header img { width: 140px; height: auto; }
+    h1 { font-size: 48px; line-height: 1.1; margin: 8px 0 12px; letter-spacing: -0.02em; }
+    .tagline { font-size: 21px; color: var(--muted); margin: 0 auto 28px; max-width: 34em; }
+    .button {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 22px; border-radius: 999px;
+      background: var(--accent); color: var(--accent-text);
+      font-weight: 600; text-decoration: none;
+    }
+    .button:hover { opacity: 0.9; }
+    .button svg { width: 20px; height: 20px; fill: currentColor; }
+    figure { margin: 48px 0 0; }
+    figure img {
+      display: block; width: 100%; height: auto;
+      border-radius: 14px; border: 1px solid var(--border);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    }
+    figcaption { margin-top: 12px; text-align: center; color: var(--muted); font-size: 15px; }
+    .points {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px; margin: 48px 0 0; padding: 0; list-style: none;
+    }
+    .points li {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px 22px;
+    }
+    .points strong { display: block; font-size: 18px; margin-bottom: 4px; }
+    .points span { color: var(--muted); }
+    h2 { font-size: 26px; margin: 56px 0 12px; letter-spacing: -0.01em; }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    code { font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    pre {
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 18px; overflow-x: auto; margin: 0 0 12px;
+    }
+    .note {
+      border-left: 3px solid var(--accent); padding: 2px 0 2px 16px;
+      color: var(--muted); margin: 24px 0 0;
+    }
+    footer {
+      max-width: 960px; margin: 0 auto; padding: 32px 16px 48px;
+      border-top: 1px solid var(--border); color: var(--muted); font-size: 15px;
+      display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between;
+    }
+    footer a { color: var(--muted); }
+    @media (max-width: 600px) {
+      main { padding-top: 32px; }
+      h1 { font-size: 38px; }
+      .tagline { font-size: 18px; }
+      figure { margin-top: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="images/honu.svg" alt="Honu, a little green sea turtle">
+      <h1>Honu</h1>
+      <p class="tagline">Claude Code creates microapps on the fly, right on your macOS desktop.</p>
+      <a class="button" href="https://github.com/ctchuang/honu">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </header>
+
+    <figure>
+      <img src="images/demo.gif" width="1056" height="660"
+        alt="Making a tally counter: Claude writes it from a one-line description, the turtle opens a second instance with a count of its own, and a change typed into the bar below restyles both at once">
+      <figcaption>Describe a microapp, open it twice, then change it: every bubble of it updates.</figcaption>
+    </figure>
+
+    <ul class="points">
+      <li><strong>Describe it</strong><span>Tell the turtle what you want, and Claude writes the microapp in moments.</span></li>
+      <li><strong>Change it</strong><span>Type what you want into the bar below a bubble, and every open bubble of it changes.</span></li>
+      <li><strong>Toss it</strong><span>Drag a bubble to the octopus to remove it. Changed your mind? Click it to get it back.</span></li>
+    </ul>
+
+    <figure>
+      <img src="images/demo.jpg" width="2400" height="1252" loading="lazy"
+        alt="Three microapps Claude made floating on the desktop (a world clock, a Pomodoro timer, and a habit tracker with a change request typed into its bar) beside the turtle's launcher">
+      <figcaption>Microapps float as bubbles right on your desktop.</figcaption>
+    </figure>
+
+    <h2>Get started</h2>
+    <p>Honu needs <strong>macOS 26</strong> or newer and
+      <a href="https://claude.com/claude-code">Claude Code</a>, signed in with your Claude
+      account. It needs no API key. If you already have Claude Code, the quickest start is to run
+      <code>claude</code> in the repository and ask it to run Honu. Or build it yourself:</p>
+    <pre><code>git clone https://github.com/ctchuang/honu.git
+cd honu
+swift run</code></pre>
+    <p>Xcode is not required: the Command Line Tools are enough.</p>
+
+    <p class="note"><strong>Status:</strong> experimental prototype. Expect breaking changes,
+      and note that there is no protection against prompt injection.</p>
+  </main>
+
+  <footer>
+    <span>Honu is open source under the MIT License.</span>
+    <a href="https://github.com/ctchuang/honu">github.com/ctchuang/honu</a>
+  </footer>
+</body>
+</html>

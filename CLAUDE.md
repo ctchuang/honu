@@ -21,7 +21,7 @@ swift format lint --strict -r Sources Tests Package.swift   # lint (as CI does)
 swift format -i -r Sources Tests Package.swift     # format
 ```
 
-CI (`.github/workflows/ci.yml`) runs on a `macos-26` runner for every push to `main` or `dev` and every pull request: the strict format check (`swift format lint --strict`, so warnings fail), a debug build, the tests, and a release build.
+CI (`.github/workflows/ci.yml`) runs on a `macos-26` runner for every push to `main` or `dev` and every pull request: the strict format check (`swift format lint --strict`, so warnings fail), a debug build, the tests, and a release build. `.github/workflows/pages.yml` publishes Honu's web page, `site/index.html` with the images in `docs/images/` beside it in `images/`, to GitHub Pages at openhonu.ai whenever a push to `main` changes them.
 
 Two hooks run the same checks earlier. `.githooks/pre-push` (on once `git config core.hooksPath .githooks` is set; Git does not turn on a repository's hooks by itself) runs the strict lint and the tests before a push that changes `Sources/`, `Tests/`, `Package.swift`, `Package.resolved`, or `.swift-format`, retrying `swift test` with Swift Testing's plugin path when SwiftPM loses it. A Claude Code `PostToolUse` hook in `.claude/settings.json` lints each Swift file Claude writes or edits and hands the errors back, so they are fixed as they appear; it does not run the tests, which are still to be run before reporting work as done.
 

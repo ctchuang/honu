@@ -5,7 +5,7 @@
 </p>
 
 An experiment in having Claude Code create microapps on the fly, right
-on your macOS desktop.
+on your macOS desktop. See [openhonu.ai](https://openhonu.ai).
 
 > **Status:** experimental prototype. Expect breaking changes.
 >
