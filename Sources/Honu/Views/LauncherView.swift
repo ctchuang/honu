@@ -45,7 +45,8 @@ struct LauncherView: View {
 
 /// One tile of the launcher, highlighted while hovered. Clicking it starts
 /// what it starts. An installed microapp's tile can be dragged to the
-/// octopus, to uninstall it; the others wobble, to show they stay.
+/// octopus, to uninstall it; the others wobble, to show they stay. It also
+/// has a menu, on a right click, for changing or uninstalling its microapp.
 private struct TileView: View {
     let shell: Shell
     let tile: LauncherTile
@@ -55,6 +56,8 @@ private struct TileView: View {
     private let wobbles = State(initialValue: 0)
     /// Whether the current drag has already been refused with a wobble.
     private let refused = State(initialValue: false)
+    /// Where the tile's center is, in the stage's coordinates.
+    private let center = State(initialValue: CGPoint.zero)
 
     init(shell: Shell, tile: LauncherTile) {
         self.shell = shell
@@ -83,6 +86,21 @@ private struct TileView: View {
             .gesture(drag.exclusively(before: TapGesture().onEnded { shell.choose(tile.kind) }))
             .help(tile.label)
             .onHover { hovered.wrappedValue = $0 }
+            .contextMenu { menu }
+            .onGeometryChange(for: CGPoint.self) { proxy in
+                let frame = proxy.frame(in: .named(ShellView.space))
+                return CGPoint(x: frame.midX, y: frame.midY)
+            } action: {
+                center.wrappedValue = $0
+            }
+    }
+
+    /// The tile's menu: none but for an installed microapp's.
+    @ViewBuilder private var menu: some View {
+        if case .installed(let name) = tile.kind {
+            Button("Modify…") { shell.modify(name) }
+            Button("Uninstall") { shell.uninstall(tile, from: center.wrappedValue) }
+        }
     }
 
     private var drag: some Gesture {
