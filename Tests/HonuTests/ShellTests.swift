@@ -23,7 +23,7 @@ struct ShellTests {
     @Test func theMenuListsEveryMicroappInOrder() {
         #expect(
             makeShell().menuChoices.map(\.label) == [
-                "Add Note", "Ask AI", "Open Web Page", "Microapp Probe",
+                "Add Note", "Ask AI", "Open Web Page", "Make a Microapp",
             ])
     }
 

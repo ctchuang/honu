@@ -72,16 +72,17 @@ struct EventParserTests {
 
 struct ClaudeCodeTests {
     @Test func theQuestionIsAnsweredQuicklyWithoutToolsOrASession() {
-        let arguments = ClaudeCode.arguments
+        let arguments = ClaudeCode.arguments(
+            for: ClaudeRequest(prompt: "Why?", systemPrompt: "Answer.", effort: .medium))
         #expect(arguments.starts(with: ["-p"]))
         for (flag, value) in [
             ("--output-format", "stream-json"), ("--model", "claude-opus-5-5"),
-            ("--effort", "low"), ("--tools", ""),
+            ("--effort", "medium"), ("--tools", ""), ("--system-prompt", "Answer."),
         ] {
             let index = arguments.firstIndex(of: flag)
             #expect(index.map { arguments[$0 + 1] } == value, "\(flag)")
         }
-        for flag in ["--include-partial-messages", "--no-session-persistence", "--system-prompt"] {
+        for flag in ["--include-partial-messages", "--no-session-persistence"] {
             #expect(arguments.contains(flag), "\(flag)")
         }
     }
@@ -112,7 +113,9 @@ struct ClaudeCodeTests {
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o755], ofItemAtPath: executable.path())
         let stream = AnswerStream()
-        await ClaudeCode.receive("Why?", from: executable, in: folder, into: stream)
+        await ClaudeCode.receive(
+            ClaudeRequest(prompt: "Why?", systemPrompt: "Answer."), from: executable, in: folder,
+            into: stream)
         return stream.take().events
     }
 

@@ -44,7 +44,7 @@ final class Shell {
         autosave = Autosave(url: storeURL)
         registry = Registry([
             NotesApp(), AskApp(services: services), WebApp(),
-            MakerApp(root: MakerApp.root(for: storeURL)),
+            MakerApp(root: MakerApp.root(for: storeURL), services: services),
         ])
         stage = Stage(size: size)
         turtle = Turtle(stageSize: size)

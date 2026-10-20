@@ -2,9 +2,9 @@ import Foundation
 import WebKit
 
 /// The Swift side of `window.honu`, what a microapp's page can ask of Honu:
-/// to load and save its state in `data.json` in its folder, and to fetch
-/// from the web without the page's CORS limits. It also hears of the
-/// page's errors.
+/// to load and save its state in `data.json` in its folder, to fetch from
+/// the web without the page's CORS limits, and to resize its panel. It also
+/// hears of the page's errors.
 @MainActor
 final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHandler {
     /// The name the page posts requests to, which reply.
@@ -13,13 +13,22 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
     static let problems = "honuProblem"
     /// The most `honu.fetch` takes in.
     static let fetchLimit = 5_000_000
+    /// The longest error kept, in characters.
+    static let problemLimit = 600
 
     let folder: URL
-    /// What the page reports going wrong.
-    private(set) var reported: [String] = []
+    /// Called with each error the page reports.
+    private let onProblem: (String) -> Void
+    /// Called with the size the page asks for.
+    private let onResize: (CGSize) -> Void
 
-    init(folder: URL) {
+    init(
+        folder: URL, onProblem: @escaping (String) -> Void = { _ in },
+        onResize: @escaping (CGSize) -> Void = { _ in }
+    ) {
         self.folder = folder
+        self.onProblem = onProblem
+        self.onResize = onResize
     }
 
     private var dataURL: URL { folder.appending(path: "data.json") }
@@ -56,6 +65,11 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
             }
         case "fetch":
             return await fetch(body)
+        case "resize":
+            guard let width = body["width"] as? Double, let height = body["height"] as? Double
+            else { return (nil, "honu.resize takes a width and a height") }
+            onResize(CGSize(width: width, height: height))
+            return (nil, nil)
         default:
             return (nil, "Unknown request")
         }
@@ -66,15 +80,21 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
     ) {
         guard let body = message.body as? [String: Any] else { return }
         let problem = "\(body["kind"] ?? "error"): \(body["message"] ?? "")"
-        reported.append(problem)
-        print("Microapp \(folder.lastPathComponent) \(problem)")
+        onProblem(String(problem.prefix(Self.problemLimit)))
     }
 
-    /// Fetches what the page asked for, over http or https only.
+    /// What `honu.fetch` may fetch: http and https URLs only.
+    static func fetchable(_ text: String) -> URL? {
+        guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased())
+        else { return nil }
+        return url
+    }
+
+    /// Fetches what the page asked for.
     private func fetch(_ body: [String: Any]) async -> (Any?, String?) {
-        guard let url = URL(string: body["url"] as? String ?? ""),
-            ["http", "https"].contains(url.scheme?.lowercased())
-        else { return (nil, "Only http and https URLs can be fetched") }
+        guard let url = Self.fetchable(body["url"] as? String ?? "") else {
+            return (nil, "Only http and https URLs can be fetched")
+        }
         var request = URLRequest(url: url, timeoutInterval: 30)
         request.httpMethod = body["method"] as? String ?? "GET"
         for (name, value) in body["headers"] as? [String: String] ?? [:] {
@@ -115,6 +135,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
               url: String(url), method: init.method ?? "GET", headers: init.headers ?? {},
               ...(init.body == null ? {} : { body: String(init.body) }),
             }),
+            resize: (width, height) => ask("resize", { width: Number(width), height: Number(height) }),
           });
           window.addEventListener("error", (e) => report("error", e.error?.stack ?? e.message));
           window.addEventListener("unhandledrejection", (e) => report("rejection", e.reason?.stack ?? e.reason));

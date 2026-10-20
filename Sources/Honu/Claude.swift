@@ -19,12 +19,26 @@ enum ClaudeEvent: Equatable, Sendable {
     }
 }
 
+/// What to ask Claude, and how.
+struct ClaudeRequest: Equatable, Sendable {
+    /// How hard Claude thinks before answering.
+    enum Effort: String, Sendable {
+        case low, medium, high
+    }
+
+    /// What is asked, sent on standard input.
+    var prompt: String
+    /// What Claude is told about its task.
+    var systemPrompt: String
+    var effort = Effort.low
+}
+
 /// Asks Claude questions.
 @MainActor
 protocol ClaudeClient: AnyObject {
-    /// Starts streaming Claude's answer to `question`. Take the events from
+    /// Starts streaming Claude's answer to `request`. Take the events from
     /// the returned stream as they arrive.
-    func ask(question: String) -> AnswerStream
+    func ask(_ request: ClaudeRequest) -> AnswerStream
 }
 
 /// The events of one answer, handed from whatever receives them to the
@@ -75,11 +89,6 @@ final class AnswerStream: @unchecked Sendable {
 /// reading its answer happen off it.
 final class ClaudeCode {
     private static let model = "claude-opus-5-5"
-    private static let systemPrompt = """
-        You answer questions inside a small floating panel on the user's desktop. \
-        Keep answers short and to the point. Write plain text without Markdown, \
-        since the panel shows the raw text.
-        """
     /// Where `claude` is usually installed, for when Honu runs without a
     /// shell's `PATH`, as an app opened from the Finder does.
     private static let installFolders = [
@@ -90,13 +99,17 @@ final class ClaudeCode {
     /// project's CLAUDE.md comes along.
     static let workingDirectory = Services.folder
 
-    /// The arguments for answering one question read from standard input:
-    /// streamed as JSON lines, with no tools, and nothing saved to resume.
-    static let arguments = [
-        "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-        "--model", model, "--effort", "low", "--tools", "", "--strict-mcp-config",
-        "--no-session-persistence", "--system-prompt", systemPrompt,
-    ]
+    /// The arguments for answering `request`, whose prompt is read from
+    /// standard input: streamed as JSON lines, with no tools, and nothing
+    /// saved to resume.
+    static func arguments(for request: ClaudeRequest) -> [String] {
+        [
+            "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+            "--model", model, "--effort", request.effort.rawValue, "--tools", "",
+            "--strict-mcp-config", "--no-session-persistence",
+            "--system-prompt", request.systemPrompt,
+        ]
+    }
 
     /// The `claude` executable: the first in `PATH`, or else in a folder it
     /// is usually installed in.
@@ -122,16 +135,16 @@ final class ClaudeCode {
         environment.filter { $0.key != "ANTHROPIC_API_KEY" }
     }
 
-    /// Runs `executable` (`claude`) in `directory` on `question` and feeds its
+    /// Runs `executable` (`claude`) in `directory` on `request` and feeds its
     /// answer into `stream` until it ends, stopping it if the stream is
     /// cancelled first.
     static func receive(
-        _ question: String, from executable: URL, in directory: URL = workingDirectory,
+        _ request: ClaudeRequest, from executable: URL, in directory: URL = workingDirectory,
         into stream: AnswerStream
     ) async {
         let process = Process()
         process.executableURL = executable
-        process.arguments = arguments
+        process.arguments = arguments(for: request)
         process.environment = environment(ProcessInfo.processInfo.environment)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         process.currentDirectoryURL = directory
@@ -155,7 +168,7 @@ final class ClaudeCode {
             stream.send(.failed("Couldn't start Claude Code: \(error.localizedDescription)"))
             return
         }
-        try? input.fileHandleForWriting.write(contentsOf: Data(question.utf8))
+        try? input.fileHandleForWriting.write(contentsOf: Data(request.prompt.utf8))
         try? input.fileHandleForWriting.close()
 
         await withTaskCancellationHandler {
@@ -197,7 +210,7 @@ final class ClaudeCode {
 }
 
 extension ClaudeCode: ClaudeClient {
-    func ask(question: String) -> AnswerStream {
+    func ask(_ request: ClaudeRequest) -> AnswerStream {
         let stream = AnswerStream()
         let executable = Self.executable()
         stream.run { stream in
@@ -208,7 +221,7 @@ extension ClaudeCode: ClaudeClient {
                             + "then run claude once in Terminal to sign in."))
                 return
             }
-            await Self.receive(question, from: executable, into: stream)
+            await Self.receive(request, from: executable, into: stream)
         }
         return stream
     }
