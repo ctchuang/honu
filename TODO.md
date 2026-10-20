@@ -30,6 +30,7 @@
 - Rename the 'Ask AI' to an always-on 'Ask Claude' bubble, migrate it
   to Web-based.
 - Migrate the existing YouTube app to Web-based.
+- Add a stock Facebook app.
 - Migrate the existing Note app to Web-based (managed in the same way
   as other microspps).
 - Design a way to uninstall a microapp.
