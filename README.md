@@ -4,18 +4,16 @@
   <img src="docs/images/honu.svg" alt="Honu, a little green sea turtle" width="240">
 </p>
 
-An experimental desktop GUI and Human-Computer-Interface project for macOS, written in
+A GUI and Human-Computer-Interface experiment on Mac OS, written in
 Swift with SwiftUI and Liquid Glass.
 
-> **Status:** experimental prototype. Expect breaking changes. The first version was
-> written in Rust with [egui](https://github.com/emilk/egui) and lives in the git history.
+> **Status:** experimental prototype. Expect breaking changes. 
 
 ## What it does
 
-Liquid Glass bubbles float directly on your desktop, above other windows. A little
-pixel turtle spits them out: notes to write in, questions for Claude whose answers stream
-in, and web pages, which can also play YouTube videos. The bubble you press comes to the
-top and covers the others.
+Microapp bubbles float directly on your desktop, above other
+windows. A little pixel turtle spits them out. Drag the bubble to the
+octopus to remove it.
 
 ## Getting started
 
