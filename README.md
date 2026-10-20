@@ -16,8 +16,8 @@ on your macOS desktop.
 Microapp bubbles float right on your desktop. A little turtle spits
 them out; drag a bubble to the octopus to remove it.
 
-Ask the turtle to make a new microapp in moments, or to change one you
-already have.
+Describe a new microapp to the turtle, and Claude makes it in moments.
+To change a microapp, type what you want into the bar at its bottom.
 
 ![Three microapps Claude made floating on the desktop (a world clock, a
 Pomodoro timer, and a habit tracker with a change request typed into its
