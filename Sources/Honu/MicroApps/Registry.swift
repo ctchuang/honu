@@ -13,6 +13,11 @@ final class Registry {
         apps.first { $0.id == id }
     }
 
+    /// How the bubbles showing `target` look, as its microapp says.
+    func appearance(of target: ViewTarget) -> Appearance? {
+        app(target.app)?.appearance(of: target.item)
+    }
+
     func title(of target: ViewTarget) -> String {
         app(target.app)?.title(of: target.item) ?? ""
     }

@@ -15,7 +15,7 @@ extension Shell {
 
     /// How `bubble` looks, as its microapp says.
     func appearance(of bubble: Bubble) -> Appearance {
-        registry.app(bubble.target.app)?.appearance(of: bubble.target.item) ?? Appearance()
+        registry.appearance(of: bubble.target) ?? Appearance()
     }
 
     func title(of bubble: Bubble) -> String {

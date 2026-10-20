@@ -241,8 +241,7 @@ final class Shell {
             if bubble.isBusy != busy {
                 bubble.isBusy = busy
             }
-            let app = registry.app(bubble.target.app)
-            if let size = app?.appearance(of: bubble.target.item).panelSize,
+            if let size = registry.appearance(of: bubble.target)?.panelSize,
                 size != bubble.panelSize
             {
                 withAnimation(.smooth(duration: 0.25)) { bubble.panelSize = size }
