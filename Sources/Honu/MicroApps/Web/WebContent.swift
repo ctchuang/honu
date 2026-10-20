@@ -28,18 +28,14 @@ struct WebContent: View {
     }
 
     private var addressField: some View {
-        let text = Binding(
-            get: { draft.text },
-            set: { draft.text = $0 }
-        )
-        return VStack(spacing: 12) {
+        VStack(spacing: 12) {
             Image(systemName: "safari")
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(.secondary)
-            TextField("Paste a link, then press Return", text: text)
+            TextField("Paste a link, then press Return", text: Bindable(draft).text)
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
-                .onSubmit { app.open(text.wrappedValue, in: item) }
+                .onSubmit { app.open(draft.text, in: item) }
                 .frame(maxWidth: 420)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

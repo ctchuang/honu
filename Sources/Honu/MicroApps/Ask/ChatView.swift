@@ -36,12 +36,11 @@ struct ChatView: View {
     }
 
     private func questionForm(error: String?) -> some View {
-        let question = Binding(get: { chat.question }, set: { chat.question = $0 })
-        return VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             if let error {
                 Text(error).foregroundStyle(Self.error)
             }
-            TextField("Ask Claude…", text: question)
+            TextField("Ask Claude…", text: Bindable(chat).question)
                 .textFieldStyle(.plain)
                 .font(.system(size: 16))
                 .foregroundStyle(Self.ink)

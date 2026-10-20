@@ -28,13 +28,13 @@ struct MakerView: View {
     }
 
     private func describing(error: String?) -> some View {
-        let draft = Binding(get: { microapp.draft }, set: { microapp.draft = $0 })
-        return VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             if let error {
                 Text(error).foregroundStyle(Self.error).lineLimit(3)
             }
             TextField(
-                "Describe a microapp, such as a pomodoro timer", text: draft, axis: .vertical
+                "Describe a microapp, such as a pomodoro timer", text: Bindable(microapp).draft,
+                axis: .vertical
             )
             .textFieldStyle(.plain)
             .font(.system(size: 16))
@@ -126,8 +126,7 @@ struct ChangeBar: View {
     }
 
     private var changeField: some View {
-        let draft = Binding(get: { microapp.draft }, set: { microapp.draft = $0 })
-        return VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 1) {
             if let notice = microapp.notice {
                 Text(notice)
                     .font(.caption)
@@ -135,7 +134,7 @@ struct ChangeBar: View {
                     .lineLimit(1)
                     .help(notice)
             }
-            TextField("Ask Claude to change it…", text: draft)
+            TextField("Ask Claude to change it…", text: Bindable(microapp).draft)
                 .textFieldStyle(.plain)
                 .onSubmit { app.change(item) }
         }
