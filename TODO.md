@@ -1,13 +1,10 @@
 # TODO
 
-### Misc
-
-- Remove mention of Liquid Glass in README
-
 ## UI Tweaking
 
 - Allow bubble resizing.
-- Remove the minimized mode.
+- Decide whether to keep the minimized mode. It's annoying that the
+  bubble shrinks after double-click.
 - Fade-in effect of the speech bubble doesn't come from the octopus.
 - **Physics shows status** (started): bubbles breathe when
   active. Rise when something finishes, and wobble when the user is
@@ -20,18 +17,27 @@
 ### Basic
 
 - Type to filter the launcher's tiles (`docs/Launcher.md`, Later).
-- Rename the 'Ask AI' to an always-on 'Ask Claude' bubble, migrate it
-  to Web-based.
-- Migrate the existing YouTube app to Web-based.
+
+### More apps
+
 - Add a stock Facebook app.
+- Migrate the existing YouTube app to Web-based.
 - Migrate the existing Note app to Web-based (managed in the same way
   as other microspps).
 - Add more stock apps in a subfolder as examples.
 
-### Memory
+### Works with Claude
 
-- Each generated microapp should have its own memory context to be
-  shared with Claude.
+- Each generated microapp should have its own memory context.
+- **The key step:** Drag a bubble to the turtle creates a requst to
+  Claude by sharing its memory context.
+- **Every microapp is an MCP server**: each microapp offers its items
+  and what can be done with them as MCP tools, so Claude can read and
+  change them, and drive Honu through the same interface a microapp it
+  generated would offer.
+
+### Gimmicks?
+
 - **Bumping and sticking bubbles together shares their context with
   Claude**: dragging one bubble into another hands both to Claude. The
   collision physics gives the gesture, and Liquid Glass already shows
@@ -39,12 +45,8 @@
 
 ### Advanced
 
-- **Install microapps from some place**: let a microapp be installed
+- **Install microapps from external place**: let a microapp be installed
   separately, without rebuilding Honu.
-- **Every microapp is an MCP server**: each microapp offers its items
-  and what can be done with them as MCP tools, so Claude can read and
-  change them, and drive Honu through the same interface a microapp it
-  generated would offer.
 
 ## Project
 
@@ -62,10 +64,6 @@
   - Without notarization (an Apple Developer account), Gatekeeper warns
     of an unidentified developer on first launch: right-click and Open,
     or `xattr -d com.apple.quarantine`. Say so in the README.
-
-- **A web page for Honu**, hosted on GitHub Pages: a page that shows
-  what Honu is (bubbles on the desktop, the turtle and the octopus)
-  with a short demo video, and how to build and run it.
 - **Support iPad**: iPadOS has no desktop to float over, so the
   bubbles would live in Honu's own window there; the models and
   SwiftUI views could be shared, while the AppKit hosting
