@@ -23,13 +23,13 @@
 - Add a stock Facebook app.
 - Migrate the existing YouTube app to Web-based.
 - Migrate the existing Note app to Web-based (managed in the same way
-  as other microspps).
+  as other microapps).
 - Add more stock apps in a subfolder as examples.
 
 ### Works with Claude
 
 - Each generated microapp should have its own memory context.
-- **The key step:** Drag a bubble to the turtle creates a requst to
+- **The key step:** Drag a bubble to the turtle creates a request to
   Claude by sharing its memory context.
 - **Every microapp is an MCP server**: each microapp offers its items
   and what can be done with them as MCP tools, so Claude can read and
