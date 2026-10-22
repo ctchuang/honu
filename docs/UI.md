@@ -9,17 +9,23 @@ The launcher's own design is in `Launcher.md`.
 
 Honu is an experiment in desktop UI that departs from macOS conventions on
 purpose. It has no app window: its bubbles float on the real desktop,
-above other windows, among the user's own apps. Two pixel-art characters
+behind the user's own apps until the user turns to them. Two pixel-art characters
 take the place of chrome: a turtle that makes things and an octopus that
 takes them away. Claude writes the microapps the bubbles show, so the UI
 stays small while what it can do grows.
 
 ## Principles
 
-1. **The desktop is the canvas.** Honu draws on the desktop, not in a
-   window. Clicks pass through to the apps below everywhere except on
-   something of Honu's, and Honu is on every desktop (Space) unless
-   turned off. It never goes full screen: it shares the screen with the
+1. **The desktop is the canvas, and the user's apps come first.** Honu
+   draws on the desktop, not in a window, and is on every desktop (Space)
+   unless turned off. While another app is in use, Honu sinks behind
+   every window: it shows only where the desktop shows, and never takes
+   another app's clicks or keys. Clicking a bubble or a character where it
+   shows brings Honu to the front, and that click counts (it starts a
+   drag, opens the launcher, and so on). Turning to another app sends
+   Honu back behind it. Even in front, clicks pass through to the apps
+   below everywhere except on something of Honu's. It never goes full
+   screen, and Mission Control hides it: it shares the screen with the
    other apps rather than taking it over.
 2. **Start empty, stay quiet.** Honu starts with only the turtle in the
    bottom-left corner. Anything else appears when needed and leaves when
@@ -37,7 +43,10 @@ stays small while what it can do grows.
    pressed last comes to the top and covers the others completely.
 5. **Status shows through motion.** A bubble breathes while busy, rises
    once when something finishes, and wobbles when it needs the user.
-   Honu shows no spinners, badges, alerts, or system notifications.
+   Honu shows no spinners, badges, alerts, or system notifications. A
+   bubble behind another app's window cannot be seen, so the turtle shows
+   for it: when bubbles out of sight finish or need the user, possibly
+   many at once, the turtle shows it in a way of its own.
 6. **Direct manipulation, as few dialogs as possible.** Things are done
    by dragging and clicking them rather than through forms and dialogs,
    wherever that can be done. Deleting asks nothing: every delete can be
@@ -64,6 +73,16 @@ stays small while what it can do grows.
 | Right click | Opens the system menu beside it: **Show on All Desktops** (checked while on, the default) and **Exit**. |
 | Drag | Moves it; its place is kept. |
 
+**Front and back.** Honu is either in front, while the user uses it, or
+behind every other window.
+
+| Input | Result |
+|---|---|
+| Click a bubble, the turtle, or the octopus where it shows | Honu comes to the front, and the click acts. |
+| Click Honu's Dock icon, or switch to it with ⌘Tab | Honu comes to the front. |
+| Click another app, or switch to it | Honu goes behind every window. |
+| Click where Honu shows nothing | The click goes to whatever is below; if that is another app, Honu goes back. |
+
 **Launcher.** A glass panel of microapps: Note, Web Page, each installed
 microapp, and **+** for a new one. See `Launcher.md`.
 
@@ -83,6 +102,7 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
 ## Non-goals
 
 - Looking or behaving like a standard macOS app window.
+- Staying above other apps' windows while they are in use.
 - Notifications outside Honu's own bubbles.
 - Settings screens: what little can be set lives in the turtle's menu.
 
@@ -91,3 +111,19 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
 - Whether bubbles keep their closed (minimized) form: double-clicking
   shrinks a bubble, which can be annoying.
 - Resizing bubbles by hand.
+- Reaching Honu when its windows are all covered: the Dock icon and ⌘Tab
+  work, but the turtle could instead stay on top, in a small window of
+  its own.
+
+## Plan
+
+1. Behind until used (not done): `FloatingWindow` at the normal window
+   level; sent behind every window when Honu stops being the active app,
+   and to the front when it becomes active again; a first click on a
+   bubble or character that brings Honu forward also acts. This fixes
+   issue #5: in testing, a transparent window at the normal level, on
+   every Space and ordered to the back, leaves every Space thumbnail
+   intact.
+2. The turtle shows covered bubbles' status (not done): what it does
+   when one or many bubbles out of sight finish or need the user is yet
+   to be designed.

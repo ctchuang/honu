@@ -2,7 +2,6 @@
 
 ## UI Tweaking
 
-- Add 'Always on Top' option. 
 - Allow bubble resizing.
 - Decide whether to keep the minimized mode. It's annoying that the
   bubble shrinks after double-click.
