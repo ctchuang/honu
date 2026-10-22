@@ -21,12 +21,24 @@ final class FloatingWindow: NSWindow {
     }
 
     /// Whether the window shows on every desktop (Space). Otherwise it stays
-    /// on the one Honu was launched on, like an ordinary window. Either way
-    /// it never goes full screen (as Fn-F or Control-Command-F would make the
-    /// key window do), since it already covers the screen beside other apps.
+    /// on the one Honu was launched on. Either way it is transient, so
+    /// Mission Control and App Exposé hide it rather than lay out a window
+    /// the size of the screen over the others, and it never goes full screen
+    /// (as Fn-F or Control-Command-F would make the key window do), since it
+    /// already covers the screen beside other apps.
+    ///
+    /// Mission Control's Space thumbnails still leave out every window that
+    /// lies wholly inside this one, as if it were opaque, so a Space it is on
+    /// shows only its wallpaper there (issue #5). Only a window at the normal
+    /// level on one Space, or windows no bigger than what Honu shows, avoid it.
     var isOnAllDesktops: Bool {
         get { collectionBehavior.contains(.canJoinAllSpaces) }
-        set { collectionBehavior = [newValue ? .canJoinAllSpaces : .managed, .fullScreenNone] }
+        set {
+            collectionBehavior = [.transient, .fullScreenNone]
+            if newValue {
+                collectionBehavior.insert(.canJoinAllSpaces)
+            }
+        }
     }
 
     // Borderless windows refuse key status by default, but web pages need it for typing.
