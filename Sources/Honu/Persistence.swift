@@ -5,6 +5,8 @@ import Foundation
 struct SavedState: Codable {
     /// Where the turtle rests relative to the center of the screen, if it was dragged.
     var turtle: CGPoint?
+    /// Whether Honu shows on every desktop; missing means it does.
+    var allDesktops: Bool?
     var bubbles: [SavedBubble] = []
     /// Each microapp's items, as the JSON it saved, by microapp id.
     var apps: [String: String] = [:]

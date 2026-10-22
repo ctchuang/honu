@@ -25,7 +25,7 @@ struct ShellView: View {
                 case .system(let point):
                     let size = CGSize(width: SystemMenu.width, height: SystemMenu.estimatedHeight)
                     let corner = menuCorner(of: size, at: point, in: shell.stage.size)
-                    SystemMenu()
+                    SystemMenu(shell: shell)
                         .offset(x: corner.x, y: corner.y)
                 }
             }

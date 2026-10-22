@@ -21,11 +21,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let frame = screen.visibleFrame
         let shell = Shell(size: frame.size)
         let window = FloatingWindow(frame: frame, content: ShellView(shell: shell))
+        window.isOnAllDesktops = shell.isOnAllDesktops
         window.makeKeyAndOrderFront(nil)
         let clickThrough = ClickThrough(window: window, shell: shell)
         frameClock = FrameClock(window: window) {
             shell.tick()
             clickThrough.update()
+            if window.isOnAllDesktops != shell.isOnAllDesktops {
+                window.isOnAllDesktops = shell.isOnAllDesktops
+            }
         }
         eventMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.keyDown, .leftMouseDown, .rightMouseDown]

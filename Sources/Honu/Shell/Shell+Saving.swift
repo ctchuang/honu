@@ -8,6 +8,7 @@ extension Shell {
         let center = stage.center
         var state = SavedState()
         state.turtle = turtle.rest.map { $0 - center }
+        state.allDesktops = isOnAllDesktops
         // A bubble still in the octopus when Honu quits counts as deleted.
         state.bubbles = stage.bubbles.filter { !$0.isSwallowed }.map {
             // Where it is going, so a bubble saved mid-flight comes back where it lands.
@@ -28,6 +29,7 @@ extension Shell {
         if let offset = state.turtle {
             turtle.move(to: center + offset)
         }
+        isOnAllDesktops = state.allDesktops ?? true
         for app in registry.apps {
             if let json = state.apps[app.id.rawValue] {
                 app.load(Data(json.utf8))

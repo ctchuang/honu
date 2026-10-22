@@ -48,6 +48,10 @@ final class Shell {
     let maker: MakerApp
     /// What the turtle has open, if anything.
     private(set) var popup: Popup?
+    /// Whether Honu shows on every desktop (Space), as it does unless turned
+    /// off, rather than only the one it was launched on. The menu changes it
+    /// through `toggleAllDesktops`.
+    var isOnAllDesktops = true
     /// The launcher tile being dragged toward the octopus, and where the
     /// pointer is.
     private(set) var tileDrag: (tile: LauncherTile, pointer: CGPoint)?
@@ -128,6 +132,14 @@ final class Shell {
     func rightClickTurtle(at point: CGPoint) {
         turtle.hop()
         popup = .system(at: point)
+    }
+
+    /// Shows Honu on every desktop, or only on the one it is on, closing the
+    /// system menu.
+    func toggleAllDesktops() {
+        popup = nil
+        isOnAllDesktops.toggle()
+        save()
     }
 
     /// Closes whichever menu is open, letting go of any tile being dragged.

@@ -56,9 +56,10 @@ swift run                # build and launch
 
 ### Floating on the desktop
 
-Clicks pass through to the apps below everywhere except on a bubble. The window has no
-close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd> to quit
-(or quit it from the Dock).
+Clicks pass through to the apps below everywhere except on a bubble. Honu shows on every
+desktop (Space) you switch to; to keep it on just one, right-click the turtle and turn off
+**Show on All Desktops**. The window has no close button: click a bubble to focus Honu,
+then press <kbd>⌘</kbd><kbd>Q</kbd> to quit (or quit it from the Dock).
 
 ### Using the bubbles
 
@@ -75,7 +76,9 @@ close button: click a bubble to focus Honu, then press <kbd>⌘</kbd><kbd>Q</kbd
   Claude to change it in the bar below it (press Return or the **Go** button), and every
   open bubble of it changes. To uninstall it, drag its tile to the octopus, or
   **right-click** its tile and choose **Uninstall**; the built-in tiles stay put.
-- **Right-click** the turtle for **Exit**, which quits Honu.
+- **Right-click** the turtle for its menu: **Show on All Desktops**, checked while Honu
+  follows you to every desktop (turn it off to keep Honu on the one it is on), and
+  **Exit**, which quits Honu.
 - **Drag** a bubble to move it, and **throw** it to let it glide. Idle bubbles drift, and
   crowded ones push each other apart. The bubble you press or drag comes to the top and
   covers the others.

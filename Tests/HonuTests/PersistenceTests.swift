@@ -34,6 +34,29 @@ struct PersistenceTests {
         #expect((back.viewState as? NoteViewState)?.focusPending == false)
     }
 
+    @Test func showingOnAllDesktopsComesBack() throws {
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
+        #expect(shell.isOnAllDesktops, "on every desktop until turned off")
+        shell.rightClickTurtle(at: shell.turtle.center)
+        shell.toggleAllDesktops()
+        #expect(!shell.isOnAllDesktops)
+        #expect(shell.popup == nil, "the menu closes")
+        #expect(!makeShell(size: size, storeURL: url).isOnAllDesktops)
+
+        shell.toggleAllDesktops()
+        #expect(makeShell(size: size, storeURL: url).isOnAllDesktops)
+
+        // A store from before the setting counts as on every desktop.
+        let old = temporaryStoreURL()
+        try FileManager.default.createDirectory(
+            at: old.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(#"{"apps":{},"bubbles":[],"turtle":[0,0]}"#.utf8).write(to: old)
+        let restored = makeShell(size: size, storeURL: old)
+        #expect(restored.turtle.origin == CGPoint(x: 600, y: 400), "the old store was read")
+        #expect(restored.isOnAllDesktops)
+    }
+
     @Test func swallowedBubblesAndTheirItemsCountAsDeleted() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(size: size, storeURL: url)

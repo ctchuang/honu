@@ -10,9 +10,7 @@ final class FloatingWindow: NSWindow {
         backgroundColor = .clear
         hasShadow = false
         level = .floating
-        // Stay on the Space Honu was launched on, like an ordinary window,
-        // rather than following the user to every Space.
-        collectionBehavior = [.managed]
+        isOnAllDesktops = false
         isReleasedWhenClosed = false
 
         let hosting = NSHostingView(rootView: content)
@@ -20,6 +18,13 @@ final class FloatingWindow: NSWindow {
         hosting.sizingOptions = []
         contentView = hosting
         setFrame(frame, display: true)
+    }
+
+    /// Whether the window shows on every desktop (Space). Otherwise it stays
+    /// on the one Honu was launched on, like an ordinary window.
+    var isOnAllDesktops: Bool {
+        get { collectionBehavior.contains(.canJoinAllSpaces) }
+        set { collectionBehavior = newValue ? [.canJoinAllSpaces] : [.managed] }
     }
 
     // Borderless windows refuse key status by default, but web pages need it for typing.
