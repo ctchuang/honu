@@ -2,6 +2,7 @@
 
 ## UI Tweaking
 
+- Add 'Always on Top' option. 
 - Allow bubble resizing.
 - Decide whether to keep the minimized mode. It's annoying that the
   bubble shrinks after double-click.
@@ -24,7 +25,8 @@
 - Migrate the existing YouTube app to Web-based.
 - Migrate the existing Note app to Web-based (managed in the same way
   as other microapps).
-- Add more stock apps in a subfolder as examples.
+- Add top 20 web sites as built-in microapps.
+- Add more built-in apps in a subfolder as examples.
 
 ### Works with Claude
 
