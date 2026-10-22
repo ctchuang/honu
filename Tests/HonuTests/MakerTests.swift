@@ -336,6 +336,25 @@ struct MakerTests {
         #expect(!FileManager.default.fileExists(atPath: stray.path()))
     }
 
+    @Test func foldersNotNamedByHonuAreLeftAloneOnLoad() throws {
+        let maker = app()
+        _ = made(maker, "a clock", answer("Clock"))
+        let files = FileManager.default
+        // Only a folder named by a UUID is Honu's to trash.
+        let stray = AppFolder(url: root.appending(path: UUID().uuidString))
+        try stray.write("stray")
+        let mine = root.appending(path: "mine", directoryHint: .isDirectory)
+        try files.createDirectory(at: mine, withIntermediateDirectories: true)
+        let note = root.appending(path: "notes.txt")
+        try Data("note".utf8).write(to: note)
+
+        let restored = app()
+        restored.load(try #require(maker.save()))
+        #expect(!files.fileExists(atPath: stray.url.path()))
+        #expect(files.fileExists(atPath: mine.path()))
+        #expect(files.fileExists(atPath: note.path()))
+    }
+
     @Test func anInstalledMicroappLaunchesAsManyTimesAsAskedEachWithItsOwnData() throws {
         let maker = app()
         let first = made(maker, "a clock", answer("Clock"))
