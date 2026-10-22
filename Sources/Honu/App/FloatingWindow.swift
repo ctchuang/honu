@@ -21,10 +21,12 @@ final class FloatingWindow: NSWindow {
     }
 
     /// Whether the window shows on every desktop (Space). Otherwise it stays
-    /// on the one Honu was launched on, like an ordinary window.
+    /// on the one Honu was launched on, like an ordinary window. Either way
+    /// it never goes full screen (as Fn-F or Control-Command-F would make the
+    /// key window do), since it already covers the screen beside other apps.
     var isOnAllDesktops: Bool {
         get { collectionBehavior.contains(.canJoinAllSpaces) }
-        set { collectionBehavior = newValue ? [.canJoinAllSpaces] : [.managed] }
+        set { collectionBehavior = [newValue ? .canJoinAllSpaces : .managed, .fullScreenNone] }
     }
 
     // Borderless windows refuse key status by default, but web pages need it for typing.
