@@ -54,42 +54,20 @@ xcode-select --install   # if you have neither Xcode nor the Command Line Tools
 swift run                # build and launch
 ```
 
-### Floating on the desktop
+### Using Honu
 
-Clicks pass through to the apps below everywhere except on a bubble. Honu shows on every
-desktop (Space) you switch to; to keep it on just one, right-click the turtle and turn off
-**Show on All Desktops**. The window has no close button: click a bubble to focus Honu,
-then press <kbd>⌘</kbd><kbd>Q</kbd> to quit (or quit it from the Dock).
+- **Click** the turtle for its launcher, and click a microapp: the turtle spits out a
+  new bubble of it, such as a **Note**, a **Web Page** (YouTube links play), one Claude
+  made, or **+** to describe a new one for Claude to write.
+- To change a microapp, say what you want in the bar below it.
+- **Drag** bubbles around, or throw them. **Double-click** one to open or close it.
+- To delete a bubble, drag it to the octopus. To uninstall a microapp, drag it from the
+  launcher there. Changed your mind? Click the octopus, or press <kbd>⌘</kbd><kbd>Z</kbd>.
+- **Right-click** the turtle to keep Honu on just one desktop, or to quit. Clicks
+  elsewhere pass through to your other apps.
+- Everything is saved as you go.
 
-### Using the bubbles
-
-- Honu starts with just a little pixel turtle in the bottom-left corner. **Drag** it to
-  move it anywhere.
-- **Click** the turtle for its launcher, a panel of tiles. Click a tile and the turtle
-  spits out a new bubble for it: **Note**, a note to write in (a closed note shows its
-  first line); **Web Page**, a bubble that asks for a link and then shows the page
-  (YouTube links play the video); any microapp Claude has made for you; and **+**, a new
-  microapp: describe what you want, such as a pomodoro timer, and Claude writes it (the
-  bubble breathes while Claude works, rises when it is done, and wobbles when something
-  needs you). Each click opens a new one, with its own data.
-- A microapp Claude has made gets a tile of its own and stays in the launcher. Ask
-  Claude to change it in the bar below it (press Return or the **Go** button), and every
-  open bubble of it changes. To uninstall it, drag its tile to the octopus, or
-  **right-click** its tile and choose **Uninstall**; the built-in tiles stay put.
-- **Right-click** the turtle for its menu: **Show on All Desktops**, checked while Honu
-  follows you to every desktop (turn it off to keep Honu on the one it is on), and
-  **Exit**, which quits Honu.
-- **Drag** a bubble to move it, and **throw** it to let it glide. Idle bubbles drift, and
-  crowded ones push each other apart. The bubble you press or drag comes to the top and
-  covers the others.
-- To delete a bubble, drag it to the pixel octopus that comes up in a bottom corner
-  while you drag, and let go. Changed your mind? For a few seconds afterwards,
-  **click** the octopus (or press <kbd>⌘</kbd><kbd>Z</kbd>) and it spits the bubble back,
-  or the microapp you uninstalled, with its bubbles.
-- **Double-click** a bubble to open it into a panel, and double-click its title to close it.
-- The turtle, bubbles, notes, pages, and microapps are saved as you go, so quitting and
-  reopening Honu brings them back where you left them. A bubble or microapp still in the
-  octopus when you quit is gone.
+The ideas behind this UI are in [docs/UI.md](docs/UI.md).
 
 ## Development
 
