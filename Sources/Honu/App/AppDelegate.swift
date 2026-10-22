@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import WebKit
 
-/// Sets up the menu bar and the floating window that covers the screen, and
+/// Sets up the menu bar and the window that covers the screen, and
 /// passes the input SwiftUI's gestures do not cover to an `InputRouter`.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -40,6 +40,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.window = window
         self.shell = shell
         NSApp.activate()
+    }
+
+    /// Honu comes to the front when it becomes the active app: a bubble or
+    /// sprite was clicked, or the user switched to it.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        window?.bringFront()
+    }
+
+    /// Honu goes behind every window when the user turns to another app,
+    /// closing any menu it had open.
+    func applicationDidResignActive(_ notification: Notification) {
+        shell?.closePopup()
+        window?.sendBack()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

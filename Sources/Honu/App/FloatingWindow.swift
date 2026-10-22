@@ -1,19 +1,20 @@
 import AppKit
 import SwiftUI
 
-/// A transparent, borderless window that floats above other windows and
-/// shows the stage of bubbles directly on the desktop.
+/// A transparent, borderless window that shows the stage of bubbles directly
+/// on the desktop. It sits at the normal window level, behind the other
+/// apps' windows while they are in use (`sendBack`), and comes to the front
+/// when Honu does.
 final class FloatingWindow: NSWindow {
     init(frame: NSRect, content: some View) {
         super.init(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        level = .floating
         isOnAllDesktops = false
         isReleasedWhenClosed = false
 
-        let hosting = NSHostingView(rootView: content)
+        let hosting = FirstClickHostingView(rootView: content)
         // Keep the window the size of the screen instead of the content's ideal size.
         hosting.sizingOptions = []
         contentView = hosting
@@ -27,10 +28,9 @@ final class FloatingWindow: NSWindow {
     /// (as Fn-F or Control-Command-F would make the key window do), since it
     /// already covers the screen beside other apps.
     ///
-    /// Mission Control's Space thumbnails still leave out every window that
-    /// lies wholly inside this one, as if it were opaque, so a Space it is on
-    /// shows only its wallpaper there (issue #5). Only a window at the normal
-    /// level on one Space, or windows no bigger than what Honu shows, avoid it.
+    /// Mission Control's Space thumbnails leave out every window that lies
+    /// wholly inside one above them, as if it were opaque, so Honu's window
+    /// must be behind the others there (issue #5); see `sendBack`.
     var isOnAllDesktops: Bool {
         get { collectionBehavior.contains(.canJoinAllSpaces) }
         set {
@@ -41,9 +41,28 @@ final class FloatingWindow: NSWindow {
         }
     }
 
+    /// Puts the window behind every other window, where it shows only where
+    /// the desktop does, as it should while another app is in use.
+    func sendBack() {
+        orderBack(nil)
+    }
+
+    /// Brings the window in front of the others, as it should while Honu is
+    /// in use.
+    func bringFront() {
+        orderFront(nil)
+    }
+
     // Borderless windows refuse key status by default, but web pages need it for typing.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+}
+
+/// A hosting view whose first click acts, rather than only bringing Honu to
+/// the front, so a bubble or the turtle behind another app's windows can be
+/// dragged or clicked at once.
+final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 /// Lets clicks through to the apps below everywhere except on something of

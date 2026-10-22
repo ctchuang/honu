@@ -117,7 +117,7 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
 
 ## Plan
 
-1. Behind until used (not done): `FloatingWindow` at the normal window
+1. Behind until used (done): `FloatingWindow` at the normal window
    level; sent behind every window when Honu stops being the active app,
    and to the front when it becomes active again; a first click on a
    bubble or character that brings Honu forward also acts. This fixes
