@@ -43,6 +43,21 @@ final class Bubble: Identifiable {
     private(set) var breathTime: Double = 0
     /// The motion being played and how many seconds into it.
     private(set) var motion: (motion: Motion, time: Double)?
+    /// Its outline while it wobbles like jelly; none at rest, when it is its
+    /// rounded rectangle.
+    private(set) var outline: Outline?
+    /// The squash, stretch, and shear of its content while it wobbles, in
+    /// its own coordinates at full size; the identity at rest.
+    private(set) var contentTransform: CGAffineTransform = .identity
+    /// The soft ring its outline follows while it wobbles.
+    @ObservationIgnored private var jelly: Jelly?
+    /// Where it was drawn last frame, if it was free then.
+    @ObservationIgnored private var lastSpot: CGPoint?
+    /// How fast where it is drawn moves, smoothed, in points per second.
+    @ObservationIgnored private var pace: CGPoint = .zero
+    /// Whether it has just landed from a flight out of the turtle or the
+    /// octopus, and is to splat.
+    @ObservationIgnored private var landed = false
 
     static let doomedScale: CGFloat = 0.6
     /// How deep the rim is at the sides and bottom, around the content.
@@ -61,6 +76,17 @@ final class Bubble: Identifiable {
     static let breathRate: Double = 0.8
     /// How quickly breathing fades in and out (1/s), so it never starts or stops abruptly.
     static let breathFadeRate: Double = 3
+    /// Seconds over which its pace is smoothed, so a jittery pointer does
+    /// not shake it.
+    static let paceSmoothing: Double = 0.05
+    /// Change in pace (points/s) in one frame, or pace, that sets a bubble at
+    /// rest wobbling.
+    static let wobbleKick: Double = 40
+    static let wobblePace: Double = 300
+    /// Pace (points/s) below which a settled ring comes to rest.
+    static let restPace: Double = 20
+    /// How hard a bubble splats when it lands (1/s).
+    static let splat: Double = 3
 
     init(
         id: BubbleID, target: ViewTarget, center: CGPoint, appearance: Appearance,
@@ -214,5 +240,66 @@ final class Bubble: Identifiable {
         flight.progress = min(flight.progress + dt / flight.seconds, 1)
         center = flight.position
         self.flight = flight.progress < 1 ? flight : nil
+        if case .spawn = flight.kind, self.flight == nil {
+            landed = true
+        }
+    }
+
+    /// Advances its jelly by `dt` seconds, on a screen of `bounds`: changes
+    /// in how where it is drawn moves set it wobbling, and it comes to rest
+    /// once settled. A bubble being resized, flying, or swallowed, or whose
+    /// size changed, comes to rest at once.
+    func wobble(dt: Double, bounds: CGSize, resizing: Bool) {
+        let scale = drawnScale
+        guard isFree, !resizing, dt > 0, scale > 0.1, jelly.map({ $0.size == size }) ?? true
+        else {
+            rest()
+            lastSpot = nil
+            return
+        }
+        let spot = CGPoint(x: center.x + motionOffset.width, y: center.y + motionOffset.height)
+        var change = CGPoint.zero
+        if let lastSpot {
+            let velocity = (spot - lastSpot) * (1 / dt)
+            let smoothed = pace + (velocity - pace) * (1 - exp(-dt / Self.paceSmoothing))
+            change = smoothed - pace
+            pace = smoothed
+        } else {
+            pace = .zero
+        }
+        lastSpot = spot
+        if jelly == nil {
+            guard landed || change.length > Self.wobbleKick || pace.length > Self.wobblePace
+            else { return }
+            jelly = Jelly(size: size, cornerRadius: cornerRadius)
+        }
+        guard var jelly else { return }
+        if landed {
+            jelly.splat(Self.splat)
+            landed = false
+        }
+        jelly.feel(change)
+        let walls = CGRect(
+            x: -spot.x / scale, y: -spot.y / scale, width: bounds.width / scale,
+            height: bounds.height / scale)
+        jelly.step(dt: dt, velocity: pace, walls: walls)
+        if jelly.isSettled && pace.length < Self.restPace {
+            rest()
+            return
+        }
+        self.jelly = jelly
+        outline = jelly.outline
+        let middle = CGAffineTransform(translationX: size.width / 2, y: size.height / 2)
+        contentTransform = middle.inverted()
+            .concatenating(jelly.contentTransform(margin: Self.rimWidth - 4))
+            .concatenating(middle)
+    }
+
+    /// Drops its jelly: its outline is its rounded rectangle again, and its
+    /// content is as laid out.
+    private func rest() {
+        jelly = nil
+        if outline != nil { outline = nil }
+        if contentTransform != .identity { contentTransform = .identity }
     }
 }

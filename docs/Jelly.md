@@ -225,7 +225,7 @@ lint on their own.
   kept; a fast ring stretches along its velocity; the content stays
   inside the outline.
 
-### Step 3: Bubbles wobble
+### Step 3: Bubbles wobble (done)
 
 - `Bubble` tracks where it is drawn and its smoothed velocity, creates
   its jelly when something sets it wobbling, drops it once it settles,

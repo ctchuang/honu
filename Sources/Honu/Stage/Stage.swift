@@ -249,12 +249,15 @@ final class Stage {
         bubble.fly(from: mouth, to: home)
     }
 
-    /// Advances every bubble's flight and motion by `dt` seconds. A dragged
-    /// or resized bubble follows the pointer instead of the physics.
+    /// Advances every bubble's flight, motion, and jelly by `dt` seconds. A
+    /// dragged or resized bubble follows the pointer instead of the physics.
     func step(dt: Double) {
         for bubble in bubbles {
             bubble.animate(dt: dt)
         }
         Physics.step(bubbles, bounds: size, held: drag?.bubble ?? resize?.bubble, dt: dt)
+        for bubble in bubbles {
+            bubble.wobble(dt: dt, bounds: size, resizing: bubble === resize?.bubble)
+        }
     }
 }

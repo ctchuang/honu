@@ -56,7 +56,7 @@ struct JellyTests {
         var jelly = jelly()
         run(&jelly, 2)
         #expect(jelly.isSettled)
-        #expect(jelly.contentTransform(margin: 8).isNearlyIdentity)
+        #expect(jelly.contentTransform(margin: 6).isNearlyIdentity)
     }
 
     @Test func changeInVelocitySetsItWobblingAndItSettles() {
@@ -130,7 +130,7 @@ struct JellyTests {
         ]
         var squashed = 1.0
         run(&jelly, 1, walls: walls) { jelly in
-            let transform = jelly.contentTransform(margin: 8)
+            let transform = jelly.contentTransform(margin: 6)
             squashed = min(squashed, transform.a)
             let outline = Path { $0.addLines(jelly.points) }
             for corner in corners {
@@ -139,6 +139,95 @@ struct JellyTests {
             }
         }
         #expect(squashed < 0.9, "content squashed only to \(squashed)")
+    }
+}
+
+@MainActor
+struct BubbleJellyTests {
+    private static let dt = 1.0 / 60
+    private let stage = Stage(size: CGSize(width: 2000, height: 1000))
+
+    private func bubble(_ x: CGFloat, _ y: CGFloat = 500) -> Bubble {
+        stage.add(
+            target: ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1)),
+            center: CGPoint(x: x, y: y), appearance: Appearance(), viewState: nil)
+    }
+
+    /// Runs the stage for `seconds`, calling `watch` after each step.
+    private func simulate(_ seconds: Double, watch: () -> Void = {}) {
+        for _ in 0..<Int((seconds / Self.dt).rounded()) {
+            stage.step(dt: Self.dt)
+            watch()
+        }
+    }
+
+    private func isAtRest(_ bubble: Bubble) -> Bool {
+        bubble.outline == nil && bubble.contentTransform == .identity
+    }
+
+    @Test func bubbleLeftAloneNeverWobbles() {
+        let bubble = bubble(500)
+        simulate(2) { #expect(isAtRest(bubble)) }
+    }
+
+    @Test func bubbleThrownAtTheEdgeSquashesWobblesAndRests() {
+        let bubble = bubble(1500)
+        bubble.velocity = CGPoint(x: 2000, y: 0)
+        var squashed = 1.0
+        simulate(0.6) { squashed = min(squashed, bubble.contentTransform.a) }
+        #expect(squashed < 0.85, "content squashed only to \(squashed)")
+        simulate(4)
+        #expect(isAtRest(bubble))
+    }
+
+    @Test func draggedBubbleTrailsThePointer() {
+        let bubble = bubble(500)
+        stage.startDrag(bubble)
+        var wobbled = false
+        for frame in 1...30 {
+            stage.dragged(
+                by: CGSize(width: 30 * Double(frame), height: 0),
+                velocity: CGSize(width: 1800, height: 0), doomed: false)
+            stage.step(dt: Self.dt)
+            wobbled = wobbled || bubble.outline != nil
+        }
+        #expect(wobbled)
+        // Moving right, it trails behind: its outline sits left of its center.
+        let points = bubble.outline?.points ?? []
+        let middle = points.reduce(0) { $0 + $1.x } / Double(max(points.count, 1))
+        #expect(middle < -1, "outline centered at \(middle)")
+        _ = stage.endDrag()
+    }
+
+    @Test func resizingOrChangingSizeBringsItToRest() {
+        let bubble = bubble(1500)
+        bubble.velocity = CGPoint(x: 2000, y: 0)
+        simulate(0.3)
+        #expect(!isAtRest(bubble))
+        stage.startResize(bubble, edges: .left)
+        simulate(Self.dt)
+        #expect(isAtRest(bubble))
+        stage.endResize()
+
+        bubble.velocity = CGPoint(x: -2000, y: 0)
+        simulate(0.2)
+        #expect(!isAtRest(bubble))
+        bubble.microappSize = CGSize(width: 500, height: 400)
+        simulate(Self.dt)
+        #expect(isAtRest(bubble))
+    }
+
+    @Test func spatOutBubbleSplatsWhenItLands() {
+        let bubble = bubble(500)
+        stage.spit(bubble, from: CGPoint(x: 100, y: 900))
+        var splatted = false
+        simulate(Bubble.spawnSeconds + 0.3) {
+            if !bubble.isInFlight, let outline = bubble.outline {
+                let xs = outline.points.map(\.x)
+                splatted = splatted || xs.max()! - xs.min()! > bubble.size.width + 5
+            }
+        }
+        #expect(splatted, "did not splat wider when it landed")
     }
 }
 

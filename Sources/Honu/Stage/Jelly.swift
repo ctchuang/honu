@@ -26,10 +26,10 @@ struct Jelly {
     static let wallStiffness = 25 * stiffness
     /// How much more the ring feels a change in the bubble's velocity than
     /// real jelly would, for a cartoon squash.
-    static let inertia = 1.6
+    static let inertia = 2.4
     /// Most change in velocity (points/s) the ring feels at once, so a hard
     /// hit squashes rather than collapses.
-    static let kickLimit = 1800.0
+    static let kickLimit = 2400.0
     /// How much less of a kick the side the ring is flung toward feels than
     /// the middle, and how much more the side behind it does.
     static let squash = 0.6
@@ -120,6 +120,9 @@ struct Jelly {
         corner(around: CGPoint(x: left, y: top), from: .pi)
         return (points, normals)
     }
+
+    /// The outline the ring draws now.
+    var outline: Outline { Outline(points: points, normals: normals) }
 
     /// Whether every point is back where it rests and nearly still.
     var isSettled: Bool {
@@ -281,4 +284,11 @@ struct Jelly {
             a: map.a * shrink, b: map.b * shrink, c: map.c * shrink, d: map.d * shrink,
             tx: map.tx, ty: map.ty)
     }
+}
+
+/// A wobbling bubble's outline: a ring of points relative to its center, at
+/// full scale, and each one's outward normal at rest.
+struct Outline: Equatable {
+    var points: [CGPoint]
+    var normals: [CGPoint]
 }
