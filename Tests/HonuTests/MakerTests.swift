@@ -27,6 +27,15 @@ struct AppSourceTests {
         #expect(AppSource.page(from: "I can't help with that.") == nil)
     }
 
+    @Test func tagsNamedBeforeThePageAreNotPartOfIt() {
+        let page = AppSource.page(
+            from: "Here is an <html> page with a <!DOCTYPE html> line:\n" + answer("Timer"))
+        #expect(page?.hasPrefix("<!doctype html>\n<html><head><title>Timer") == true)
+        // A page without a doctype starts at its <html>.
+        let bare = AppSource.page(from: "Writing <html>:\n<html><body>Hi</body></html>")
+        #expect(bare == "<html><body>Hi</body></html>")
+    }
+
     @Test func thePageSaysWhatItIsCalledHowBigItIsAndItsSymbol() throws {
         let page = try #require(AppSource.page(from: answer("Tea &amp; Toast")))
         #expect(
