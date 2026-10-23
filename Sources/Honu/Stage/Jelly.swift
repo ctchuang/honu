@@ -48,7 +48,7 @@ struct Jelly {
     /// Distance between points along the sides, at rest.
     static let spacing: CGFloat = 40
     /// Points on each rounded corner, besides the one starting the next side.
-    static let cornerPoints = 3
+    static let cornerPoints = 5
     /// Steps each frame is cut into, since the walls are stiff.
     static let substeps = 8
     /// Within this distance (points) of its rest, and slower than
