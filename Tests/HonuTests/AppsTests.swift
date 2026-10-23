@@ -41,6 +41,16 @@ struct NotesAppTests {
         #expect(text.runs.last?.font == nil)
     }
 
+    @Test func aNoteIsNotRestyledWhileAnInputMethodComposes() {
+        let state = NoteViewState(focusPending: false)
+        // Restyling would end the composition, leaving its keys behind.
+        #expect(state.edited(AttributedString("ㄋㄧˇ"), composing: true) == "ㄋㄧˇ")
+        #expect(state.shown("ㄋㄧˇ").runs.first?.font == nil)
+        // The next edit, once a character is chosen, sets the title.
+        #expect(state.edited(AttributedString("你"), composing: false) == "你")
+        #expect(state.shown("你").runs.first?.font == NoteEditor.titleFont)
+    }
+
     @Test func aNoteShowsItsOwnTitle() {
         let notes = NotesApp()
         #expect(!notes.appearance(of: notes.create()).showsTitle)

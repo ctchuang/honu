@@ -25,12 +25,23 @@ final class NoteViewState: FocusTaking {
     }
 
     /// Takes the editor's text, restyles it since its title line may have
-    /// changed, and returns it plain, as the note keeps it.
-    func edited(_ text: AttributedString) -> String {
+    /// changed, and returns it plain, as the note keeps it. While an input
+    /// method is `composing`, as Zhuyin or Pinyin does before a character is
+    /// chosen, the text is left as it is: restyling hands the editor new text,
+    /// which ends the composition and leaves the keys typed for it behind.
+    /// The text is restyled with the next edit after it.
+    func edited(_ text: AttributedString, composing: Bool = NoteViewState.isComposing) -> String {
         var text = text
-        text.transform(updating: &selection) { NoteEditor.style(&$0) }
+        if !composing {
+            text.transform(updating: &selection) { NoteEditor.style(&$0) }
+        }
         shownText = text
         return String(text.characters)
+    }
+
+    /// Whether an input method is composing text in the field with the focus.
+    static var isComposing: Bool {
+        (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() ?? false
     }
 }
 
