@@ -53,6 +53,29 @@ struct PersistenceTests {
         #expect(restored.isOnAllDesktops)
     }
 
+    @Test func bubblesOfItemsNoLongerThereDoNotComeBack() throws {
+        let url = temporaryStoreURL()
+        let notes = NotesApp()
+        let kept = notes.create()
+        notes.setText("kept", of: kept)
+        let bubble = { (app: String, item: ItemID) in
+            SavedBubble(
+                target: ViewTarget(app: AppID(app), item: item), offset: .zero, isOpen: true)
+        }
+        var state = SavedState()
+        state.apps["notes"] = String(decoding: try #require(notes.save()), as: UTF8.self)
+        // A note that is gone, and a microapp Honu no longer has.
+        state.bubbles = [
+            bubble("notes", ItemID(rawValue: 99)), bubble("notes", kept), bubble("gone", kept),
+        ]
+        Autosave(url: url).save(state)
+
+        let shell = makeShell(size: size, storeURL: url)
+        #expect(shell.stage.bubbles.map(\.target) == [ViewTarget(app: AppID("notes"), item: kept)])
+        #expect(shell.stage.bubbles.first?.isOpen == true)
+        #expect(shell.notes.items == [kept] && shell.notes.notes[kept] == "kept")
+    }
+
     @Test func swallowedBubblesAndTheirItemsCountAsDeleted() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(size: size, storeURL: url)
