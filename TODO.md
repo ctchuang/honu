@@ -28,6 +28,8 @@
 
 ### Works with Claude (TBD)
 
+- Read the user's services, such as a summary of Gmail or Slack, through
+  their Claude connectors (draft PRD in `docs/Connectors.md`).
 - Each generated microapp should have its own memory context.
 - **The key step:** Drag a bubble to the turtle creates a request to
   Claude by sharing its memory context.
