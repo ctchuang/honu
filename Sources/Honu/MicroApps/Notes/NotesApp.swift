@@ -24,17 +24,31 @@ final class NotesApp: MicroApp {
         notes.insert("")
     }
 
+    /// A note shows its title as its first line, so its bubble shows none
+    /// above it.
     func appearance(of item: ItemID) -> Appearance {
-        Appearance(tint: Self.yellow.opacity(0.75), textColor: Self.ink)
+        Appearance(tint: Self.yellow.opacity(0.75), textColor: Self.ink, showsTitle: false)
     }
 
     /// A short label for a note's bubble: its first line with anything on it.
     func title(of item: ItemID) -> String {
-        let line = notes[item]?
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .first { !$0.isEmpty }
-        return line.map(shortLabel) ?? Self.emptyLabel
+        guard let text = notes[item], let line = Self.titleLine(of: text) else {
+            return Self.emptyLabel
+        }
+        return shortLabel(text[line].trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Where a note's title is: its first line with anything on it.
+    static func titleLine(of text: String) -> Range<String.Index>? {
+        var start = text.startIndex
+        while start < text.endIndex {
+            let end = text[start...].firstIndex(where: \.isNewline) ?? text.endIndex
+            if text[start..<end].contains(where: { !$0.isWhitespace }) {
+                return start..<end
+            }
+            start = end == text.endIndex ? end : text.index(after: end)
+        }
+        return nil
     }
 
     /// A new note is for writing in, so its bubble starts with the cursor in it.

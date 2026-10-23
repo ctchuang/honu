@@ -35,6 +35,9 @@ struct Appearance {
     var tint: Color? = nil
     var size = CGSize(width: 380, height: 300)
     var textColor: Color = .primary
+    /// Whether the bubble shows its title above its content; content that
+    /// shows the title itself leaves it out.
+    var showsTitle = true
 }
 
 /// Hands out a microapp's item ids.

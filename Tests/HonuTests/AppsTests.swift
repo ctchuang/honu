@@ -21,6 +21,31 @@ struct NotesAppTests {
             title("Remember to call the aquarium about the turtle") == "Remember to call the aqu…")
     }
 
+    @Test func onlyTheTitleLineIsSetAsATitle() {
+        func titleRuns(_ note: String) -> [String] {
+            var text = AttributedString(note)
+            text.font = NoteEditor.bodyFont  // Formatting from before goes.
+            NoteEditor.style(&text)
+            return text.runs.filter { $0.font == NoteEditor.titleFont }
+                .map { String(text[$0.range].characters) }
+        }
+        #expect(titleRuns("") == [])
+        #expect(titleRuns(" \n\n") == [])
+        #expect(titleRuns("Groceries\nmilk") == ["Groceries"])
+        #expect(titleRuns("\n  🐢 Groceries \nmilk\neggs") == ["  🐢 Groceries "])
+        // The editor's runs go with every change of font, the body's included.
+        var text = AttributedString("Groceries\nmilk")
+        NoteEditor.style(&text)
+        #expect(text.runs.count == 2)
+        #expect(text.runs.first?.font == NoteEditor.titleFont)
+        #expect(text.runs.last?.font == nil)
+    }
+
+    @Test func aNoteShowsItsOwnTitle() {
+        let notes = NotesApp()
+        #expect(!notes.appearance(of: notes.create()).showsTitle)
+    }
+
     @Test func notesComeBackAfterARelaunch() throws {
         let notes = NotesApp()
         let a = notes.create()

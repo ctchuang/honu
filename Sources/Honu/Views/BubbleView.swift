@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// One bubble in interactive Liquid Glass, tinted the way its microapp says.
-/// It shows its title over the content its microapp makes, and dragging
-/// moves it.
+/// It shows its title (unless its content shows it) over the content its
+/// microapp makes, and dragging moves it.
 struct BubbleView: View {
     let bubble: Bubble
     let shell: Shell
@@ -39,13 +39,14 @@ struct BubbleView: View {
 
     private func content(appearance: Appearance, title: String) -> some View {
         VStack(spacing: 0) {
-            Text(title)
+            // Without a title, a strip of glass is left to drag the bubble by.
+            Text(appearance.showsTitle ? title : "")
                 .font(.headline)
                 .foregroundStyle(appearance.textColor)
                 .lineLimit(1)
                 .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity)
-                .frame(height: 36)
+                .frame(height: appearance.showsTitle ? 36 : 18)
             UndoScope(history: shell.undoManager(for: bubble), content: shell.content(of: bubble))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .padding([.horizontal, .bottom], 10)

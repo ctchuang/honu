@@ -89,8 +89,10 @@ behind every other window.
 microapp, and **+** for a new one. See `Launcher.md`.
 
 **Bubbles.** Each shows one item: a note, a web page, or an instance of a
-microapp, under its title. There is one kind of bubble: it never shrinks
-into an icon or closes, and it leaves only through the octopus. A new
+microapp, under its title; a note's title is its first line with text,
+shown larger than the rest, so a note's bubble shows none above it, only
+a strip of glass to drag it by. There is one kind of bubble: it never
+shrinks into an icon or closes, and it leaves only through the octopus. A new
 bubble flies out of the turtle, growing on the way, and text typed
 before its field has the focus goes into it.
 
