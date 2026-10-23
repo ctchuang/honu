@@ -18,13 +18,12 @@ struct TypeAheadTests {
         let bubble = try #require(shell.stage.bubbles.last)
         #expect(shell.type("Gro"))
         #expect(shell.type("ceries"))
-        let notes = try #require(shell.registry.app(AppID("notes")) as? NotesApp)
-        #expect(notes.notes[bubble.target.item] == "Groceries")
+        #expect(shell.notes.notes[bubble.target.item] == "Groceries")
 
         // Once the note's field has the focus, typing goes there by itself.
         (bubble.viewState as? NoteViewState)?.focusPending = false
         #expect(!shell.type("!"))
-        #expect(notes.notes[bubble.target.item] == "Groceries")
+        #expect(shell.notes.notes[bubble.target.item] == "Groceries")
     }
 
     @Test func onlyTheNewestBubbleTakesIt() throws {
@@ -34,9 +33,8 @@ struct TypeAheadTests {
         shell.start(AppID("notes"))
         let second = try #require(shell.stage.bubbles.last)
         #expect(shell.type("hi"))
-        let notes = try #require(shell.registry.app(AppID("notes")) as? NotesApp)
-        #expect(notes.notes[first.target.item] == "")
-        #expect(notes.notes[second.target.item] == "hi")
+        #expect(shell.notes.notes[first.target.item] == "")
+        #expect(shell.notes.notes[second.target.item] == "hi")
     }
 
     @Test func anAskBubbleTakesItAsTheQuestion() throws {
@@ -44,8 +42,7 @@ struct TypeAheadTests {
         shell.start(AppID("ask"))
         let question = try #require(shell.stage.bubbles.last)
         #expect(shell.type("Why?"))
-        let asks = try #require(shell.registry.app(AppID("ask")) as? AskApp)
-        #expect(asks.chats[question.target.item]?.question == "Why?")
+        #expect(shell.asks.chats[question.target.item]?.question == "Why?")
     }
 
     @Test func aWebBubbleTakesItAsTheAddress() throws {

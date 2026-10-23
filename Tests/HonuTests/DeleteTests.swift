@@ -8,22 +8,8 @@ import Testing
 struct DeleteTests {
     private let shell = makeShell()
 
-    /// A note's bubble, at rest at `center`.
-    private func note(at center: CGPoint = CGPoint(x: 600, y: 300)) -> Bubble {
-        let notes = shell.registry.app(AppID("notes"))!
-        return shell.addBubble(showing: notes.create(), of: notes, at: center, fresh: false)
-    }
-
-    /// Drags `bubble` far enough to call the octopus up, then drops it there.
-    private func drop(_ bubble: Bubble) {
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: bubble.center)
-        let mouth = shell.octopus.middle
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: mouth)
-        shell.endBubbleDrag(pointer: mouth)
-    }
-
     @Test func theOctopusComesUpOnlyForADragAndSinksWhenItIsDroppedElsewhere() {
-        let bubble = note()
+        let bubble = shell.addNote()
         let home = bubble.center
         let aside = CGPoint(x: home.x + 100, y: home.y)
         shell.dragBubble(bubble, by: CGSize(width: 30, height: 0), pointer: home)
@@ -39,7 +25,7 @@ struct DeleteTests {
     }
 
     @Test func whereThePointerIsDecidesNotWhereTheBubbleIs() {
-        let bubble = note()
+        let bubble = shell.addNote()
         let home = bubble.center
         let far = CGPoint(x: 100, y: 100)
         shell.dragBubble(bubble, by: CGSize(width: 100, height: 0), pointer: far)
@@ -62,9 +48,10 @@ struct DeleteTests {
     }
 
     @Test func undoBringsBackTheLatestDeleteFirst() {
-        let (a, b) = (note(at: CGPoint(x: 400, y: 300)), note(at: CGPoint(x: 700, y: 300)))
-        drop(a)
-        drop(b)
+        let a = shell.addNote(at: CGPoint(x: 400, y: 300))
+        let b = shell.addNote(at: CGPoint(x: 700, y: 300))
+        shell.drop(a)
+        shell.drop(b)
         #expect(a.isSwallowed && b.isSwallowed)
 
         shell.undoDelete()
@@ -74,17 +61,17 @@ struct DeleteTests {
     }
 
     @Test func whatTheOctopusForgetsIsDeletedWithItemsNoOtherBubbleShows() throws {
-        let notes = try #require(shell.registry.app(AppID("notes")))
-        let (a, b) = (note(at: CGPoint(x: 400, y: 300)), note(at: CGPoint(x: 700, y: 300)))
+        let a = shell.addNote(at: CGPoint(x: 400, y: 300))
+        let b = shell.addNote(at: CGPoint(x: 700, y: 300))
         // Another bubble showing the same note as `a`.
         let twin = shell.addBubble(
-            showing: a.target.item, of: notes, at: CGPoint(x: 400, y: 600), fresh: false)
-        drop(a)
-        drop(b)
+            showing: a.target.item, of: shell.notes, at: CGPoint(x: 400, y: 600), fresh: false)
+        shell.drop(a)
+        shell.drop(b)
 
         shell.tick(at: now() + Bubble.swallowSeconds + Octopus.undoSeconds + 1)
         #expect(shell.stage.bubbles.map(\.id) == [twin.id])
-        #expect(notes.items == [a.target.item], "kept a note no bubble shows, or lost one")
+        #expect(shell.notes.items == [a.target.item], "kept a note no bubble shows, or lost one")
         #expect(!shell.octopus.canUndo)
     }
 }

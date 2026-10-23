@@ -66,26 +66,21 @@ struct InputRouterTests {
         let router = InputRouter(shell: shell)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.last)
-        let notes = try #require(shell.registry.app(AppID("notes")) as? NotesApp)
 
         #expect(!router.handle(key("a"), typing: true), "took text a field has")
         #expect(!router.handle(key("a", command: true), typing: false), "took a shortcut")
         #expect(!router.handle(key("a", control: true), typing: false), "took a shortcut")
         #expect(!router.handle(key("\r"), typing: false), "took Return")
         #expect(router.handle(key("hi"), typing: false))
-        #expect(notes.notes[bubble.target.item] == "hi")
+        #expect(shell.notes.notes[bubble.target.item] == "hi")
     }
 
     @Test func commandZUndoesADeleteUnlessAFieldWantsIt() throws {
         let shell = makeShell()
         let router = InputRouter(shell: shell)
         #expect(!router.handle(key("z", command: true), typing: false), "nothing to undo")
-        shell.start(AppID("notes"))
-        let bubble = try #require(shell.stage.bubbles.last)
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: bubble.center)
-        let mouth = shell.octopus.middle
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: mouth)
-        shell.endBubbleDrag(pointer: mouth)
+        let bubble = shell.addNote()
+        shell.drop(bubble)
         #expect(bubble.isSwallowed)
 
         #expect(!router.handle(key("z", command: true), typing: true))
@@ -97,12 +92,8 @@ struct InputRouterTests {
     @Test func onlyCommandZUndoesADelete() throws {
         let shell = makeShell()
         let router = InputRouter(shell: shell)
-        shell.start(AppID("notes"))
-        let bubble = try #require(shell.stage.bubbles.last)
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: bubble.center)
-        let mouth = shell.octopus.middle
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: mouth)
-        shell.endBubbleDrag(pointer: mouth)
+        let bubble = shell.addNote()
+        shell.drop(bubble)
 
         // ⌘⇧Z, which redoes, and ⌃Z leave the delete alone.
         let redo = InputEvent.key(text: "Z", unmodified: "Z", command: true, control: false)
@@ -120,7 +111,6 @@ struct InputRouterTests {
         let router = InputRouter(shell: shell)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.last)
-        let notes = try #require(shell.registry.app(AppID("notes")) as? NotesApp)
 
         // An arrow, Delete, Tab, Escape, and nothing at all.
         for text in ["\u{F700}", "\u{7F}", "\t", "\u{1B}", ""] {
@@ -129,6 +119,6 @@ struct InputRouterTests {
         for text in ["海", "🐢", "é", " "] {
             #expect(router.handle(key(text), typing: false), "lost \(text)")
         }
-        #expect(notes.notes[bubble.target.item] == "海🐢é ")
+        #expect(shell.notes.notes[bubble.target.item] == "海🐢é ")
     }
 }

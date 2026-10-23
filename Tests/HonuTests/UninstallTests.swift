@@ -12,15 +12,7 @@ struct UninstallTests {
     /// bubble, returning the shell and the microapp.
     private func shellWithMicroapp(_ title: String = "Clock") throws -> (Shell, GeneratedApp) {
         let shell = makeShell(claude: claude)
-        shell.choose(.make)
-        let item = try #require(shell.maker.items.last)
-        let microapp = try #require(shell.maker.microapp(of: item))
-        microapp.draft = "a \(title)"
-        shell.maker.make(item)
-        claude.streams.last!.send(
-            .text("<!doctype html><html><head><title>\(title)</title></head></html>"))
-        claude.streams.last!.send(.done)
-        shell.tick(at: 1)
+        let (_, microapp) = try shell.makeMicroapp(title, claude: claude)
         return (shell, microapp)
     }
 
@@ -155,15 +147,7 @@ struct UninstallTests {
 
     @Test func uninstallingLeavesOtherMicroappsAlone() throws {
         let (shell, clock) = try shellWithMicroapp("Clock")
-        shell.choose(.make)
-        let item = try #require(shell.maker.items.last)
-        let timer = try #require(shell.maker.microapp(of: item))
-        timer.draft = "a timer"
-        shell.maker.make(item)
-        claude.streams.last!.send(
-            .text("<!doctype html><html><head><title>Timer</title></head></html>"))
-        claude.streams.last!.send(.done)
-        shell.tick(at: 2)
+        let (_, timer) = try shell.makeMicroapp("Timer", claude: claude, at: 2)
 
         shell.uninstall(clock.folder.name, at: 10)
         shell.tick(at: 10 + Bubble.swallowSeconds + Octopus.undoSeconds + 1)
