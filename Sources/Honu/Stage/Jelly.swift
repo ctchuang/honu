@@ -41,6 +41,9 @@ struct Jelly {
     /// How much more the content squashes, stretches, and shears than the
     /// ring does; where it would poke out, the glass grows to cover it.
     static let contentExaggeration = 1.3
+    /// The least and most the content squashes or stretches along any
+    /// direction.
+    static let contentStretch = 0.6...1.6
     /// How much a fast bubble stretches along its velocity at most, and
     /// the speed (points/s) at which it does.
     static let stretch = 0.2
@@ -325,14 +328,46 @@ struct Jelly {
 
     /// The squash, stretch, and shear of the content, relative to the
     /// center: the map that best fits the ring, exaggerated by
-    /// `contentExaggeration` for a cartoon look, moved with the ring.
+    /// `contentExaggeration` for a cartoon look, moved with the ring, and
+    /// kept within `contentStretch` (`limited`).
     var contentTransform: CGAffineTransform {
         let (fitted, offset) = fit()
         let linear = Self.withoutRotation(fitted)
         let more = Self.contentExaggeration
+        var map = Self.limited(
+            CGAffineTransform(
+                a: 1 + (linear.a - 1) * more, b: linear.b * more, c: linear.c * more,
+                d: 1 + (linear.d - 1) * more, tx: 0, ty: 0))
+        if offset.x.isFinite && offset.y.isFinite {
+            map.tx = offset.x
+            map.ty = offset.y
+        }
+        return map
+    }
+
+    /// `map`'s squash and stretch, kept within `contentStretch` along each
+    /// of its two main directions, or the identity if it is not finite.
+    /// AppKit views take the content's transform, and abort on one that is
+    /// not finite; SwiftUI inverts it for views nested in others (a web
+    /// page in its bubble's undo scope), so one close to folding flat must
+    /// never reach them either.
+    static func limited(_ map: CGAffineTransform) -> CGAffineTransform {
+        let entries = [map.a, map.b, map.c, map.d]
+        guard entries.allSatisfy(\.isFinite) else { return .identity }
+        // Its symmetric part: its stretch along two perpendicular
+        // directions. In `CGAffineTransform`, x' = a x + c y and y' = b x + d y.
+        let shear = (map.b + map.c) / 2
+        let middle = (map.a + map.d) / 2
+        let spread = hypot((map.a - map.d) / 2, shear)
+        let angle = atan2(2 * shear, map.a - map.d) / 2
+        let range = contentStretch
+        let first = min(max(middle + spread, range.lowerBound), range.upperBound)
+        let second = min(max(middle - spread, range.lowerBound), range.upperBound)
+        let (cos, sin) = (Foundation.cos(angle), Foundation.sin(angle))
+        let along = first - second
         return CGAffineTransform(
-            a: 1 + (linear.a - 1) * more, b: linear.b * more, c: linear.c * more,
-            d: 1 + (linear.d - 1) * more, tx: offset.x, ty: offset.y)
+            a: second + along * cos * cos, b: along * cos * sin, c: along * cos * sin,
+            d: second + along * sin * sin, tx: 0, ty: 0)
     }
 
     /// The outline the glass takes: the ring, pushed out wherever it caves

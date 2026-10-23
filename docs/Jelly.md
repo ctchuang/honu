@@ -200,7 +200,12 @@ center, at full scale, pure value code that tests can drive:
   runs in substeps, since the walls are stiff.
 
 The **content transform** is the best-fit linear map, exaggerated by
-a third, and the ring's offset, about the center. The outline the glass
+a third, and the ring's offset, about the center. Its stretch along
+each of its two main directions is kept between 0.6 and 1.6, and one
+that is not finite becomes the identity: AppKit views take it and
+abort on a transform that is not finite, and SwiftUI inverts it for
+views nested in others (a web page in its bubble's undo scope), so a
+transform close to folding flat crashed Honu before the limit. The outline the glass
 takes is the ring pushed out wherever it caves in past the content's
 edge less a margin, so the content never pokes out and the rim stays.
 
@@ -290,3 +295,19 @@ lint on their own.
 - Tests (`JellyTests`): a bubble wobbles as it grows, a swallowed one
   does not, a bubble resized into another squashes it, and the jelly
   never turns.
+
+### Step 7: A content transform that cannot crash (done)
+
+- Honu crashed in `-[NSView setFrameTransform:]` on a transform that was
+  not finite, opening a web page; a shaken stage showed the content
+  transform could come within 0.003 of folding flat, which SwiftUI turns
+  into infinities when it inverts it for a nested view.
+- `Jelly.limited` keeps the content's stretch within `contentStretch`
+  along each main direction and turns what is not finite into the
+  identity.
+- Tests (`ContentTransformTests`): any map, however flat, flipped, huge,
+  or not finite, comes out safe; modest squashes are left alone; the
+  content squashes along a hit and widens across it, moves with the ring,
+  and exaggerates it; a ring of any size stays safe under kicks, splats,
+  walls, and contacts; and a randomly shaken stage keeps every bubble's
+  transform finite and well away from flat.
