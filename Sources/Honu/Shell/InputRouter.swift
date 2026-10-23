@@ -15,7 +15,7 @@ enum InputEvent: Equatable {
 /// Turns the events SwiftUI's gestures do not cover into calls on the shell:
 /// presses on content (raising that bubble), right-clicks on the turtle
 /// (opening the system menu; on the launcher they go on to its tiles'
-/// menus), Escape (closing a menu), text typed while no field has
+/// menus), Escape (leaving a folder of the launcher, or closing a menu), text typed while no field has
 /// the focus (type-ahead), and ⌘Z (undoing a delete).
 @MainActor
 struct InputRouter {
@@ -47,6 +47,10 @@ struct InputRouter {
             }
             return false
         case .escape:
+            // Escape in a folder of the launcher goes back to its top level.
+            if shell.closeFolder() {
+                return true
+            }
             guard shell.popup != nil else { return false }
             shell.closePopup()
             return true

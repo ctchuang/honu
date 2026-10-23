@@ -177,7 +177,7 @@ instance's data file and the size its page asked for.
 Each step is one or more commits that build, pass the tests, and pass the
 lint on their own.
 
-### Step 1: The Reef, with the native microapps
+### Step 1: The Reef, with the native microapps (done)
 
 - `LauncherTile.Kind` gains `.folder(LauncherFolder)`; `LauncherFolder`
   is an enum with one case, `.builtIn`.

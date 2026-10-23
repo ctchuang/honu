@@ -139,11 +139,18 @@ struct ShellTests {
         #expect(shell.undoManager(for: second) !== history)
     }
 
-    @Test func theLauncherListsTheBuiltInMicroappsButAskAIAndWebThenPlus() {
+    @Test func theLauncherListsTheReefThenPlus() {
         let tiles = makeShell().launcherTiles
-        #expect(tiles.map(\.kind) == [.stock(AppID("notes")), .make])
-        #expect(tiles.map(\.label) == ["Note", "New Microapp"])
+        #expect(tiles.map(\.kind) == [.folder(.builtIn), .make])
+        #expect(tiles.map(\.label) == ["Reef", "New Microapp"])
         #expect(tiles.last?.symbol == "plus")
+    }
+
+    @Test func theReefListsTheBuiltInMicroappsButAskAIAndWeb() {
+        let tiles = makeShell().launcherTiles(in: .builtIn)
+        #expect(tiles.map(\.kind) == [.stock(AppID("notes"))])
+        #expect(tiles.map(\.label) == ["Note"])
+        #expect(tiles.allSatisfy { $0.preview.isEmpty })
     }
 
     @Test func choosingATileStartsAnItemAndClosesTheLauncher() throws {
@@ -197,6 +204,7 @@ struct ShellTests {
         shell.maker.make(item)
         shell.tick(at: 1)
         #expect(shell.launcherTiles.count == 2, "a tile before the page was written")
+        #expect(shell.launcherTiles(in: .builtIn).count == 1)
 
         claude.streams[0].send(
             .text(
@@ -207,7 +215,10 @@ struct ShellTests {
         claude.streams[0].send(.done)
         shell.tick(at: 2)
         let tiles = shell.launcherTiles
-        #expect(tiles.map(\.label) == ["Note", "Clock", "New Microapp"])
+        #expect(tiles.map(\.label) == ["Reef", "Clock", "New Microapp"])
+        #expect(
+            !shell.launcherTiles(in: .builtIn).contains { $0.label == "Clock" },
+            "an installed microapp in the Reef")
         #expect(
             tiles[1]
                 == LauncherTile(

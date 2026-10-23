@@ -10,10 +10,31 @@ enum Hit {
 }
 
 /// What the turtle has open, where it was clicked: its launcher on a click,
-/// or the system menu on a right click.
+/// at its top level or in one of its folders, or the system menu on a right
+/// click.
 enum Popup: Equatable {
-    case launcher(at: CGPoint)
+    case launcher(at: CGPoint, folder: LauncherFolder? = nil)
     case system(at: CGPoint)
+}
+
+/// A folder of the launcher: a tile that opens to tiles of its own.
+enum LauncherFolder: Hashable {
+    /// The Reef: the microapps built into Honu.
+    case builtIn
+
+    /// The folder's name, on its tile and above its tiles.
+    var label: String {
+        switch self {
+        case .builtIn: "Reef"
+        }
+    }
+
+    /// The SF Symbol of a folder with nothing in it to show instead.
+    var symbol: String {
+        switch self {
+        case .builtIn: "fish"
+        }
+    }
 }
 
 /// One tile of the turtle's launcher, which starts something new.
@@ -25,11 +46,16 @@ struct LauncherTile: Identifiable, Equatable {
         case installed(String)
         /// A new microapp, to be described.
         case make
+        /// Opens a folder of tiles.
+        case folder(LauncherFolder)
     }
 
     let kind: Kind
     let label: String
     let symbol: String
+    /// The symbols of what a folder holds, the first few, which its tile
+    /// shows instead of its own; empty for any other tile.
+    var preview: [String] = []
 
     var id: Kind { kind }
 }
@@ -145,6 +171,26 @@ final class Shell {
         save()
     }
 
+    /// The launcher's folder that is open, if any.
+    var openFolder: LauncherFolder? {
+        if case .launcher(_, let folder) = popup { folder } else { nil }
+    }
+
+    /// Opens `folder` in the launcher, where the launcher is, if it is open.
+    func open(_ folder: LauncherFolder) {
+        guard case .launcher(let point, _) = popup else { return }
+        popup = .launcher(at: point, folder: folder)
+    }
+
+    /// Goes back from a folder of the launcher to its top level. Returns
+    /// whether a folder was open.
+    @discardableResult
+    func closeFolder() -> Bool {
+        guard case .launcher(let point, .some) = popup else { return false }
+        popup = .launcher(at: point)
+        return true
+    }
+
     /// Closes whichever menu is open, letting go of any tile being dragged.
     func closePopup() {
         popup = nil
@@ -166,13 +212,19 @@ final class Shell {
         save()
     }
 
-    /// Carries out the launcher tile `tile`.
+    /// Carries out the launcher tile `tile`: a folder opens, and anything
+    /// else closes the launcher and starts something new.
     func choose(_ tile: LauncherTile.Kind) {
+        if case .folder(let folder) = tile {
+            open(folder)
+            return
+        }
         popup = nil
         switch tile {
         case .stock(let app): start(app)
         case .installed(let name): launch(name)
         case .make: start(maker.id)
+        case .folder: break
         }
     }
 
