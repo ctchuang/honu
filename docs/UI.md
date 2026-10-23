@@ -3,8 +3,9 @@
 A PRD for how Honu looks and behaves: the principles every part of the UI
 follows, and the behavior that comes from them. Changes to the UI should
 keep to it; a change that departs from it updates this document first.
-The launcher's own design is in `Launcher.md`, and resizing bubbles in
-`Resizing.md`.
+The launcher's own design is in `Launcher.md`, resizing bubbles in
+`Resizing.md`, and each built-in microapp's in `microapps/` (`Note.md`,
+`WebPage.md`).
 
 ## Vision
 
@@ -89,10 +90,9 @@ behind every other window.
 microapp, and **+** for a new one. See `Launcher.md`.
 
 **Bubbles.** Each shows one item: a note, a web page, or an instance of a
-microapp, under its title; a note's title is its first line with text,
-shown larger than the rest, so a note's bubble shows none above it, only
-a strip of glass to drag it by. There is one kind of bubble: it never
-shrinks into an icon or closes, and it leaves only through the octopus. A new
+microapp, under its title (or, as a note does, with the title in its
+content). There is one kind of bubble: it never shrinks into an icon or
+closes, and it leaves only through the octopus. A new
 bubble flies out of the turtle, growing on the way, and text typed
 before its field has the focus goes into it.
 
