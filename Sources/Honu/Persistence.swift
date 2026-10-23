@@ -67,15 +67,16 @@ final class Autosave {
     }
 
     /// Saves the state `snapshot` makes if a second has passed since the last
-    /// check and anything changed. `snapshot` runs only when a check is due.
-    func tick(_ snapshot: () -> SavedState) {
-        guard now() - lastCheck >= Self.interval else { return }
-        save(snapshot())
+    /// check at `time` and anything changed. `snapshot` runs only when a
+    /// check is due.
+    func tick(at time: TimeInterval = now(), _ snapshot: () -> SavedState) {
+        guard time - lastCheck >= Self.interval else { return }
+        save(snapshot(), at: time)
     }
 
-    /// Saves `state` if anything changed since the last save.
-    func save(_ state: SavedState) {
-        lastCheck = now()
+    /// Saves `state` at `time` if anything changed since the last save.
+    func save(_ state: SavedState, at time: TimeInterval = now()) {
+        lastCheck = time
         let state = Self.canonical(state)
         guard let data = try? Self.encode(state),
             let unplaced = try? Self.encode(state.unplaced),
@@ -92,12 +93,21 @@ final class Autosave {
         }
     }
 
+    /// Where a store that could not be read is kept, beside it.
+    var unreadableURL: URL {
+        url.deletingPathExtension().appendingPathExtension("unreadable.json")
+    }
+
     /// What was saved on the last launch, if anything was, which counts as
-    /// saved already.
+    /// saved already. A store that cannot be read is moved to
+    /// `unreadableURL` rather than written over, so nothing in it is lost.
     func restore() -> SavedState? {
-        guard let data = try? Data(contentsOf: url),
-            let state = try? JSONDecoder().decode(SavedState.self, from: data)
-        else { return nil }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let state = try? JSONDecoder().decode(SavedState.self, from: data) else {
+            try? FileManager.default.removeItem(at: unreadableURL)
+            try? FileManager.default.moveItem(at: url, to: unreadableURL)
+            return nil
+        }
         lastSaved = try? Self.encode(Self.canonical(state).unplaced)
         return state
     }
