@@ -215,7 +215,7 @@ lint on their own.
 
 - This document; `TODO.md` marks the jelly effect as started.
 
-### Step 2: The jelly model
+### Step 2: The jelly model (done)
 
 - `Jelly`: the rest shape, shape matching, bending, inertia, walls,
   stretch, splat, settling, and the content transform.

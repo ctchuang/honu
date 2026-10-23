@@ -1,0 +1,150 @@
+import Foundation
+import SwiftUI
+import Testing
+
+@testable import Honu
+
+struct JellyTests {
+    private static let dt = 1.0 / 60
+    private static let size = CGSize(width: 380, height: 300)
+    /// Screen edges far from the ring.
+    private static let open = CGRect(x: -5000, y: -5000, width: 10000, height: 10000)
+
+    private func jelly() -> Jelly {
+        Jelly(size: Self.size, cornerRadius: 30)
+    }
+
+    /// Runs `jelly` for `seconds`, calling `watch` after each frame.
+    private func run(
+        _ jelly: inout Jelly, _ seconds: Double, velocity: CGPoint = .zero,
+        walls: CGRect = open, watch: (Jelly) -> Void = { _ in }
+    ) {
+        for _ in 0..<Int(seconds / Self.dt) {
+            jelly.step(dt: Self.dt, velocity: velocity, walls: walls)
+            watch(jelly)
+        }
+    }
+
+    private func bounds(_ points: [CGPoint]) -> CGRect {
+        let xs = points.map(\.x)
+        let ys = points.map(\.y)
+        return CGRect(
+            x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!,
+            height: ys.max()! - ys.min()!)
+    }
+
+    private func area(_ points: [CGPoint]) -> Double {
+        var sum = 0.0
+        for (a, b) in zip(points, points.dropFirst() + [points[0]]) {
+            sum += a.x * b.y - b.x * a.y
+        }
+        return abs(sum) / 2
+    }
+
+    @Test func restsOnTheRoundedRectangle() {
+        let jelly = jelly()
+        let box = bounds(jelly.rest)
+        #expect(abs(box.width - Self.size.width) < 0.001)
+        #expect(abs(box.height - Self.size.height) < 0.001)
+        #expect(jelly.isSettled)
+        // Nothing pokes past the rounded corners.
+        let corner = CGPoint(x: Self.size.width / 2, y: Self.size.height / 2)
+        #expect(jelly.rest.allSatisfy { ($0 - corner).length > 10 })
+    }
+
+    @Test func ringLeftAloneStaysAtRest() {
+        var jelly = jelly()
+        run(&jelly, 2)
+        #expect(jelly.isSettled)
+        #expect(jelly.contentTransform(margin: 8).isNearlyIdentity)
+    }
+
+    @Test func changeInVelocitySetsItWobblingAndItSettles() {
+        var jelly = jelly()
+        jelly.feel(CGPoint(x: 1200, y: 0))
+        var widest = 0.0
+        var swings = 0
+        var last = 0.0
+        run(&jelly, 0.8) {
+            let width = bounds($0.points).width - Self.size.width
+            widest = max(widest, abs(width))
+            if width * last < 0 { swings += 1 }
+            if abs(width) > 1 { last = width }
+        }
+        #expect(widest > 20, "deformed only \(widest) points")
+        #expect(swings >= 2, "swung \(swings) times")
+        run(&jelly, 3)
+        #expect(jelly.isSettled)
+    }
+
+    @Test func hittingAWallFlattensThatSideAndBulgesTheOthers() {
+        var jelly = jelly()
+        let walls = CGRect(
+            x: -5000, y: -5000, width: 5000 + Self.size.width / 2, height: 10000)
+        // Moving right, it bounced off the right edge.
+        jelly.feel(CGPoint(x: -1500, y: 0))
+        var narrowest = Self.size.width
+        var tallest = Self.size.height
+        var farthest = -Double.infinity
+        run(&jelly, 0.4, walls: walls) {
+            let box = bounds($0.points)
+            narrowest = min(narrowest, box.width)
+            tallest = max(tallest, box.height)
+            farthest = max(farthest, box.maxX)
+        }
+        #expect(narrowest < Self.size.width * 0.85, "narrowed only to \(narrowest)")
+        #expect(tallest > Self.size.height * 1.08, "grew only to \(tallest)")
+        #expect(farthest < walls.maxX + 15, "poked \(farthest - walls.maxX) past the wall")
+    }
+
+    @Test func keepsRoughlyItsArea() {
+        var jelly = jelly()
+        let restArea = area(jelly.rest)
+        jelly.feel(CGPoint(x: 1500, y: -800))
+        run(&jelly, 1.5) {
+            let ratio = area($0.points) / restArea
+            #expect(ratio > 0.8 && ratio < 1.2, "area went to \(ratio) of its rest")
+        }
+    }
+
+    @Test func fastRingStretchesAlongItsVelocity() {
+        var jelly = jelly()
+        run(&jelly, 1.5, velocity: CGPoint(x: 0, y: 2500))
+        let box = bounds(jelly.points)
+        #expect(box.height > Self.size.height * 1.1, "stretched only to \(box.height)")
+        #expect(box.width < Self.size.width * 0.93, "narrowed only to \(box.width)")
+    }
+
+    @Test func contentFollowsTheRingAndStaysInsideIt() {
+        var jelly = jelly()
+        let walls = CGRect(x: -Self.size.width / 2, y: -5000, width: 10000, height: 10000)
+        jelly.feel(CGPoint(x: 1800, y: 600))
+        // The content's rounded rectangle, 10 points inside the outline with
+        // corners of radius 20: the middle of each side and of each corner.
+        let (w, h) = (Self.size.width / 2 - 10, Self.size.height / 2 - 10)
+        let bend = 20 * (1 - 1 / 2.squareRoot())
+        let corners = [
+            CGPoint(x: -w, y: 0), CGPoint(x: w, y: 0), CGPoint(x: 0, y: -h), CGPoint(x: 0, y: h),
+            CGPoint(x: -w + bend, y: -h + bend), CGPoint(x: w - bend, y: -h + bend),
+            CGPoint(x: w - bend, y: h - bend), CGPoint(x: -w + bend, y: h - bend),
+        ]
+        var squashed = 1.0
+        run(&jelly, 1, walls: walls) { jelly in
+            let transform = jelly.contentTransform(margin: 8)
+            squashed = min(squashed, transform.a)
+            let outline = Path { $0.addLines(jelly.points) }
+            for corner in corners {
+                let moved = corner.applying(transform)
+                #expect(outline.contains(moved), "content corner \(moved) left the outline")
+            }
+        }
+        #expect(squashed < 0.9, "content squashed only to \(squashed)")
+    }
+}
+
+extension CGAffineTransform {
+    fileprivate var isNearlyIdentity: Bool {
+        abs(a - 1) < 0.001 && abs(b) < 0.001 && abs(c) < 0.001 && abs(d - 1) < 0.001
+            && abs(tx) < 0.01 && abs(ty) < 0.01
+    }
+}
