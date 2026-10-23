@@ -2,9 +2,6 @@
 
 ## UI Tweaking
 
-- [P1] Allow bubble resizing (started; design and plan in
-  `docs/Resizing.md`): dragging the rim, zooming, and saving are built;
-  microapp pages that fit any size are left.
 - [P2] Can we make the bubble look like bubble (jelly effect)?
 - [P2] Fade-in effect of the speech bubble doesn't come from the
   octopus.

@@ -208,16 +208,23 @@ comes first.
   dragging the rim resizes while dragging the title moves, and resizing
   over the octopus does not delete.
 
-### Step 6: Microapp pages that fit any size
+### Step 6: Microapp pages that fit any size (done)
 
 - `MakerPrompt`: a page fills the size it is given and lays out again
-  when it changes, rather than only fitting the size it declares; the
-  size it declares is where it starts.
+  when it changes (sized to the viewport, redrawing what is drawn at a
+  fixed size on `resize`), rather than only fitting the size it
+  declares; the size it declares in `honu-size` is where it starts.
 - `honu.resize` keeps working while the user has not resized the bubble,
-  and is ignored after.
+  and is ignored after, unless the bubble is zoomed to its microapp's
+  size; the prompt tells Claude never to rely on it. The bubble's
+  `userSize` already wins over `microappSize`, so the bridge needs no
+  change. Pages written before this keep their fixed layout until
+  changed.
+- Tests (`ShellResizeTests`): a page's `honu.resize` resizes its bubble
+  until the user does, and again once zoomed.
 
-### Step 7: Docs (done but for `TODO.md`, which waits for step 6)
+### Step 7: Docs (done)
 
 - `UI.md`: resizing in **Bubbles**, and out of the open questions;
-  `CLAUDE.md`: the architecture; `TODO.md`: check off resizing; mark the
-  steps here (done).
+  `CLAUDE.md`: the architecture; `TODO.md`: resizing is off the list;
+  the steps here are marked (done).

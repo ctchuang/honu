@@ -201,6 +201,26 @@ struct ShellResizeTests {
         #expect(bubble.minSize == AppSource.minSize + MakerApp.chrome)
     }
 
+    @Test func aPageResizesItsBubbleOnlyUntilTheUserDoes() throws {
+        let claude = FakeClaude()
+        let shell = makeShell(claude: claude)
+        let (bubble, _) = try shell.makeMicroapp("Clock", claude: claude)
+        let item = bubble.target.item
+        shell.maker.resize(item, to: CGSize(width: 400, height: 300))
+        land(shell, from: 2)
+        #expect(bubble.size == CGSize(width: 400, height: 300) + MakerApp.chrome)
+
+        widen(shell, bubble, by: 50)
+        let chosen = bubble.size
+        shell.maker.resize(item, to: CGSize(width: 500, height: 500))
+        shell.tick(at: 4)
+        #expect(bubble.size == chosen, "honu.resize won over the user")
+
+        // Zoomed to the page's size, it follows the page again.
+        shell.zoom(bubble)
+        #expect(bubble.size == CGSize(width: 500, height: 500) + MakerApp.chrome)
+    }
+
     @Test func aDescriptionThatBecomesAPageTakesThePagesSize() throws {
         let claude = FakeClaude()
         let shell = makeShell(claude: claude)
