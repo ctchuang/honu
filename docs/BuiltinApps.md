@@ -109,6 +109,12 @@ false) stay registered so saved items load, and show in no folder.
   `BuiltinApps/<name>/`, holding its `index.html` and any files it loads
   by relative links. `<name>` is its id: it names its data and its saved
   items, so it never changes once shipped.
+- `<name>` is lowercase letters, digits, and hyphens (`a-z`, `0-9`, `-`),
+  starting with a letter. It is the host of the page's URL, which
+  ignores case, as the Mac's file system usually does, so two names that
+  differ only in case would share an origin and a data folder; and it
+  must be a valid host. A folder whose name breaks the rule is not
+  loaded, and a test fails on it.
 - Its page declares what an installed microapp's does, in its head
   (`PageMeta`): its `<title>` (the tile's name), `honu-size` (the size
   its bubble starts at), and `honu-symbol` (the tile's SF Symbol;
@@ -201,7 +207,7 @@ A refactor; no behavior changes.
 
 - `Package.swift` copies `BuiltinApps/` into the resources.
 - `BuiltinCatalog` lists the folders of `BuiltinApps/` and reads each
-  page's `PageMeta`.
+  page's `PageMeta`, skipping folders whose name breaks the name rule.
 - `BundledWebApp`, a `MicroApp` per web built-in microapp (`AppID`
   `builtin.<name>`): an `ItemTable` of instances (data UUID and size),
   `appearance` from its meta and size, `content` through `MicroappView`
@@ -209,10 +215,11 @@ A refactor; no behavior changes.
 - `Shell.init` registers one per catalog entry, after the native ones;
   their tiles go into the folder.
 - Restoring drops bubbles of an app id no microapp has.
-- Tests: the catalog reads a page's meta; two instances save apart and
-  come back after a relaunch; the scheme stays inside the folder and
-  refuses `instances/`; a store naming a microapp no longer shipped
-  loads without its bubbles.
+- Tests: the catalog reads a page's meta; every folder in `BuiltinApps/`
+  keeps the name rule, and the catalog skips one that does not; two
+  instances save apart and come back after a relaunch; the scheme stays
+  inside the folder and refuses `instances/`; a store naming a microapp
+  no longer shipped loads without its bubbles.
 
 ### Step 4: The first web built-in microapp
 
