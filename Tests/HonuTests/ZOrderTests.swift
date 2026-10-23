@@ -57,6 +57,24 @@ struct ZOrderTests {
         #expect(abs(cut.rect.width - (100 + 2 * StageView.gap) / Bubble.doomedScale) < 0.001)
     }
 
+    @Test func cutsFollowTheOutlineOfAWobblingBubbleAbove() throws {
+        add(500, 300)
+        let cover = add(560, 330)
+        cover.velocity = CGPoint(x: 0, y: 3000)
+        stage.step(dt: 1.0 / 60)
+        stage.step(dt: 1.0 / 60)
+        let outline = try #require(cover.drawnOutline(grownBy: StageView.gap))
+        let cut = try #require(StageView.cuts(of: 0, in: stage.bubbles).first)
+        let points = try #require(cut.outline)
+        // The cover's outline, moved into the lower bubble's own coordinates.
+        let below = stage.bubbles[0].drawnFrame
+        #expect(points.count == outline.count)
+        for (point, drawn) in zip(points, outline) {
+            #expect(abs(point.x - (drawn.x - below.minX)) < 0.001)
+            #expect(abs(point.y - (drawn.y - below.minY)) < 0.001)
+        }
+    }
+
     @Test func pressingABubbleBringsItToTheTop() throws {
         let shell = makeShell()
         let target = ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1))

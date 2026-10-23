@@ -15,7 +15,7 @@ struct Jelly {
     static let stiffness = 900.0
     /// Damping relative to critical damping, low so the ring wobbles a few
     /// times before it settles.
-    static let dampingRatio = 0.16
+    static let dampingRatio = 0.2
     /// How much of its current deformation the goal keeps rather than
     /// springing back to rest; the rest is the pull back to its shape.
     static let shapeKeeping = 0.6
@@ -26,16 +26,18 @@ struct Jelly {
     static let wallStiffness = 25 * stiffness
     /// How much more the ring feels a change in the bubble's velocity than
     /// real jelly would, for a cartoon squash.
-    static let inertia = 2.4
-    /// Most change in velocity (points/s) the ring feels at once, so a hard
-    /// hit squashes rather than collapses.
-    static let kickLimit = 2400.0
+    static let inertia = 3.0
+    /// The most change in velocity (points/s) the ring feels within about
+    /// `kickMemory` seconds: kicks add up toward it ever more slowly, so a
+    /// hard hit squashes a lot rather than collapsing the ring.
+    static let kickLimit = 5000.0
+    static let kickMemory = 0.2
     /// How much less of a kick the side the ring is flung toward feels than
     /// the middle, and how much more the side behind it does.
     static let squash = 0.6
     /// How much a fast bubble stretches along its velocity at most, and
     /// the speed (points/s) at which it does.
-    static let stretch = 0.15
+    static let stretch = 0.2
     static let stretchSpeed = 2000.0
     /// The farthest a point strays from where it rests, relative to the
     /// shorter side.
@@ -61,6 +63,10 @@ struct Jelly {
     private(set) var points: [CGPoint]
     /// Each point's velocity relative to the bubble, in points per second.
     private var speeds: [CGPoint]
+    /// The kicks of the last moments, as felt and before they were limited,
+    /// fading over `kickMemory`.
+    private var felt = 0.0
+    private var kicked = 0.0
     /// The inverse of the sum of `p pᵀ` over the rest points, for fitting.
     private let restInverse: CGAffineTransform
 
@@ -135,13 +141,13 @@ struct Jelly {
     /// the side behind more, so it squashes against where it is going, as a
     /// cartoon ball does when it stops short.
     mutating func feel(_ change: CGPoint) {
-        var kick = change * -Self.inertia
-        let length = kick.length
-        guard length > 0 else { return }
-        if length > Self.kickLimit {
-            kick = kick * (Self.kickLimit / length)
-        }
-        let toward = kick * (1 / kick.length)
+        let raw = change.length * Self.inertia
+        guard raw > 0 else { return }
+        kicked += raw
+        let limited = Self.kickLimit * tanh(kicked / Self.kickLimit)
+        let kick = change * (-(limited - felt) / change.length)
+        felt = limited
+        let toward = change * (-1 / change.length)
         for i in speeds.indices {
             speeds[i] = speeds[i] + kick * (1 - Self.squash * normals[i].dot(toward))
         }
@@ -157,6 +163,9 @@ struct Jelly {
     /// Advances the ring by `dt` seconds while the bubble moves at
     /// `velocity`, keeping it inside `walls` (relative to the center).
     mutating func step(dt: Double, velocity: CGPoint, walls: CGRect) {
+        let fade = exp(-dt / Self.kickMemory)
+        felt *= fade
+        kicked = Self.kickLimit * atanh(min(felt / Self.kickLimit, 0.999))
         let stretch = Self.stretching(velocity)
         let h = dt / Double(Self.substeps)
         for _ in 0..<Self.substeps {
@@ -273,13 +282,18 @@ struct Jelly {
         var map = linear
         map.tx = offset.x
         map.ty = offset.y
-        var dent: CGFloat = 0
+        // Shrinking about the center by `shrink` pulls the content in by
+        // `1 - shrink` of how far out it reaches; wherever the ring caves in
+        // past the margin, it must be pulled in by that much more.
+        var shrink: CGFloat = 1
         for i in points.indices {
             let fitted = rest[i].applying(map)
-            dent = max(dent, (fitted - points[i]).dot(normals[i]))
+            let dent = (fitted - points[i]).dot(normals[i]) - margin
+            guard dent > 0 else { continue }
+            let reach = max((fitted - offset).dot(normals[i]), 1)
+            shrink = min(shrink, 1 - dent / reach)
         }
-        let half = min(size.width, size.height) / 2
-        let shrink = max(1 - max(dent - margin, 0) / half, 0.5)
+        shrink = max(shrink, 0.5)
         return CGAffineTransform(
             a: map.a * shrink, b: map.b * shrink, c: map.c * shrink, d: map.d * shrink,
             tx: map.tx, ty: map.ty)

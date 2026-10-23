@@ -21,15 +21,19 @@ struct BubbleView: View {
         let appearance = shell.appearance(of: bubble)
         content(appearance: appearance, title: shell.title(of: bubble))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // While the glass wobbles like jelly, the content squashes and
+            // stretches with it.
+            .transformEffect(bubble.contentTransform)
             // Content below another bubble is drawn above that bubble's glass,
             // so it is cut away too.
-            .clipShape(CutAway(shape: shape, cuts: cuts))
+            .clipShape(CutAway(shape: shape, outline: bubble.outline, cuts: cuts))
             .contentShape(shape)
             // The glass goes on the content itself, which keeps the content in
             // front of it; a glass layer of its own would be drawn over the
             // content. Only the glass breathes, so the content holds still.
             .glassEffect(
-                glassStyle(appearance), in: CutAway(shape: shape, swell: bubble.swell, cuts: cuts)
+                glassStyle(appearance),
+                in: CutAway(shape: shape, outline: bubble.outline, swell: bubble.swell, cuts: cuts)
             )
             .glassEffectID(bubble.id, in: glass)
             .onContinuousHover(coordinateSpace: .named(ShellView.space)) {

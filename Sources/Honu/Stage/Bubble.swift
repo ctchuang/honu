@@ -86,7 +86,7 @@ final class Bubble: Identifiable {
     /// Pace (points/s) below which a settled ring comes to rest.
     static let restPace: Double = 20
     /// How hard a bubble splats when it lands (1/s).
-    static let splat: Double = 3
+    static let splat: Double = 4
 
     init(
         id: BubbleID, target: ViewTarget, center: CGPoint, appearance: Appearance,
@@ -169,6 +169,27 @@ final class Bubble: Identifiable {
     /// Where it is drawn this frame, moved by the motion being played.
     var drawnFrame: CGRect {
         frame.offsetBy(dx: motionOffset.width, dy: motionOffset.height)
+    }
+
+    /// Where its wobbling outline is drawn this frame, grown by `grow`
+    /// points, in the stage's coordinates; none at rest.
+    func drawnOutline(grownBy grow: CGFloat) -> [CGPoint]? {
+        guard let outline else { return nil }
+        let frame = drawnFrame
+        let middle = CGPoint(x: frame.midX, y: frame.midY)
+        return zip(outline.points, outline.normals).map {
+            middle + $0 * drawnScale + $1 * grow
+        }
+    }
+
+    /// The box its glass is drawn in this frame, breathing and wobbling
+    /// included.
+    var drawnBounds: CGRect {
+        let grow = swell * drawnScale
+        if let outline = drawnOutline(grownBy: grow) {
+            return CGRect(around: outline)
+        }
+        return drawnFrame.insetBy(dx: -grow, dy: -grow)
     }
 
     /// Where it is going to rest: where a flight ends, otherwise where it is.
