@@ -144,56 +144,69 @@ comes first.
 - This document; `UI.md` points here from its open questions, and
   `TODO.md` marks resizing as started.
 
-### Step 2: Resizing on the stage
+### Step 2: Resizing on the stage (done)
 
 - `Bubble` gains `userSize: CGSize?`, `isZoomed` (at the microapp's size
-  though it has a user's size), and `minSize`; its microapp's size stays
-  apart, and `size` uses the user's size when there is one and it is not
-  zoomed.
+  though it has a user's size), and `minSize`; its microapp's size is
+  `microappSize`, which the shell sets, and `size` uses the user's size
+  when there is one and it is not zoomed.
 - `Stage` gains `startResize(_:edges:)`, `resized(by:)`, and
-  `endResize()`, with the edges being resized (an `OptionSet` of left,
-  right, top, and bottom), keeping the opposite edges put, the size
-  within limits, and the bubble on screen; and `zoom(_:)`, which
+  `endResize()`, with the edges being resized (`Edges`, an `OptionSet`
+  of left, right, top, and bottom), keeping the opposite edges put, the
+  size within limits, and the bubble on screen; and `zoom(_:)`, which
   switches between the user's size and the microapp's, easing to the new
-  size.
+  size. A bubble cannot be dragged while one is resized.
 - `Physics` holds the bubble being resized, as the dragged one.
-- Tests (`StageTests`, `PhysicsTests`): the opposite edge stays put, the
+- Tests (`ResizeTests`, `PhysicsTests`): the opposite edge stays put, the
   limits hold, a corner resizes both ways, zooming goes back and forth,
   and a growing bubble pushes its neighbor aside without moving itself.
 
-### Step 3: The shell
+### Step 3: The shell (done)
 
-- `Shell.tick` applies the microapp's size only to bubbles without a
-  user's size.
-- `Appearance` gains `minSize`; the shell hands it to the bubble.
-- `Effect` gains `resetSize(ViewTarget)`; the Maker asks for it when a
-  microapp's first page is written.
+- `Shell.tick` keeps every bubble's `microappSize` up to date; a bubble
+  with a user's size, not zoomed, does not show it.
+- `Appearance` gains `minSize` (240 by 160 points; a microapp's page,
+  the smallest a page may ask for plus the bubble around it); the shell
+  hands it to the bubble.
+- `Effect` gains `resetSize(ViewTarget)` (`Context.resetSize(for:)`);
+  the Maker asks for it when a microapp's first page is written.
 - `Shell` gains `resizeBubble`, `endBubbleResize` (which tells autosave
   the bubble moved), and `zoom` for the views.
-- Tests (`ShellTests`, `MakerTests`): a chat's growing answer does not
-  resize a resized bubble, zooming brings the microapp's size back, and
-  the Maker resets the size of a description that becomes a page.
+- Tests (`ShellResizeTests`, `MakerTests`): a chat's growing answer does
+  not resize a resized bubble, zooming brings the microapp's size back
+  and goes back again, a bubble takes its microapp's minimum, and the
+  Maker resets the size of a description that becomes a page but not of
+  a page that changes.
 
-### Step 4: Saving
+### Step 4: Saving (done)
 
 - `SavedBubble` gains `size: CGSize?` and `isZoomed: Bool?`, written
   only when there is a user's size; `Shell.snapshot` and `Shell.restore`
-  carry them, the size clamped to the screen.
+  carry them, and `Stage.setUserSize(of:to:zoomed:)` fits the size
+  between the bubble's minimum and the screen of the launch.
 - Tests (`PersistenceTests`): sizes, zoomed or not, survive a relaunch,
-  and zooming back works after one; a store
-  without sizes loads.
+  and zooming back works after one; a size too big for a smaller screen
+  shrinks to fit it; a store without sizes loads.
 
-### Step 5: The rim and the title in the view
+### Step 5: The rim and the title in the view (done)
 
 - `Bubble.rimEdges(at:)`: which edges a point on the rim resizes, if
   any, as a pure function of the outline, so it is tested without views.
-- `BubbleView`: a drag gesture on the rim, ahead of the move gesture,
-  that resizes; a hover that sets the resize cursor (restoring the arrow
-  on leaving); and a double-click on the title that zooms.
-- `ClickThrough` and `InputRouter`: confirm that presses on the rim are
-  Honu's and that presses on the content still go to it.
-- Tests (`StageTests`): edges and corners are found where the table above
-  says, and the content and title are not rim.
+  The rim is 10 points deep at the sides and bottom (`rimWidth`), but
+  only 6 at the top (`topRimWidth`), so most of the title still moves
+  the bubble; corners reach 20 points (`cornerReach`).
+- `Shell.dragBubble(_:from:by:velocity:pointer:)`: a drag that starts on
+  the rim resizes, any other moves, and `endBubbleDrag` ends either.
+- `BubbleView`: its one drag gesture goes through it; a hover sets the
+  system's resize cursor (`pointerStyle(.frameResize(position:))`, kept
+  while resizing), and a double-click on the title zooms.
+- `ClickThrough` and `InputRouter` needed no change: the rim is inside
+  the outline, so presses on it are Honu's, and the content's AppKit
+  views still take the presses inside them.
+- Tests (`ResizeTests`): edges and corners are found where the table
+  above says, the title, the content, and past the outline are not rim,
+  dragging the rim resizes while dragging the title moves, and resizing
+  over the octopus does not delete.
 
 ### Step 6: Microapp pages that fit any size
 
@@ -203,7 +216,7 @@ comes first.
 - `honu.resize` keeps working while the user has not resized the bubble,
   and is ignored after.
 
-### Step 7: Docs
+### Step 7: Docs (done but for `TODO.md`, which waits for step 6)
 
 - `UI.md`: resizing in **Bubbles**, and out of the open questions;
   `CLAUDE.md`: the architecture; `TODO.md`: check off resizing; mark the

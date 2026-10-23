@@ -17,7 +17,14 @@ final class Bubble: Identifiable {
     var velocity: CGPoint = .zero
     /// The size its microapp asks for, which may change, as an Ask chat
     /// grows with its answer.
-    var size: CGSize
+    var microappSize: CGSize
+    /// The size the user last resized it to, if any. It is kept while the
+    /// bubble is zoomed to its microapp's size, so zooming can bring it back.
+    var userSize: CGSize?
+    /// Zoomed to its microapp's size though it has a user's size.
+    var isZoomed = false
+    /// The smallest the user can resize it to, as its microapp says.
+    var minSize: CGSize
     /// What the bubble keeps for itself about its item, made by its microapp.
     @ObservationIgnored let viewState: AnyObject?
     /// Held over the octopus, where letting go deletes it; it shrinks.
@@ -38,6 +45,12 @@ final class Bubble: Identifiable {
     private(set) var motion: (motion: Motion, time: Double)?
 
     static let doomedScale: CGFloat = 0.6
+    /// How deep the rim is at the sides and bottom, around the content.
+    static let rimWidth: CGFloat = 10
+    /// How deep the rim is at the top, along the outer edge of the title.
+    static let topRimWidth: CGFloat = 6
+    /// How far from a corner the rim resizes both ways.
+    static let cornerReach: CGFloat = 20
     /// Seconds a flight out of the turtle or back from the octopus lasts.
     nonisolated static let spawnSeconds: Double = 0.8
     /// Seconds a bubble takes to go down into the octopus.
@@ -56,8 +69,16 @@ final class Bubble: Identifiable {
         self.id = id
         self.target = target
         self.center = center
-        size = appearance.size
+        microappSize = appearance.size
+        minSize = appearance.minSize
         self.viewState = viewState
+    }
+
+    /// Its size at full scale: the user's size, unless it has none or is
+    /// zoomed to its microapp's size.
+    var size: CGSize {
+        if let userSize, !isZoomed { return userSize }
+        return microappSize
     }
 
     /// Size relative to full size: small, growing (with a little overshoot)
@@ -89,6 +110,34 @@ final class Bubble: Identifiable {
     func contains(_ point: CGPoint) -> Bool {
         let outline = RoundedRectangle(cornerRadius: cornerRadius * drawnScale, style: .continuous)
         return outline.path(in: frame).contains(point)
+    }
+
+    /// Which edges dragging from `point` resizes: those of the rim it is on,
+    /// both of a corner within `cornerReach` of it, or none off the rim. The
+    /// rim is the glass between the outline and the content, `rimWidth` deep
+    /// at the sides and bottom, and only `topRimWidth` at the top, which
+    /// leaves the rest of the title for moving the bubble.
+    func rimEdges(at point: CGPoint) -> Edges {
+        guard contains(point) else { return [] }
+        let inner = CGRect(
+            x: frame.minX + Self.rimWidth, y: frame.minY + Self.topRimWidth,
+            width: frame.width - 2 * Self.rimWidth,
+            height: frame.height - Self.topRimWidth - Self.rimWidth)
+        let innerOutline = RoundedRectangle(
+            cornerRadius: cornerRadius - Self.rimWidth, style: .continuous)
+        guard !innerOutline.path(in: inner).contains(point) else { return [] }
+        var edges: Edges = []
+        if point.x < frame.minX + Self.cornerReach {
+            edges.insert(.left)
+        } else if point.x > frame.maxX - Self.cornerReach {
+            edges.insert(.right)
+        }
+        if point.y < frame.minY + Self.cornerReach {
+            edges.insert(.top)
+        } else if point.y > frame.maxY - Self.cornerReach {
+            edges.insert(.bottom)
+        }
+        return edges
     }
 
     /// Where it is drawn this frame, moved by the motion being played.

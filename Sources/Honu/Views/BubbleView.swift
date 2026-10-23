@@ -2,13 +2,16 @@ import SwiftUI
 
 /// One bubble in interactive Liquid Glass, tinted the way its microapp says.
 /// It shows its title (unless its content shows it) over the content its
-/// microapp makes, and dragging moves it.
+/// microapp makes. Dragging its rim resizes it, dragging it elsewhere moves
+/// it, and double-clicking its title zooms it.
 struct BubbleView: View {
     let bubble: Bubble
     let shell: Shell
     let glass: Namespace.ID
     /// Where bubbles above lie, cut away from this one's glass and content.
     let cuts: [Cut]
+    /// The edges of the rim the pointer is over, which set the cursor.
+    private let hovered = State(initialValue: Edges())
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: bubble.cornerRadius, style: .continuous)
@@ -29,7 +32,35 @@ struct BubbleView: View {
                 glassStyle(appearance), in: CutAway(shape: shape, swell: bubble.swell, cuts: cuts)
             )
             .glassEffectID(bubble.id, in: glass)
+            .onContinuousHover(coordinateSpace: .named(ShellView.space)) {
+                if case .active(let point) = $0 {
+                    hovered.wrappedValue = bubble.rimEdges(at: point)
+                } else {
+                    hovered.wrappedValue = []
+                }
+            }
+            // The edges being resized keep their cursor wherever the pointer goes.
+            .pointerStyle(
+                Self.cursor(for: shell.stage.resizedEdges(of: bubble) ?? hovered.wrappedValue)
+            )
             .gesture(drag)
+    }
+
+    /// The system's resize cursor for `edges`, or none off the rim.
+    private static func cursor(for edges: Edges) -> PointerStyle? {
+        let position: FrameResizePosition? =
+            switch edges {
+            case .top: .top
+            case .bottom: .bottom
+            case .left: .leading
+            case .right: .trailing
+            case .topLeft: .topLeading
+            case .topRight: .topTrailing
+            case .bottomLeft: .bottomLeading
+            case .bottomRight: .bottomTrailing
+            default: nil
+            }
+        return position.map { .frameResize(position: $0) }
     }
 
     private func glassStyle(_ appearance: Appearance) -> Glass {
@@ -47,6 +78,13 @@ struct BubbleView: View {
                 .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity)
                 .frame(height: appearance.showsTitle ? 36 : 18)
+                .contentShape(Rectangle())
+                // Double-clicking the title zooms, as with a window's title bar.
+                .onTapGesture(count: 2, coordinateSpace: .named(ShellView.space)) {
+                    if bubble.rimEdges(at: $0).isEmpty {
+                        shell.zoom(bubble)
+                    }
+                }
             UndoScope(history: shell.undoManager(for: bubble), content: shell.content(of: bubble))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .padding([.horizontal, .bottom], 10)
@@ -57,7 +95,8 @@ struct BubbleView: View {
         DragGesture(minimumDistance: 2, coordinateSpace: .named(ShellView.space))
             .onChanged {
                 shell.dragBubble(
-                    bubble, by: $0.translation, velocity: $0.velocity, pointer: $0.location)
+                    bubble, from: $0.startLocation, by: $0.translation, velocity: $0.velocity,
+                    pointer: $0.location)
             }
             .onEnded { shell.endBubbleDrag(pointer: $0.location) }
     }

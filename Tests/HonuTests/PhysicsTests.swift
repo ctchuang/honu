@@ -133,6 +133,17 @@ struct PhysicsTests {
         #expect(big.frame.minX > held.frame.maxX - 30, "the big one was not pushed aside")
     }
 
+    @Test func aGrowingBubblePushesItsNeighborAsideWithoutMoving() {
+        let (growing, neighbor) = (bubble(1000), bubble(1450))
+        stage.startResize(growing, edges: .right)
+        stage.resized(by: CGSize(width: 150, height: 0))
+        let center = growing.center
+        simulate(2)
+        #expect(growing.center == center && growing.velocity == .zero)
+        #expect(neighbor.frame.minX > growing.frame.maxX - 30, "the neighbor was not pushed")
+        stage.endResize()
+    }
+
     @Test func swallowedBubbleShrinksIntoTheMouthAndStaysThere() {
         let bubble = small(500)
         bubble.isDoomed = true

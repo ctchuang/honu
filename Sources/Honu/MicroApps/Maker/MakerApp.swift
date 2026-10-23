@@ -95,14 +95,15 @@ final class MakerApp: MicroApp {
 
     func appearance(of item: ItemID) -> Appearance {
         guard let instance = instances[item] else { return Appearance() }
-        let size: CGSize =
-            switch instance.app.status {
-            case .describing: Self.describingSize
-            case .writing(.making): Self.writingSize
-            case .writing, .running:
-                (instance.size ?? Self.defaultPageSize) + Self.chrome
-            }
-        return Appearance(size: size)
+        switch instance.app.status {
+        case .describing: return Appearance(size: Self.describingSize)
+        case .writing(.making): return Appearance(size: Self.writingSize)
+        case .writing, .running:
+            // A page is never smaller than pages may ask to be.
+            return Appearance(
+                size: (instance.size ?? Self.defaultPageSize) + Self.chrome,
+                minSize: AppSource.minSize + Self.chrome)
+        }
     }
 
     /// The SF Symbol of `microapp`: the one its page names, if it exists.
@@ -130,12 +131,21 @@ final class MakerApp: MicroApp {
 
     /// Takes in what Claude has written, and fixes pages' errors when due.
     /// The bubbles of every instance of a microapp wobble when writing it
-    /// fails, and rise when its new page has loaded.
+    /// fails, and rise when its new page has loaded. A bubble resized while
+    /// it asked for a description takes the first page's size, since the
+    /// size given to the description says nothing about the page.
     func update(_ context: Context) {
         let time = now()
-        for microapp in apps where microapp.poll(services.claude, at: time) == .needsAttention {
+        for microapp in apps {
+            let wasMaking = microapp.status == .writing(.making)
+            let outcome = microapp.poll(services.claude, at: time)
             for item in items(of: microapp) {
-                context.play(.wobble, for: item)
+                if outcome == .needsAttention {
+                    context.play(.wobble, for: item)
+                }
+                if wasMaking, microapp.status == .running {
+                    context.resetSize(for: item)
+                }
             }
         }
         for item in risen.sorted() {

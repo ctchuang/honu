@@ -30,6 +30,46 @@ struct PersistenceTests {
         #expect((back.viewState as? NoteViewState)?.focusPending == false)
     }
 
+    @Test func sizesTheUserChoseComeBackZoomedOrNot() throws {
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
+        let widened = shell.addNote(at: CGPoint(x: 400, y: 400))
+        let zoomed = shell.addNote(at: CGPoint(x: 800, y: 400))
+        for bubble in [widened, zoomed] {
+            shell.resizeBubble(bubble, edges: .right, by: CGSize(width: 60, height: 0))
+            shell.endBubbleResize()
+        }
+        shell.zoom(zoomed)
+        let chosen = CGSize(width: Appearance().size.width + 60, height: Appearance().size.height)
+        shell.save()
+
+        let restored = makeShell(size: size, storeURL: url)
+        let (wide, zoomedBack) = (restored.stage.bubbles[0], restored.stage.bubbles[1])
+        #expect(wide.userSize == chosen && !wide.isZoomed && wide.size == chosen)
+        #expect(zoomedBack.userSize == chosen && zoomedBack.isZoomed)
+        #expect(zoomedBack.size == Appearance().size)
+        // Zooming back works after a relaunch too.
+        restored.zoom(zoomedBack)
+        #expect(zoomedBack.size == chosen)
+    }
+
+    @Test func aSavedSizeFitsTheScreenOfTheLaunch() throws {
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
+        let bubble = shell.addNote(at: CGPoint(x: 600, y: 400))
+        shell.resizeBubble(bubble, edges: .bottomRight, by: CGSize(width: 500, height: 300))
+        shell.endBubbleResize()
+        shell.save()
+
+        #expect(bubble.size == CGSize(width: 774, height: 534))
+
+        // On a narrower screen, it gets narrower to fit, and stays on it.
+        let smaller = CGSize(width: 800, height: 800)
+        let back = try #require(makeShell(size: smaller, storeURL: url).stage.bubbles.first)
+        #expect(back.size == CGSize(width: 800 - 32, height: 534))
+        #expect(back.frame.minX == 16 && back.frame.maxX == 784)
+    }
+
     @Test func bubblesSavedClosedComeBackAsAnyOther() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(size: size, storeURL: url)
@@ -44,7 +84,7 @@ struct PersistenceTests {
 
         let restored = makeShell(size: size, storeURL: url)
         let back = try #require(restored.stage.bubbles.first)
-        #expect(back.size == Appearance().size)
+        #expect(back.size == Appearance().size && back.userSize == nil)
         #expect(restored.content(of: back) != nil)
     }
 

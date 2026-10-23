@@ -13,6 +13,9 @@ final class Stage {
     @ObservationIgnored private var nextID = 1
     /// The bubble being dragged, always the top one, and where it was picked up.
     private(set) var drag: (bubble: Bubble, home: CGPoint)?
+    /// The bubble being resized, always the top one, the edges it moves, and
+    /// its frame when resizing started.
+    private var resize: (bubble: Bubble, edges: Edges, start: CGRect)?
 
     /// How far a new bubble steps aside from one already in its place.
     static let cascadeStep: CGFloat = 28
@@ -88,6 +91,7 @@ final class Stage {
 
     /// Picks up `bubble`, which moves to the top.
     func startDrag(_ bubble: Bubble) {
+        guard !isResizing else { return }
         raise(bubble)
         drag = (bubble, bubble.center)
     }
@@ -115,6 +119,94 @@ final class Stage {
     func endDrag() -> (bubble: Bubble, home: CGPoint)? {
         defer { drag = nil }
         return drag
+    }
+
+    // MARK: Resizing
+
+    var isResizing: Bool { resize != nil }
+
+    /// The edges of `bubble` being resized, if it is.
+    func resizedEdges(of bubble: Bubble) -> Edges? {
+        resize.flatMap { $0.bubble === bubble ? $0.edges : nil }
+    }
+
+    /// Starts resizing `bubble` by moving its `edges`, which brings it to the
+    /// top and holds it still.
+    func startResize(_ bubble: Bubble, edges: Edges) {
+        guard !isDragging, !edges.isEmpty, bubble.isGrabbable else { return }
+        raise(bubble)
+        bubble.velocity = .zero
+        resize = (bubble, edges, bubble.frame)
+    }
+
+    /// Moves the edges being resized `translation` away from where they
+    /// were when resizing started. The opposite edges stay put, the size
+    /// stays between the bubble's minimum and the screen, and the bubble
+    /// stays on screen. The new size is the user's size.
+    func resized(by translation: CGSize) {
+        guard let (bubble, edges, start) = resize else { return }
+        let (minX, maxX) = Self.resizedSpan(
+            start.minX, start.maxX, by: translation.width,
+            moving: (edges.contains(.left), edges.contains(.right)),
+            min: bubble.minSize.width, within: size.width - Self.margin)
+        let (minY, maxY) = Self.resizedSpan(
+            start.minY, start.maxY, by: translation.height,
+            moving: (edges.contains(.top), edges.contains(.bottom)),
+            min: bubble.minSize.height, within: size.height - Self.margin)
+        bubble.userSize = CGSize(width: maxX - minX, height: maxY - minY)
+        bubble.isZoomed = false
+        bubble.center = CGPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
+    }
+
+    /// One side of a resized frame: the span from `low` to `high`, with the
+    /// `moving` ends moved `delta`, no shorter than `min`, and inside
+    /// `margin` to `limit`.
+    private static func resizedSpan(
+        _ low: CGFloat, _ high: CGFloat, by delta: CGFloat, moving: (low: Bool, high: Bool),
+        min shortest: CGFloat, within limit: CGFloat
+    ) -> (CGFloat, CGFloat) {
+        let shortest = Swift.min(shortest, limit - margin)
+        var (low, high) = (low, high)
+        if moving.low {
+            low = Swift.min(Swift.max(low + delta, margin), high - shortest)
+        }
+        if moving.high {
+            high = Swift.max(Swift.min(high + delta, limit), low + shortest)
+        }
+        return (low, high)
+    }
+
+    /// Stops resizing, returning the bubble that was resized.
+    @discardableResult
+    func endResize() -> Bubble? {
+        defer { resize = nil }
+        return resize?.bubble
+    }
+
+    /// Gives `bubble` the user's `size`, as when it was saved, fitting it
+    /// between its minimum and the screen and keeping it on screen.
+    func setUserSize(of bubble: Bubble, to size: CGSize, zoomed: Bool) {
+        let largest = CGSize(
+            width: self.size.width - 2 * Self.margin, height: self.size.height - 2 * Self.margin)
+        bubble.userSize = CGSize(
+            width: max(min(size.width, largest.width), min(bubble.minSize.width, largest.width)),
+            height: max(
+                min(size.height, largest.height), min(bubble.minSize.height, largest.height)))
+        bubble.isZoomed = zoomed
+        bubble.center = clamped(bubble.center, size: bubble.size)
+    }
+
+    /// Zooms `bubble` as a window zooms: from the user's size to its
+    /// microapp's, or back, easing to the new size and keeping it on
+    /// screen. A bubble never resized does not zoom. Returns whether it did.
+    @discardableResult
+    func zoom(_ bubble: Bubble) -> Bool {
+        guard bubble.userSize != nil else { return false }
+        withAnimation(.smooth(duration: 0.3)) {
+            bubble.isZoomed.toggle()
+            bubble.center = clamped(bubble.center, size: bubble.size)
+        }
+        return true
     }
 
     // MARK: Flying in and out
@@ -158,11 +250,11 @@ final class Stage {
     }
 
     /// Advances every bubble's flight and motion by `dt` seconds. A dragged
-    /// bubble follows the pointer instead of the physics.
+    /// or resized bubble follows the pointer instead of the physics.
     func step(dt: Double) {
         for bubble in bubbles {
             bubble.animate(dt: dt)
         }
-        Physics.step(bubbles, bounds: size, held: drag?.bubble, dt: dt)
+        Physics.step(bubbles, bounds: size, held: drag?.bubble ?? resize?.bubble, dt: dt)
     }
 }

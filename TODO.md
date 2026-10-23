@@ -3,7 +3,8 @@
 ## UI Tweaking
 
 - [P1] Allow bubble resizing (started; design and plan in
-  `docs/Resizing.md`).
+  `docs/Resizing.md`): dragging the rim, zooming, and saving are built;
+  microapp pages that fit any size are left.
 - [P2] Fade-in effect of the speech bubble doesn't come from the
   octopus.
 - [P2] **Physics shows status** (started): bubbles breathe when

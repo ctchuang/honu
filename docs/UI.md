@@ -94,11 +94,15 @@ microapp, under its title (or, as a note does, with the title in its
 content). There is one kind of bubble: it never shrinks into an icon or
 closes, and it leaves only through the octopus. A new
 bubble flies out of the turtle, growing on the way, and text typed
-before its field has the focus goes into it.
+before its field has the focus goes into it. A bubble starts at the size
+its microapp asks for; once the user resizes it, it keeps the user's
+size, across launches too. See `Resizing.md`.
 
 | Input | Result |
 |---|---|
 | Drag the title | Moves it; let go while moving, it glides on. |
+| Drag the rim (the glass around the content), or a corner | Resizes it, as a window: the opposite edge stays put, and the bubbles it grows into are pushed aside. The pointer shows the system's resize cursor there. |
+| Double-click the title | Zooms it, as a window: from the size the user chose to the size its microapp asks for, and back. |
 | Press anywhere on it | Brings it to the top, over every other bubble. |
 
 **Octopus.** Rises from the bottom corner away from the turtle once a
@@ -117,7 +121,6 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
 
 ## Open questions
 
-- Resizing bubbles by hand: designed in `Resizing.md`, not built yet.
 - Reaching Honu when its windows are all covered: the Dock icon and ⌘Tab
   work, but the turtle could instead stay on top, in a small window of
   its own.
@@ -135,8 +138,8 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
    when one or many bubbles out of sight finish or need the user is yet
    to be designed.
 3. One kind of bubble (done): bubbles no longer close into an icon,
-   and double-clicking the title does nothing until `Resizing.md` gives
-   it a meaning. `Bubble` loses `isOpen` and its icon size, along with
+   and double-clicking the title did nothing until `Resizing.md` gave
+   it a meaning, zooming. `Bubble` loses `isOpen` and its icon size, along with
    the morph between bubble and icon (`Stage.toggle`) and opening on landing
    (`openOnLanding`); `Appearance` loses `closedSide`, and its
    `panelSize` becomes `size`. A store saved

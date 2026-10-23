@@ -193,7 +193,10 @@ struct MakerTests {
         #expect(update(maker).isEmpty)
         #expect(microapp.written.contains("Pomodoro"))
         claude.streams[0].send(.done)
-        #expect(update(maker).isEmpty, "rose before the page loaded")
+        let target = ViewTarget(app: maker.id, item: item)
+        // The first page drops the size given to the description, and does
+        // not rise before it loads.
+        #expect(update(maker) == [.resetSize(target)])
         #expect(microapp.status == .running)
         #expect(!maker.isBusy(item))
         #expect(microapp.folder.page()?.hasPrefix("<!doctype html>") == true)
@@ -203,7 +206,6 @@ struct MakerTests {
             maker.appearance(of: item).size
                 == CGSize(width: 300, height: 400) + MakerApp.chrome)
 
-        let target = ViewTarget(app: maker.id, item: item)
         maker.loaded(item)
         #expect(update(maker) == [.motion(target, .rise)])
         maker.loaded(item)

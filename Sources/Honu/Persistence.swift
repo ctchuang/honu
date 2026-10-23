@@ -28,6 +28,10 @@ struct SavedBubble: Codable {
     /// Where it was relative to the center of the screen, so it comes back in
     /// place on a screen of another size.
     var offset: CGPoint
+    /// The size the user resized it to, if any.
+    var size: CGSize?
+    /// Whether it was zoomed to its microapp's size instead; only kept with a size.
+    var isZoomed: Bool?
     // Stores from when bubbles could close into an icon also say whether
     // each was open; decoding leaves that out, and every bubble comes back
     // as any other.
