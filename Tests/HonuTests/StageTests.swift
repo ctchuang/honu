@@ -59,56 +59,50 @@ struct StageTests {
         #expect(stage.bubbles.count == 2)
     }
 
-    @Test func newPanelsStepAsideFromEachOther() {
+    @Test func newBubblesStepAsideFromEachOther() {
         let stage = stage()
         let mouth = CGPoint(x: 100, y: 700)
         let a = add(stage, x: 0)
-        stage.spitPanel(a, from: mouth)
+        stage.spit(a, from: mouth)
         let b = add(stage, x: 0)
-        stage.spitPanel(b, from: mouth)
+        stage.spit(b, from: mouth)
         #expect(b.destination.x - a.destination.x == Stage.cascadeStep)
         #expect(b.destination.y - a.destination.y == Stage.cascadeStep)
         // They fly from the mouth and cannot be grabbed until they land.
         #expect(a.center == mouth && a.isInFlight)
     }
 
-    @Test func openPanelsStayOnScreen() {
+    @Test func newBubblesLandOnScreen() {
         let stage = stage()
-        let bubble = add(stage, x: 1190)
-        stage.toggle(bubble)
-        #expect(bubble.isOpen)
-        #expect(bubble.frame.maxX <= stage.size.width)
-        stage.toggle(bubble)
-        #expect(!bubble.isOpen)
+        let bubble = add(stage, x: 0)
+        stage.spit(bubble, from: CGPoint(x: stage.size.width - 10, y: 20))
+        let landing = CGRect(
+            x: bubble.destination.x - bubble.size.width / 2,
+            y: bubble.destination.y - bubble.size.height / 2,
+            width: bubble.size.width, height: bubble.size.height)
+        #expect(CGRect(origin: .zero, size: stage.size).contains(landing))
     }
 }
 
 @MainActor
 struct BubbleShapeTests {
-    private func bubble(open: Bool = false) -> Bubble {
-        let bubble = Bubble(
+    private func bubble() -> Bubble {
+        Bubble(
             id: BubbleID(rawValue: 1),
             target: ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1)),
-            center: CGPoint(x: 500, y: 300), appearance: Appearance(closedSide: 100),
-            viewState: nil)
-        bubble.isOpen = open
-        return bubble
+            center: CGPoint(x: 500, y: 300),
+            appearance: Appearance(size: CGSize(width: 100, height: 100)), viewState: nil)
     }
 
     @Test func roundedCornersAreNotHit() {
-        let closed = bubble()
-        #expect(closed.contains(CGPoint(x: 500, y: 300)), "middle")
-        #expect(closed.contains(CGPoint(x: 451, y: 300)), "left edge")
-        #expect(closed.contains(CGPoint(x: 500, y: 349)), "bottom edge")
-        #expect(!closed.contains(CGPoint(x: 451, y: 251)), "top-left corner")
-        #expect(!closed.contains(CGPoint(x: 549, y: 349)), "bottom-right corner")
-        #expect(!closed.contains(CGPoint(x: 560, y: 300)), "outside")
-
-        // An open panel's corners are rounder in points but smaller for its size.
-        let open = bubble(open: true)
-        let frame = open.frame
-        #expect(!open.contains(CGPoint(x: frame.minX + 2, y: frame.minY + 2)))
-        #expect(open.contains(CGPoint(x: frame.minX + 30, y: frame.minY + 30)))
+        let bubble = bubble()
+        #expect(bubble.contains(CGPoint(x: 500, y: 300)), "middle")
+        #expect(bubble.contains(CGPoint(x: 451, y: 300)), "left edge")
+        #expect(bubble.contains(CGPoint(x: 500, y: 349)), "bottom edge")
+        #expect(!bubble.contains(CGPoint(x: 451, y: 251)), "top-left corner")
+        #expect(!bubble.contains(CGPoint(x: 549, y: 349)), "bottom-right corner")
+        #expect(!bubble.contains(CGPoint(x: 560, y: 300)), "outside")
+        #expect(bubble.contains(CGPoint(x: 465, y: 265)), "inside the corner's curve")
     }
 
     @Test func aShrunkBubbleIsHitOnlyWhereItIsDrawn() {
@@ -123,10 +117,10 @@ struct BubbleShapeTests {
         let target = ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1))
         let below = stage.add(
             target: target, center: CGPoint(x: 440, y: 240),
-            appearance: Appearance(closedSide: 100), viewState: nil)
+            appearance: Appearance(size: CGSize(width: 100, height: 100)), viewState: nil)
         let above = stage.add(
             target: target, center: CGPoint(x: 500, y: 300),
-            appearance: Appearance(closedSide: 100), viewState: nil)
+            appearance: Appearance(size: CGSize(width: 100, height: 100)), viewState: nil)
         #expect(stage.bubble(at: CGPoint(x: 500, y: 300)) === above)
         // Past the top bubble's rounded corner, inside the one below it.
         #expect(stage.bubble(at: CGPoint(x: 452, y: 252)) === below)

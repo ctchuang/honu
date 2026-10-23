@@ -38,14 +38,9 @@ extension Shell {
         registry.title(of: bubble.target)
     }
 
-    /// What an open `bubble` shows, made by its microapp.
+    /// What `bubble` shows, made by its microapp.
     func content(of bubble: Bubble) -> AnyView? {
         registry.app(bubble.target.app)?.anyContent(
             of: bubble.target.item, viewState: bubble.viewState)
-    }
-
-    /// Opens a closed bubble into its panel, or closes an open one.
-    func toggle(_ bubble: Bubble) {
-        stage.toggle(bubble)
     }
 }

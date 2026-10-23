@@ -89,3 +89,40 @@ struct EffectTests {
         #expect(!registry.isBusy(ViewTarget(app: AppID("unknown"), item: target.item)))
     }
 }
+
+struct FlightTests {
+    private let from = CGPoint(x: 100, y: 700)
+    private let to = CGPoint(x: 400, y: 300)
+
+    @Test func easingStartsAndEndsInPlaceAndPopsOutPastTheEnd() {
+        for ease in [easeOutQuad, easeOutBack] {
+            #expect(ease(0) == 0 && ease(1) == 1)
+        }
+        let steps = stride(from: 0.0, through: 1, by: 0.01)
+        #expect(steps.map(easeOutQuad).allSatisfy { $0 <= 1 })
+        #expect(steps.map(easeOutBack).contains { $0 > 1 }, "no overshoot")
+    }
+
+    @Test func aBubbleSpatOutGrowsOnTheWayAndLandsFullSize() {
+        let flight = Flight(kind: .spawn, from: from, to: to)
+        #expect(flight.after(0).position == from && flight.after(0).scale == 0)
+        let steps = stride(from: 0.0, through: flight.seconds, by: flight.seconds / 50)
+        #expect(steps.contains { flight.after($0).scale > 1 }, "did not pop")
+        let landed = flight.after(flight.seconds)
+        #expect(landed.position == to && landed.scale == 1)
+        // It stays where it landed, however late it is asked.
+        #expect(flight.after(flight.seconds * 3).position == to)
+        #expect(flight.after(-1).position == from)
+    }
+
+    @Test func aSwallowedBubbleShrinksToNothingInTheMouth() {
+        let flight = Flight(kind: .swallow(fromScale: 0.7), from: from, to: to)
+        #expect(flight.after(0).scale == 0.7)
+        let scales = stride(from: 0.0, through: flight.seconds, by: flight.seconds / 50).map {
+            flight.after($0).scale
+        }
+        #expect(zip(scales, scales.dropFirst()).allSatisfy { $0 >= $1 }, "grew on the way")
+        let gone = flight.after(flight.seconds)
+        #expect(gone.position == to && gone.scale == 0)
+    }
+}

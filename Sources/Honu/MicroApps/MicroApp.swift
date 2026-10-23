@@ -33,12 +33,13 @@ struct ViewTarget: Hashable, Codable, Sendable {
 struct Appearance {
     /// The color the glass is tinted toward, if any.
     var tint: Color? = nil
-    /// Shown on a closed bubble instead of its title.
-    var symbol: String? = nil
-    /// The side of a closed bubble.
-    var closedSide: CGFloat = 88
-    var panelSize = CGSize(width: 380, height: 300)
+    var size = CGSize(width: 380, height: 300)
+    /// The smallest the user can resize the bubble to.
+    var minSize = CGSize(width: 240, height: 160)
     var textColor: Color = .primary
+    /// Whether the bubble shows its title above its content; content that
+    /// shows the title itself leaves it out.
+    var showsTitle = true
 }
 
 /// Hands out a microapp's item ids.
@@ -61,6 +62,10 @@ struct ItemIDs {
 enum Effect: Equatable {
     /// Every bubble showing the target plays the motion.
     case motion(ViewTarget, Motion)
+    /// Every bubble showing the target drops the size the user resized it
+    /// to, and takes its microapp's size again: what it shows changed in
+    /// kind, so that size no longer fits.
+    case resetSize(ViewTarget)
 }
 
 /// What a microapp gets to work with while it catches up: a way to ask
@@ -77,6 +82,11 @@ final class Context {
     /// Has every bubble showing `item` play `motion`.
     func play(_ motion: Motion, for item: ItemID) {
         effects.append(.motion(ViewTarget(app: app, item: item), motion))
+    }
+
+    /// Has every bubble showing `item` drop the size the user resized it to.
+    func resetSize(for item: ItemID) {
+        effects.append(.resetSize(ViewTarget(app: app, item: item)))
     }
 }
 
@@ -99,7 +109,7 @@ protocol ItemStore: AnyObject {
     func load(_ data: Data)
 }
 
-/// How a microapp's items look on their bubbles, open or closed.
+/// How a microapp's items look on their bubbles.
 @MainActor
 protocol ItemLook {
     func appearance(of item: ItemID) -> Appearance
@@ -115,7 +125,7 @@ extension ItemLook {
     func isBusy(_ item: ItemID) -> Bool { false }
 }
 
-/// What an open bubble shows of a microapp's item, and what each bubble
+/// What a bubble shows of a microapp's item, and what each bubble
 /// keeps for itself apart from the item's data.
 @MainActor
 protocol ItemViews {
@@ -129,7 +139,7 @@ protocol ItemViews {
     /// bubble may take the focus.
     func newViewState(for item: ItemID, fresh: Bool) -> ViewState
 
-    /// The content of an open bubble showing `item`, below its title.
+    /// The content of a bubble showing `item`, below its title.
     @ViewBuilder
     func content(of item: ItemID, viewState: ViewState) -> Content
 

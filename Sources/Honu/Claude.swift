@@ -48,6 +48,10 @@ final class AnswerStream: @unchecked Sendable {
     private var events: [ClaudeEvent] = []
     private var isClosed = false
     private var task: Task<Void, Never>?
+    private var cancelled = false
+
+    /// Whether the answer is no longer wanted.
+    var isCancelled: Bool { lock.withLock { cancelled } }
 
     /// Adds an event for the next `take`.
     func send(_ event: ClaudeEvent) {
@@ -80,7 +84,10 @@ final class AnswerStream: @unchecked Sendable {
 
     /// Stops receiving the answer, as when its chat is deleted.
     func cancel() {
-        lock.withLock { task }?.cancel()
+        lock.withLock {
+            cancelled = true
+            return task
+        }?.cancel()
     }
 }
 

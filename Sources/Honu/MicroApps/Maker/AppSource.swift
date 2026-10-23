@@ -1,7 +1,7 @@
 import Foundation
 
 /// What a microapp's page says about itself in its head: its name, the size
-/// it wants, and the symbol for its closed bubble.
+/// it wants, and the symbol for its launcher tile.
 struct PageMeta: Equatable {
     var title: String?
     var size: CGSize?
@@ -19,10 +19,16 @@ enum AppSource {
     /// `</html>`, leaving out anything around it, such as Markdown fences.
     /// Nothing if the page is missing or cut off.
     static func page(from answer: String) -> String? {
-        let start = [
-            answer.range(of: "<!doctype html", options: .caseInsensitive),
-            answer.range(of: "<html", options: .caseInsensitive),
-        ].compactMap { $0?.lowerBound }.min()
+        // The page starts a line of its own, so tags named in the text
+        // before it are not taken for it.
+        let lineStart = /^[ \t]*(?<tag><!doctype html|<html)/.ignoresCase()
+            .anchorsMatchLineEndings()
+        let start =
+            answer.firstMatch(of: lineStart)?.output.tag.startIndex
+            ?? [
+                answer.range(of: "<!doctype html", options: .caseInsensitive),
+                answer.range(of: "<html", options: .caseInsensitive),
+            ].compactMap { $0?.lowerBound }.min()
         guard let start,
             let end = answer.range(of: "</html>", options: [.caseInsensitive, .backwards]),
             start < end.lowerBound

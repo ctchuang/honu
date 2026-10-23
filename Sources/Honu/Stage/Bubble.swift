@@ -5,8 +5,8 @@ struct BubbleID: Hashable, Sendable {
     let rawValue: Int
 }
 
-/// One bubble: a view of one item of one microapp. A glass square when
-/// closed, a panel showing the item when open.
+/// One bubble: a view of one item of one microapp, showing the item under
+/// its title.
 @Observable
 @MainActor
 final class Bubble: Identifiable {
@@ -15,13 +15,16 @@ final class Bubble: Identifiable {
     var center: CGPoint
     /// Speed and direction, in points per second.
     var velocity: CGPoint = .zero
-    /// Offset in seconds into the idle float, so bubbles drift out of step.
-    @ObservationIgnored var phase: Double
-    var isOpen = false
-    let closedSide: CGFloat
-    /// The size when open, which its microapp may change, as an Ask panel
+    /// The size its microapp asks for, which may change, as an Ask chat
     /// grows with its answer.
-    var panelSize: CGSize
+    var microappSize: CGSize
+    /// The size the user last resized it to, if any. It is kept while the
+    /// bubble is zoomed to its microapp's size, so zooming can bring it back.
+    var userSize: CGSize?
+    /// Zoomed to its microapp's size though it has a user's size.
+    var isZoomed = false
+    /// The smallest the user can resize it to, as its microapp says.
+    var minSize: CGSize
     /// What the bubble keeps for itself about its item, made by its microapp.
     @ObservationIgnored let viewState: AnyObject?
     /// Held over the octopus, where letting go deletes it; it shrinks.
@@ -40,8 +43,39 @@ final class Bubble: Identifiable {
     private(set) var breathTime: Double = 0
     /// The motion being played and how many seconds into it.
     private(set) var motion: (motion: Motion, time: Double)?
+    /// Its outline while it wobbles like jelly; none at rest, when it is its
+    /// rounded rectangle.
+    private(set) var outline: Outline?
+    /// The squash, stretch, and shear of its content while it wobbles, in
+    /// its own coordinates at full size; the identity at rest.
+    private(set) var contentTransform: CGAffineTransform = .identity
+    /// The soft ring its outline follows while it wobbles.
+    @ObservationIgnored private var jelly: Jelly?
+    /// Where it was drawn last frame, if it was free then.
+    @ObservationIgnored private var lastSpot: CGPoint?
+    /// How fast where it is drawn moves, smoothed, in points per second;
+    /// none until it has been drawn twice in a row.
+    @ObservationIgnored private var pace: CGPoint?
+    /// Whether it has just landed from a flight out of the turtle or the
+    /// octopus, and is to splat.
+    @ObservationIgnored private var landed = false
+    /// The scale it was drawn at last frame, and how fast it was growing.
+    @ObservationIgnored private var lastScale: CGFloat?
+    @ObservationIgnored private var growth: Double?
+    /// How much other bubbles pushing it changed its velocity since last
+    /// frame.
+    @ObservationIgnored private var knocks = CGPoint.zero
+    /// The edges of the bubbles pushing it this frame, in the stage's
+    /// coordinates, which its jelly is pressed flat against.
+    @ObservationIgnored private var contacts: [Jelly.Contact] = []
 
     static let doomedScale: CGFloat = 0.6
+    /// How deep the rim is at the sides and bottom, around the content.
+    static let rimWidth: CGFloat = 10
+    /// How deep the rim is at the top, along the outer edge of the title.
+    static let topRimWidth: CGFloat = 6
+    /// How far from a corner the rim resizes both ways.
+    static let cornerReach: CGFloat = 20
     /// Seconds a flight out of the turtle or back from the octopus lasts.
     nonisolated static let spawnSeconds: Double = 0.8
     /// Seconds a bubble takes to go down into the octopus.
@@ -52,6 +86,28 @@ final class Bubble: Identifiable {
     static let breathRate: Double = 0.8
     /// How quickly breathing fades in and out (1/s), so it never starts or stops abruptly.
     static let breathFadeRate: Double = 3
+    /// Seconds over which its pace is smoothed, so a jittery pointer does
+    /// not shake it.
+    static let paceSmoothing: Double = 0.05
+    /// Change in pace (points/s) in one frame, or pace, that sets a bubble at
+    /// rest wobbling.
+    static let wobbleKick: Double = 40
+    static let wobblePace: Double = 300
+    /// Pace (points/s) below which a settled ring comes to rest.
+    static let restPace: Double = 20
+    /// How hard a bubble splats when it lands (1/s).
+    static let splat: Double = 4
+    /// How much more its jelly feels other bubbles pushing it than the push
+    /// moves it, so a bump shows even when the push is gentle.
+    static let knockInertia: Double = 3
+    /// How much its jelly lags behind it growing or shrinking as it flies
+    /// out of the turtle, so it overshoots and wobbles.
+    static let growthInertia: Double = 1
+    /// How much of the changes in its pace its jelly feels while it flies
+    /// out of the turtle.
+    static let flightInertia: Double = 0.4
+    /// Change in growth (1/s) in one frame that sets a bubble wobbling.
+    static let wobbleGrowth: Double = 0.05
 
     init(
         id: BubbleID, target: ViewTarget, center: CGPoint, appearance: Appearance,
@@ -60,14 +116,16 @@ final class Bubble: Identifiable {
         self.id = id
         self.target = target
         self.center = center
-        phase = Double(id.rawValue) * 37.3
-        closedSide = appearance.closedSide
-        panelSize = appearance.panelSize
+        microappSize = appearance.size
+        minSize = appearance.minSize
         self.viewState = viewState
     }
 
+    /// Its size at full scale: the user's size, unless it has none or is
+    /// zoomed to its microapp's size.
     var size: CGSize {
-        isOpen ? panelSize : CGSize(width: closedSide, height: closedSide)
+        if let userSize, !isZoomed { return userSize }
+        return microappSize
     }
 
     /// Size relative to full size: small, growing (with a little overshoot)
@@ -90,11 +148,9 @@ final class Bubble: Identifiable {
             width: size.width, height: size.height)
     }
 
-    /// The corner radius of its outline at full size: like a macOS app icon
-    /// when closed, a little rounder than a window when open.
-    var cornerRadius: CGFloat {
-        isOpen ? 30 : closedSide * 0.28
-    }
+    /// The corner radius of its outline at full size, a little rounder than
+    /// a window's.
+    var cornerRadius: CGFloat { 30 }
 
     /// Whether `point` is inside its outline as drawn, so presses on the
     /// transparent area past its rounded corners go to whatever is below.
@@ -103,9 +159,58 @@ final class Bubble: Identifiable {
         return outline.path(in: frame).contains(point)
     }
 
+    /// Which edges dragging from `point` resizes: those of the rim it is on,
+    /// both of a corner within `cornerReach` of it, or none off the rim. The
+    /// rim is the glass between the outline and the content, `rimWidth` deep
+    /// at the sides and bottom, and only `topRimWidth` at the top, which
+    /// leaves the rest of the title for moving the bubble.
+    func rimEdges(at point: CGPoint) -> Edges {
+        guard contains(point) else { return [] }
+        let inner = CGRect(
+            x: frame.minX + Self.rimWidth, y: frame.minY + Self.topRimWidth,
+            width: frame.width - 2 * Self.rimWidth,
+            height: frame.height - Self.topRimWidth - Self.rimWidth)
+        let innerOutline = RoundedRectangle(
+            cornerRadius: cornerRadius - Self.rimWidth, style: .continuous)
+        guard !innerOutline.path(in: inner).contains(point) else { return [] }
+        var edges: Edges = []
+        if point.x < frame.minX + Self.cornerReach {
+            edges.insert(.left)
+        } else if point.x > frame.maxX - Self.cornerReach {
+            edges.insert(.right)
+        }
+        if point.y < frame.minY + Self.cornerReach {
+            edges.insert(.top)
+        } else if point.y > frame.maxY - Self.cornerReach {
+            edges.insert(.bottom)
+        }
+        return edges
+    }
+
     /// Where it is drawn this frame, moved by the motion being played.
     var drawnFrame: CGRect {
         frame.offsetBy(dx: motionOffset.width, dy: motionOffset.height)
+    }
+
+    /// Where its wobbling outline is drawn this frame, grown by `grow`
+    /// points, in the stage's coordinates; none at rest.
+    func drawnOutline(grownBy grow: CGFloat) -> [CGPoint]? {
+        guard let outline else { return nil }
+        let frame = drawnFrame
+        let middle = CGPoint(x: frame.midX, y: frame.midY)
+        return zip(outline.points, outline.normals).map {
+            middle + $0 * drawnScale + $1 * grow
+        }
+    }
+
+    /// The box its glass is drawn in this frame, breathing and wobbling
+    /// included.
+    var drawnBounds: CGRect {
+        let grow = swell * drawnScale
+        if let outline = drawnOutline(grownBy: grow) {
+            return CGRect(around: outline)
+        }
+        return drawnFrame.insetBy(dx: -grow, dy: -grow)
     }
 
     /// Where it is going to rest: where a flight ends, otherwise where it is.
@@ -138,15 +243,13 @@ final class Bubble: Identifiable {
         self.motion = (motion, 0)
     }
 
-    /// Flies from `start`, small, to `place`, growing on the way, and opens
-    /// on landing if `openOnLanding`.
-    func fly(from start: CGPoint, to place: CGPoint, openOnLanding: Bool) {
+    /// Flies from `start`, small, to `place`, growing on the way.
+    func fly(from start: CGPoint, to place: CGPoint) {
         isSwallowed = false
         isDoomed = false
-        isOpen = false
         velocity = .zero
         center = start
-        flight = Flight(kind: .spawn(openOnLanding: openOnLanding), from: start, to: place)
+        flight = Flight(kind: .spawn, from: start, to: place)
     }
 
     /// Goes down into the octopus's `mouth`, shrinking to nothing.
@@ -158,8 +261,7 @@ final class Bubble: Identifiable {
     }
 
     /// Advances the breathing, the motion, and the flight by `dt` seconds.
-    /// Returns whether the bubble just landed and should open.
-    func animate(dt: Double) -> Bool {
+    func animate(dt: Double) {
         let target: Double = isBusy ? 1 : 0
         if breath != target {
             breath += (target - breath) * (1 - exp(-Self.breathFadeRate * dt))
@@ -176,17 +278,127 @@ final class Bubble: Identifiable {
             self.motion = time + dt < motion.seconds ? (motion, time + dt) : nil
         }
 
-        guard var flight else { return false }
+        guard var flight else { return }
         flight.progress = min(flight.progress + dt / flight.seconds, 1)
         center = flight.position
-        if flight.progress < 1 {
-            self.flight = flight
-            return false
+        self.flight = flight.progress < 1 ? flight : nil
+        if case .spawn = flight.kind, self.flight == nil {
+            landed = true
         }
-        self.flight = nil
-        if case .spawn(let openOnLanding) = flight.kind {
-            return openOnLanding
+    }
+
+    /// Another bubble pushing it changed its velocity by `change`, which its
+    /// jelly feels more than the push moves it.
+    func knock(_ change: CGPoint) {
+        knocks = knocks + change
+    }
+
+    /// Another bubble pushes it this frame along `normal`, its edge passing
+    /// through `point`: its jelly is pressed flat against that edge.
+    func press(at point: CGPoint, toward normal: CGPoint) {
+        contacts.append(Jelly.Contact(point: point, normal: normal))
+    }
+
+    /// Advances its jelly by `dt` seconds, on a screen of `bounds`: changes
+    /// in how where it is drawn moves, other bubbles pushing it, and growing
+    /// as it flies out set it wobbling, and it comes to rest once settled. A
+    /// bubble being resized, flying into the octopus, or swallowed, or whose
+    /// size changed, comes to rest at once.
+    func wobble(dt: Double, bounds: CGSize, resizing: Bool) {
+        let scale = drawnScale
+        var spawning = false
+        if case .spawn = flight?.kind {
+            spawning = true
         }
-        return false
+        guard isFree || spawning, !resizing, dt > 0, scale > 0.1,
+            jelly.map({ $0.size == size }) ?? true
+        else {
+            rest()
+            lastSpot = nil
+            lastScale = nil
+            knocks = .zero
+            contacts = []
+            return
+        }
+        let spot = CGPoint(x: center.x + motionOffset.width, y: center.y + motionOffset.height)
+        // Its pace starts as it is found, so a flight out of the turtle
+        // starting fast, or letting go after resizing, is no kick; changes
+        // after that are.
+        var change = CGPoint.zero
+        if let lastSpot {
+            let velocity = (spot - lastSpot) * (1 / dt)
+            if let pace {
+                let smoothed = pace + (velocity - pace) * (1 - exp(-dt / Self.paceSmoothing))
+                change = smoothed - pace
+                self.pace = smoothed
+            } else {
+                pace = velocity
+            }
+        } else {
+            pace = nil
+        }
+        lastSpot = spot
+        // A flight follows a path of its own, so it shakes the jelly less.
+        if spawning {
+            change = change * Self.flightInertia
+        }
+        let pace = self.pace ?? .zero
+        // Its growth is known from its second frame on, and changes from its
+        // third.
+        var growthChange = 0.0
+        if let lastScale {
+            let rate = (scale - lastScale) / dt
+            growthChange = growth.map { rate - $0 } ?? 0
+            growth = rate
+        } else {
+            growth = nil
+        }
+        lastScale = scale
+        let knock = knocks * Self.knockInertia
+        knocks = .zero
+        // The edges pressing on it, relative to where it is drawn, at full scale.
+        let pressing = contacts.map {
+            Jelly.Contact(point: ($0.point - spot) * (1 / scale), normal: $0.normal)
+        }
+        contacts = []
+        if jelly == nil {
+            guard
+                landed || change.length > Self.wobbleKick || pace.length > Self.wobblePace
+                    || knock.length > Self.wobbleKick || abs(growthChange) > Self.wobbleGrowth
+                    || !pressing.isEmpty
+            else { return }
+            jelly = Jelly(size: size, cornerRadius: cornerRadius)
+        }
+        guard var jelly else { return }
+        if landed {
+            jelly.splat(Self.splat)
+            landed = false
+        }
+        jelly.feel(change + knock)
+        // Lagging behind its growth, it bulges as growing slows, and caves
+        // in as it speeds up.
+        jelly.inflate(-growthChange * Self.growthInertia)
+        let walls = CGRect(
+            x: -spot.x / scale, y: -spot.y / scale, width: bounds.width / scale,
+            height: bounds.height / scale)
+        jelly.step(dt: dt, velocity: pace, walls: walls, contacts: pressing)
+        if jelly.isSettled && pace.length < Self.restPace && pressing.isEmpty {
+            rest()
+            return
+        }
+        self.jelly = jelly
+        outline = jelly.outline(margin: Self.rimWidth - 4)
+        let middle = CGAffineTransform(translationX: size.width / 2, y: size.height / 2)
+        contentTransform = middle.inverted()
+            .concatenating(jelly.contentTransform)
+            .concatenating(middle)
+    }
+
+    /// Drops its jelly: its outline is its rounded rectangle again, and its
+    /// content is as laid out.
+    private func rest() {
+        jelly = nil
+        if outline != nil { outline = nil }
+        if contentTransform != .identity { contentTransform = .identity }
     }
 }

@@ -21,6 +21,41 @@ struct NotesAppTests {
             title("Remember to call the aquarium about the turtle") == "Remember to call the aqu…")
     }
 
+    @Test func onlyTheTitleLineIsSetAsATitle() {
+        func titleRuns(_ note: String) -> [String] {
+            var text = AttributedString(note)
+            text.font = NoteEditor.bodyFont  // Formatting from before goes.
+            NoteEditor.style(&text)
+            return text.runs.filter { $0.font == NoteEditor.titleFont }
+                .map { String(text[$0.range].characters) }
+        }
+        #expect(titleRuns("") == [])
+        #expect(titleRuns(" \n\n") == [])
+        #expect(titleRuns("Groceries\nmilk") == ["Groceries"])
+        #expect(titleRuns("\n  🐢 Groceries \nmilk\neggs") == ["  🐢 Groceries "])
+        // The editor's runs go with every change of font, the body's included.
+        var text = AttributedString("Groceries\nmilk")
+        NoteEditor.style(&text)
+        #expect(text.runs.count == 2)
+        #expect(text.runs.first?.font == NoteEditor.titleFont)
+        #expect(text.runs.last?.font == nil)
+    }
+
+    @Test func aNoteIsNotRestyledWhileAnInputMethodComposes() {
+        let state = NoteViewState(focusPending: false)
+        // Restyling would end the composition, leaving its keys behind.
+        #expect(state.edited(AttributedString("ㄋㄧˇ"), composing: true) == "ㄋㄧˇ")
+        #expect(state.shown("ㄋㄧˇ").runs.first?.font == nil)
+        // The next edit, once a character is chosen, sets the title.
+        #expect(state.edited(AttributedString("你"), composing: false) == "你")
+        #expect(state.shown("你").runs.first?.font == NoteEditor.titleFont)
+    }
+
+    @Test func aNoteShowsItsOwnTitle() {
+        let notes = NotesApp()
+        #expect(!notes.appearance(of: notes.create()).showsTitle)
+    }
+
     @Test func notesComeBackAfterARelaunch() throws {
         let notes = NotesApp()
         let a = notes.create()
@@ -87,10 +122,8 @@ struct WebAppTests {
         web.open(" en.wikipedia.org/wiki/Sea_turtle\n", in: item)
         #expect(web.url(of: item)?.absoluteString == "https://en.wikipedia.org/wiki/Sea_turtle")
         #expect(web.title(of: item) == "en.wikipedia.org")
-        #expect(web.appearance(of: item).symbol == "safari.fill")
         web.open("http://youtu.be/aqz-KE-bpKQ", in: item)
         #expect(web.url(of: item)?.absoluteString == "http://youtu.be/aqz-KE-bpKQ")
-        #expect(web.appearance(of: item).symbol == "play.rectangle.fill")
 
         let restored = WebApp()
         restored.load(try #require(web.save()))

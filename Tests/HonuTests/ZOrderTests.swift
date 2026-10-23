@@ -11,7 +11,8 @@ struct ZOrderTests {
     @discardableResult
     private func add(_ x: CGFloat, _ y: CGFloat) -> Bubble {
         stage.add(
-            target: target, center: CGPoint(x: x, y: y), appearance: Appearance(closedSide: 100),
+            target: target, center: CGPoint(x: x, y: y),
+            appearance: Appearance(size: CGSize(width: 100, height: 100)),
             viewState: nil)
     }
 
@@ -27,7 +28,7 @@ struct ZOrderTests {
         #expect(
             cut.rect
                 == CGRect(x: 60 - gap, y: 30 - gap, width: 100 + 2 * gap, height: 100 + 2 * gap))
-        #expect(abs(cut.cornerRadius - (28 + gap)) < 0.001)
+        #expect(abs(cut.cornerRadius - (30 + gap)) < 0.001)
         // Nothing lies above the top one.
         #expect(StageView.cuts(of: 1, in: stage.bubbles).isEmpty)
     }
@@ -38,7 +39,7 @@ struct ZOrderTests {
         let swallowed = add(520, 300)
         stage.swallow(swallowed, into: CGPoint(x: 1100, y: 750))
         for frame in 0..<60 {
-            stage.step(time: Double(frame) / 60, dt: 1.0 / 60)
+            stage.step(dt: 1.0 / 60)
         }
         #expect(StageView.cuts(of: 0, in: stage.bubbles).isEmpty)
     }
@@ -56,15 +57,33 @@ struct ZOrderTests {
         #expect(abs(cut.rect.width - (100 + 2 * StageView.gap) / Bubble.doomedScale) < 0.001)
     }
 
+    @Test func cutsFollowTheOutlineOfAWobblingBubbleAbove() throws {
+        add(500, 300)
+        let cover = add(560, 330)
+        cover.velocity = CGPoint(x: 0, y: 600)
+        stage.step(dt: 1.0 / 60)
+        stage.step(dt: 1.0 / 60)
+        let outline = try #require(cover.drawnOutline(grownBy: StageView.gap))
+        let cut = try #require(StageView.cuts(of: 0, in: stage.bubbles).first)
+        let points = try #require(cut.outline)
+        // The cover's outline, moved into the lower bubble's own coordinates.
+        let below = stage.bubbles[0].drawnFrame
+        #expect(points.count == outline.count)
+        for (point, drawn) in zip(points, outline) {
+            #expect(abs(point.x - (drawn.x - below.minX)) < 0.001)
+            #expect(abs(point.y - (drawn.y - below.minY)) < 0.001)
+        }
+    }
+
     @Test func pressingABubbleBringsItToTheTop() throws {
         let shell = makeShell()
         let target = ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1))
         let below = shell.stage.add(
             target: target, center: CGPoint(x: 500, y: 300),
-            appearance: Appearance(closedSide: 100), viewState: nil)
+            appearance: Appearance(size: CGSize(width: 100, height: 100)), viewState: nil)
         shell.stage.add(
             target: target, center: CGPoint(x: 560, y: 330),
-            appearance: Appearance(closedSide: 100), viewState: nil)
+            appearance: Appearance(size: CGSize(width: 100, height: 100)), viewState: nil)
         shell.press(at: CGPoint(x: 470, y: 290))
         #expect(shell.stage.bubbles.last === below)
         #expect(StageView.cuts(of: 1, in: shell.stage.bubbles).isEmpty)

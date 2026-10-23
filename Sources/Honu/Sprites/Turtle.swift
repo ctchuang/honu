@@ -33,9 +33,9 @@ final class Turtle {
     private static let mouthSeconds: TimeInterval = 0.3
     /// Gap between the turtle and the corner of the screen.
     static let margin: CGFloat = 24
-    private static let hopSeconds: TimeInterval = 0.35
+    static let hopSeconds: TimeInterval = 0.35
     /// Height of a hop, in sprite pixels.
-    private static let hopPixels: Double = 3
+    static let hopPixels: Double = 3
     /// Idle bobs per second; the turtle rises one sprite pixel on every other one.
     private static let bobRate: Double = 1.5
 
@@ -73,8 +73,9 @@ final class Turtle {
         rest = origin
     }
 
-    func hop() {
-        hoppedAt = now()
+    /// Starts a hop at `time`.
+    func hop(at time: TimeInterval = now()) {
+        hoppedAt = time
     }
 
     /// Opens the mouth for a moment and returns where a bubble should come out.

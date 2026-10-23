@@ -149,3 +149,28 @@ struct ClaudeCodeTests {
         #expect(environment == ["HOME": "/h"])
     }
 }
+
+struct AnswerStreamTests {
+    @Test func cancellingStopsWhatFeedsTheStreamAndClosesIt() async throws {
+        let stream = AnswerStream()
+        stream.run { stream in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            stream.send(.failed("stopped"))
+        }
+        #expect(!stream.take().isClosed && !stream.isCancelled)
+
+        stream.cancel()
+        #expect(stream.isCancelled)
+        var events: [ClaudeEvent] = []
+        var isClosed = false
+        for _ in 0..<400 where !isClosed {
+            try await Task.sleep(for: .milliseconds(5))
+            let taken = stream.take()
+            events += taken.events
+            isClosed = taken.isClosed
+        }
+        #expect(isClosed && events == [.failed("stopped")])
+    }
+}

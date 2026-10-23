@@ -12,7 +12,9 @@ extension Shell {
         // A bubble still in the octopus when Honu quits counts as deleted.
         state.bubbles = stage.bubbles.filter { !$0.isSwallowed }.map {
             // Where it is going, so a bubble saved mid-flight comes back where it lands.
-            SavedBubble(target: $0.target, offset: $0.destination - center, isOpen: $0.isOpen)
+            SavedBubble(
+                target: $0.target, offset: $0.destination - center, size: $0.userSize,
+                isZoomed: $0.userSize == nil ? nil : $0.isZoomed)
         }
         for app in registry.apps {
             if let data = app.save(), let json = String(data: data, encoding: .utf8) {
@@ -39,7 +41,9 @@ extension Shell {
             guard let app = registry.app(saved.target.app) else { continue }
             let bubble = addBubble(
                 showing: saved.target.item, of: app, at: center + saved.offset, fresh: false)
-            bubble.isOpen = saved.isOpen
+            if let size = saved.size {
+                stage.setUserSize(of: bubble, to: size, zoomed: saved.isZoomed ?? false)
+            }
         }
         for app in registry.apps {
             for item in app.items where !stage.shows(ViewTarget(app: app.id, item: item)) {

@@ -27,6 +27,15 @@ struct AppSourceTests {
         #expect(AppSource.page(from: "I can't help with that.") == nil)
     }
 
+    @Test func tagsNamedBeforeThePageAreNotPartOfIt() {
+        let page = AppSource.page(
+            from: "Here is an <html> page with a <!DOCTYPE html> line:\n" + answer("Timer"))
+        #expect(page?.hasPrefix("<!doctype html>\n<html><head><title>Timer") == true)
+        // A page without a doctype starts at its <html>.
+        let bare = AppSource.page(from: "Writing <html>:\n<html><body>Hi</body></html>")
+        #expect(bare == "<html><body>Hi</body></html>")
+    }
+
     @Test func thePageSaysWhatItIsCalledHowBigItIsAndItsSymbol() throws {
         let page = try #require(AppSource.page(from: answer("Tea &amp; Toast")))
         #expect(
@@ -129,6 +138,43 @@ struct MakerTests {
         #expect(Bridge.fetchable("honu-app://A1/data.json") == nil)
     }
 
+    @Test func aPageSavesAndLoadsItsOwnState() async throws {
+        let bridge = Bridge(dataURL: root.appending(path: "instances/A.json"))
+        let nothing = await bridge.reply(to: ["op": "load"])
+        #expect(nothing.0 is NSNull && nothing.1 == nil, "loaded state never saved")
+        let saved = await bridge.reply(to: ["op": "save", "state": #"{"n":1}"#])
+        #expect(saved.0 == nil && saved.1 == nil)
+        let loaded = await bridge.reply(to: ["op": "load"])
+        #expect(loaded.0 as? String == #"{"n":1}"#)
+
+        // Where nothing can be written, saving says why.
+        let stuck = Bridge(dataURL: URL(filePath: "/dev/null/instances/A.json"))
+        #expect(await stuck.reply(to: ["op": "save", "state": "1"]).1 != nil)
+    }
+
+    @Test func aPageAsksForWhatTheBridgeKnows() async {
+        var sizes: [CGSize] = []
+        let bridge = Bridge(dataURL: root.appending(path: "A.json"), onResize: { sizes.append($0) })
+        let resized = await bridge.reply(to: ["op": "resize", "width": 320.0, "height": 240.0])
+        #expect(resized.1 == nil && sizes == [CGSize(width: 320, height: 240)])
+        let unsized = await bridge.reply(to: ["op": "resize", "width": "wide"])
+        #expect(unsized.1 == "honu.resize takes a width and a height")
+        #expect(sizes.count == 1)
+
+        let local = await bridge.reply(to: ["op": "fetch", "url": "file:///etc/passwd"])
+        #expect(local.1 == "Only http and https URLs can be fetched")
+        #expect(await bridge.reply(to: ["op": "delete"]).1 == "Unknown request")
+        #expect(await bridge.reply(to: [:]).1 == "Unknown request")
+    }
+
+    @Test func errorsThePageReportsAreKeptShort() {
+        let rejection = Bridge.problem(from: ["kind": "rejection", "message": "boom"])
+        #expect(rejection == "rejection: boom")
+        #expect(Bridge.problem(from: [:]) == "error: ")
+        let long = Bridge.problem(from: ["message": String(repeating: "x", count: 5000)])
+        #expect(long.count == Bridge.problemLimit && long.hasPrefix("error: x"))
+    }
+
     @Test func claudeMakesTheMicroappDescribedAndItRisesOnceLoaded() throws {
         let maker = app()
         let item = maker.create()
@@ -147,17 +193,19 @@ struct MakerTests {
         #expect(update(maker).isEmpty)
         #expect(microapp.written.contains("Pomodoro"))
         claude.streams[0].send(.done)
-        #expect(update(maker).isEmpty, "rose before the page loaded")
+        let target = ViewTarget(app: maker.id, item: item)
+        // The first page drops the size given to the description, and does
+        // not rise before it loads.
+        #expect(update(maker) == [.resetSize(target)])
         #expect(microapp.status == .running)
         #expect(!maker.isBusy(item))
         #expect(microapp.folder.page()?.hasPrefix("<!doctype html>") == true)
         #expect(maker.title(of: item) == "Pomodoro")
-        #expect(maker.appearance(of: item).symbol == "timer")
+        #expect(MakerApp.symbol(of: microapp) == "timer")
         #expect(
-            maker.appearance(of: item).panelSize
+            maker.appearance(of: item).size
                 == CGSize(width: 300, height: 400) + MakerApp.chrome)
 
-        let target = ViewTarget(app: maker.id, item: item)
         maker.loaded(item)
         #expect(update(maker) == [.motion(target, .rise)])
         maker.loaded(item)
@@ -268,6 +316,62 @@ struct MakerTests {
         #expect(microapp.problems.count == 1)
     }
 
+    @Test func onlyARunningPageReportsErrorsAndOnlyAFewOfThem() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        for n in 0..<(GeneratedApp.maxProblems + 5) {
+            microapp.report("error \(n)", at: 100)
+        }
+        #expect(microapp.problems.count == GeneratedApp.maxProblems)
+        #expect(microapp.problems.last == "error \(GeneratedApp.maxProblems - 1)")
+
+        // While Claude writes the fix, the old page's errors are not kept.
+        _ = microapp.poll(claude, at: 100 + GeneratedApp.fixDelay)
+        #expect(microapp.status == .writing(.fixing))
+        microapp.report("error: late", at: 102)
+        #expect(!microapp.problems.contains("error: late"))
+    }
+
+    @Test func revertingClearsTheNoticeAndWaitsForTheUserToFix() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        claude.streams[1].send(.text(answer("Blue Clock")))
+        claude.streams[1].send(.done)
+        _ = update(maker)
+        microapp.draft = "make it red"
+        maker.change(item)
+        claude.streams[2].send(.failed("Rate limited."))
+        _ = update(maker)
+        #expect(microapp.notice != nil)
+
+        maker.revert(item)
+        #expect(microapp.notice == nil)
+        #expect(maker.title(of: item) == "Clock")
+        // Errors as the page it went back to starts are not fixed without asking.
+        _ = microapp.loaded(at: 100)
+        microapp.report("error: x is not defined", at: 100)
+        _ = microapp.poll(claude, at: 100 + GeneratedApp.fixDelay + 1)
+        #expect(claude.requests.count == 3)
+        #expect(microapp.status == .running)
+    }
+
+    @Test func aTileTakesTheSymbolThePageNamesIfItExists() {
+        let maker = app()
+        let named = made(maker, "a clock", answer("Clock", symbol: "clock"))
+        let unknown = made(maker, "a timer", answer("Timer", symbol: "no.such.symbol"))
+        let unnamed = made(
+            maker, "a list",
+            "<!doctype html><html><head><title>List</title></head><body></body></html>")
+        let symbols = [named, unknown, unnamed].map {
+            maker.microapp(of: $0).map(MakerApp.symbol(of:))
+        }
+        #expect(symbols == ["clock", MakerApp.defaultSymbol, MakerApp.defaultSymbol])
+    }
+
     @Test func microappsComeBackAfterARelaunch() throws {
         let maker = app()
         let clock = made(maker, "a clock", answer("Clock"))
@@ -298,25 +402,31 @@ struct MakerTests {
         #expect(back.folder.page() != nil)
     }
 
-    @Test func microappsSavedBeforeInstancesComeBackWithTheirData() throws {
-        let folder = AppFolder(url: root.appending(path: UUID().uuidString))
-        try folder.write(answer("Clock"))
-        try Data(#"{"alarm":7}"#.utf8).write(to: folder.oldDataURL)
-        let old = """
-            [{"id":{"rawValue":3},"folder":"\(folder.name)","description":"a clock","draft":"",\
-            "width":500,"height":600}]
-            """
-
+    @Test func aPageCutShortByQuittingLeavesThePageBeforeRunning() throws {
         let maker = app()
-        maker.load(Data(old.utf8))
-        #expect(maker.items == [ItemID(rawValue: 3)])
-        let instance = try #require(maker.instances[ItemID(rawValue: 3)])
-        #expect(instance.app.description == "a clock")
-        #expect(instance.size == CGSize(width: 500, height: 600))
-        #expect(maker.library.count == 1)
-        #expect(!FileManager.default.fileExists(atPath: folder.oldDataURL.path()))
-        #expect(try String(contentsOf: instance.dataURL, encoding: .utf8) == #"{"alarm":7}"#)
-        #expect(maker.create() == ItemID(rawValue: 4))
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        #expect(microapp.status == .writing(.changing))
+
+        let restored = app()
+        restored.load(try #require(maker.save()))
+        let back = try #require(restored.microapp(of: item))
+        #expect(back.status == .running)
+        #expect(back.notice == "Honu quit before Claude finished the page.")
+        #expect(back.draft == "make it blue")
+        #expect(restored.title(of: item) == "Clock")
+        #expect(restored.library.map { $0 === back } == [true])
+
+        // A fix cut short, too.
+        back.report("error: x is not defined", at: 100)
+        restored.fix(item)
+        #expect(back.status == .writing(.fixing))
+        let again = app()
+        again.load(try #require(restored.save()))
+        #expect(again.microapp(of: item)?.status == .running)
+        #expect(again.microapp(of: item)?.notice == "Honu quit before Claude finished the page.")
     }
 
     @Test func whatNoInstanceSavedIsDeletedOnLoad() throws {
@@ -455,6 +565,49 @@ struct MakerTests {
         #expect(restored.items.isEmpty)
         #expect(restored.library.map(\.description) == ["a clock"])
         #expect(FileManager.default.fileExists(atPath: instance.app.folder.url.path()))
+    }
+
+    @Test func aNewPageDropsTheSizeTheOldOneAskedFor() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock", size: "300x400"))
+        let other = try #require(maker.launch(maker.library[0].folder.name))
+        let instance = try #require(maker.instances[item])
+        maker.resize(item, to: CGSize(width: 500, height: 600))
+        #expect(instance.size == CGSize(width: 500, height: 600))
+        #expect(maker.instances[other]?.size == CGSize(width: 300, height: 400))
+
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        claude.streams[1].send(.text(answer("Blue Clock", size: "320x240")))
+        claude.streams[1].send(.done)
+        _ = update(maker)
+        #expect(instance.size == CGSize(width: 320, height: 240))
+
+        maker.resize(item, to: CGSize(width: 700, height: 500))
+        maker.revert(item)
+        #expect(instance.size == CGSize(width: 300, height: 400), "kept a size across a revert")
+    }
+
+    @Test func deletingAMicroappStopsClaudeWritingIt() throws {
+        let maker = app()
+        let unmade = maker.create()
+        maker.microapp(of: unmade)!.draft = "a clock"
+        maker.make(unmade)
+        maker.remove(unmade)
+        #expect(claude.streams[0].isCancelled)
+
+        // An installed one goes on being changed while an instance is left.
+        let item = made(maker, "a timer", answer("Timer"))
+        let other = try #require(maker.launch(maker.library[0].folder.name))
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        maker.remove(item)
+        maker.remove(other)
+        #expect(!claude.streams[2].isCancelled && microapp.isBusy)
+        maker.uninstall(microapp.folder.name)
+        #expect(claude.streams[2].isCancelled)
     }
 
     @Test func aMicroappNeverMadeGoesToTheTrashWithItsBubble() throws {

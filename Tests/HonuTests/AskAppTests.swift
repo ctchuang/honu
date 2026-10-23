@@ -123,21 +123,24 @@ struct AskAppTests {
         #expect(fresh.focusDue(after: 0) && !fresh.focusDue(after: 0))
     }
 
-    @Test func thePanelGrowsWithTheAnswerUpToALimit() {
+    @Test func theBubbleGrowsWithTheAnswerUpToALimit() {
         let asks = app()
         let item = asks.create()
-        #expect(asks.appearance(of: item).panelSize.height == AskApp.startHeight)
+        #expect(asks.appearance(of: item).size.height == AskApp.startHeight)
         asks.chats[item]?.contentHeight = 300
-        #expect(asks.appearance(of: item).panelSize.height == 300 + AskApp.chromeHeight)
+        #expect(asks.appearance(of: item).size.height == 300 + AskApp.chromeHeight)
         asks.chats[item]?.contentHeight = 5000
-        #expect(asks.appearance(of: item).panelSize.height == AskApp.maxHeight)
+        #expect(asks.appearance(of: item).size.height == AskApp.maxHeight)
     }
 
     @Test func deletingAChatStopsItsAnswer() {
         let asks = app()
         let item = ask(asks, "Why?")
+        let kept = ask(asks, "Why not?")
         asks.remove(item)
-        #expect(asks.items.isEmpty)
+        #expect(asks.items == [kept])
+        #expect(claude.streams[0].isCancelled)
+        #expect(!claude.streams[1].isCancelled && asks.isBusy(kept))
         #expect(update(asks).isEmpty)
     }
 }

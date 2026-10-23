@@ -174,7 +174,7 @@ final class Shell {
     }
 
     /// Starts a new item in microapp `id` and has the turtle spit out a
-    /// bubble showing it, which opens into its panel when it lands.
+    /// bubble showing it.
     func start(_ id: AppID) {
         guard let app = registry.app(id) else { return }
         spit(app.create(), of: app)
@@ -188,16 +188,17 @@ final class Shell {
     }
 
     /// Has the turtle spit out a bubble showing `item`, just made, which
-    /// opens into its panel when it lands and takes what is typed until then.
+    /// takes what is typed until its field has the focus.
     private func spit(_ item: ItemID, of app: any MicroApp) {
         let bubble = addBubble(showing: item, of: app, at: turtle.center, fresh: true)
-        stage.spitPanel(bubble, from: turtle.spit())
+        stage.spit(bubble, from: turtle.spit())
         typeAheadTarget = bubble.id
     }
 
     /// Adds a bubble at `center` showing `item` of `app`, looking the way
     /// `app` says, with a view state of its own. A `fresh` item, just
     /// created, may take the focus.
+    @discardableResult
     func addBubble(
         showing item: ItemID, of app: any MicroApp, at center: CGPoint, fresh: Bool
     ) -> Bubble {
@@ -237,8 +238,8 @@ final class Shell {
         return manager
     }
 
-    /// Any press on a bubble brings it to the front, including presses on an
-    /// open bubble's content, which SwiftUI's gestures never see.
+    /// Any press on a bubble brings it to the front, including presses on a
+    /// bubble's content, which SwiftUI's gestures never see.
     func press(at point: CGPoint) {
         if case .bubble(let bubble) = hit(point) {
             stage.raise(bubble)
@@ -261,7 +262,32 @@ final class Shell {
         octopus.summon(summoned, turtle: turtle.center)
     }
 
+    /// Drags `bubble`, picked up at `start`: from its rim, resizing it,
+    /// otherwise moving it. A drag goes on doing what it started doing.
+    func dragBubble(
+        _ bubble: Bubble, from start: CGPoint, by translation: CGSize, velocity: CGSize,
+        pointer: CGPoint
+    ) {
+        if !stage.isDragging, !stage.isResizing {
+            let edges = bubble.rimEdges(at: start)
+            if !edges.isEmpty {
+                stage.startResize(bubble, edges: edges)
+            }
+        }
+        if stage.isResizing {
+            resizeBubble(bubble, edges: [], by: translation)
+        } else {
+            dragBubble(bubble, by: translation, velocity: velocity, pointer: pointer)
+        }
+    }
+
+    /// Lets go of the bubble being dragged: one being resized keeps its new
+    /// size, and one being moved over the octopus is deleted.
     func endBubbleDrag(pointer: CGPoint) {
+        if stage.isResizing {
+            endBubbleResize()
+            return
+        }
         let doomed = octopus.inReach(pointer)
         octopus.isEager = false
         guard let (bubble, home) = stage.endDrag() else { return }
@@ -271,6 +297,30 @@ final class Shell {
             stage.swallow(bubble, into: octopus.mouth)
         }
         octopus.summon(false, turtle: turtle.center)
+    }
+
+    /// Resizes `bubble` by moving its `edges` `translation` away from where
+    /// they were when the resize started, starting it if it is not yet.
+    func resizeBubble(_ bubble: Bubble, edges: Edges, by translation: CGSize) {
+        if !stage.isResizing {
+            stage.startResize(bubble, edges: edges)
+        }
+        stage.resized(by: translation)
+    }
+
+    /// Stops resizing; the bubble keeps its new size, which is saved.
+    func endBubbleResize() {
+        if stage.endResize() != nil {
+            autosave.moved()
+        }
+    }
+
+    /// Zooms `bubble` between the size the user resized it to and its
+    /// microapp's, as double-clicking a window's title bar zooms it.
+    func zoom(_ bubble: Bubble) {
+        if stage.zoom(bubble) {
+            autosave.moved()
+        }
     }
 
     /// Drags launcher `tile`, picked up at `start`, with the pointer now at
@@ -320,7 +370,7 @@ final class Shell {
     /// the launcher, and the octopus swallows it with every bubble of it,
     /// keeping them for a while in case the user takes it back.
     func uninstall(_ name: String, at time: TimeInterval = now()) {
-        guard let microapp = maker.library.first(where: { $0.folder.name == name }) else { return }
+        guard let microapp = maker.installed(named: name) else { return }
         maker.withdraw(name)
         let targets = Set(maker.items(of: microapp).map { ViewTarget(app: maker.id, item: $0) })
         var morsels: [Octopus.Swallowed.Morsel] = []
@@ -354,7 +404,7 @@ final class Shell {
         let dt = min(time - (lastTick ?? time), 1.0 / 30)
         lastTick = time
         updateApps()
-        stage.step(time: time, dt: dt)
+        stage.step(dt: dt)
         if let swallowed = swallowedTile, time - swallowed.start >= swallowed.flight.seconds {
             swallowedTile = nil
         }
@@ -373,14 +423,22 @@ final class Shell {
     }
 
     /// Lets the microapps catch up, shows on each bubble what its item is
-    /// doing (it breathes while busy, and an open panel takes the size its
-    /// microapp asks for), and plays the motions they ask for.
+    /// doing (it breathes while busy, and takes the size its microapp asks
+    /// for, unless the user resized it), and plays the motions and drops the
+    /// sizes they ask for.
     private func updateApps() {
         for effect in registry.update() {
             switch effect {
             case .motion(let target, let motion):
                 for bubble in stage.bubbles where bubble.target == target {
                     bubble.play(motion)
+                }
+            case .resetSize(let target):
+                for bubble in stage.bubbles where bubble.target == target {
+                    withAnimation(.smooth(duration: 0.25)) {
+                        bubble.userSize = nil
+                        bubble.isZoomed = false
+                    }
                 }
             }
         }
@@ -389,10 +447,12 @@ final class Shell {
             if bubble.isBusy != busy {
                 bubble.isBusy = busy
             }
-            if let size = registry.appearance(of: bubble.target)?.panelSize,
-                size != bubble.panelSize
-            {
-                withAnimation(.smooth(duration: 0.25)) { bubble.panelSize = size }
+            guard let appearance = registry.appearance(of: bubble.target) else { continue }
+            if appearance.size != bubble.microappSize {
+                withAnimation(.smooth(duration: 0.25)) { bubble.microappSize = appearance.size }
+            }
+            if appearance.minSize != bubble.minSize {
+                bubble.minSize = appearance.minSize
             }
         }
     }

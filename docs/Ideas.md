@@ -40,11 +40,11 @@ from the model and handle them with deterministic code.
 
 Each item is one symbol, such as `AAPL`.
 
-- **Closed:** the symbol, the last price, and the change since the previous close. The
-  bubble's color follows the change. Up and down colors are a setting: US convention is
-  green for up, while Taiwan and other East Asian markets use red for up.
-- **Open:** today's price as a sparkline, the day's range, the time of the last trade,
-  and the item's thesis, if it has one (see Context).
+- **The bubble:** the symbol, the last price, and the change since the previous close,
+  over today's price as a sparkline, the day's range, the time of the last trade, and
+  the item's thesis, if it has one (see Context). The bubble's color follows the change.
+  Up and down colors are a setting: US convention is green for up, while Taiwan and
+  other East Asian markets use red for up.
 - **Alerts:** the user sets price levels. Crossing one makes the bubble wobble and come
   to the front.
 - **Status through motion:** a bubble could breathe faster when the price moves

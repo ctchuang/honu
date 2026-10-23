@@ -3,7 +3,9 @@
 A PRD for how Honu looks and behaves: the principles every part of the UI
 follows, and the behavior that comes from them. Changes to the UI should
 keep to it; a change that departs from it updates this document first.
-The launcher's own design is in `Launcher.md`.
+The launcher's own design is in `Launcher.md`, resizing bubbles in
+`Resizing.md`, jelly bubbles in `Jelly.md`, and each built-in microapp's in `microapps/` (`Note.md`,
+`WebPage.md`).
 
 ## Vision
 
@@ -38,8 +40,10 @@ stays small while what it can do grows.
    such as Exit, sits in the turtle's right-click menu, off the main
    surface.
 4. **Bubbles are physical.** A bubble is Liquid Glass with weight: it can
-   be thrown and glides to a stop, idle bubbles drift, crowded ones push
-   each other apart, and they bounce off the screen edges. The bubble
+   be thrown and glides to a stop, crowded ones push each other apart,
+   and they bounce off the screen edges. It is soft, too: it squashes,
+   stretches, and wobbles like cartoon jelly, what it shows and all, and
+   springs back into shape. Left alone, a bubble stays where it is put. The bubble
    pressed last comes to the top and covers the others completely.
 5. **Status shows through motion.** A bubble breathes while busy, rises
    once when something finishes, and wobbles when it needs the user.
@@ -83,14 +87,28 @@ behind every other window.
 | Click another app, or switch to it | Honu goes behind every window. |
 | Click where Honu shows nothing | The click goes to whatever is below; if that is another app, Honu goes back. |
 
-**Launcher.** A glass panel of microapps: Note, Web Page, each installed
-microapp, and **+** for a new one. See `Launcher.md`.
+**Launcher.** A glass panel of microapps: Note, each installed microapp,
+and **+** for a new one; Web Page is left off for now, as Ask AI is. See
+`Launcher.md`.
 
 **Bubbles.** Each shows one item: a note, a web page, or an instance of a
-microapp. Closed, a bubble shows its title or symbol; double-clicking it
-opens it into a panel, and double-clicking the title closes it again. A
-new bubble flies out of the turtle and opens on landing, and text typed
-before its field has the focus goes into it.
+microapp, under its title (or, as a note does, with the title in its
+content). There is one kind of bubble: it never shrinks into an icon or
+closes, and it leaves only through the octopus. A new
+bubble flies out of the turtle, growing on the way, and text typed
+before its field has the focus goes into it. A bubble starts at the size
+its microapp asks for; once the user resizes it, it keeps the user's
+size, across launches too. See `Resizing.md`. It is jelly: it flattens
+against an edge it hits, trails behind the pointer and stretches when
+moved fast, splats when it lands, and wobbles back into shape within
+about a second, its content squashing along. See `Jelly.md`.
+
+| Input | Result |
+|---|---|
+| Drag the title | Moves it; let go while moving, it glides on. |
+| Drag the rim (the glass around the content), or a corner | Resizes it, as a window: the opposite edge stays put, and the bubbles it grows into are pushed aside. The pointer shows the system's resize cursor there. |
+| Double-click the title | Zooms it, as a window: from the size the user chose to the size its microapp asks for, and back. |
+| Press anywhere on it | Brings it to the top, over every other bubble. |
 
 **Octopus.** Rises from the bottom corner away from the turtle once a
 bubble is dragged a little way, or a microapp is dragged out of
@@ -108,9 +126,6 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
 
 ## Open questions
 
-- Whether bubbles keep their closed (minimized) form: double-clicking
-  shrinks a bubble, which can be annoying.
-- Resizing bubbles by hand.
 - Reaching Honu when its windows are all covered: the Dock icon and ⌘Tab
   work, but the turtle could instead stay on top, in a small window of
   its own.
@@ -127,3 +142,14 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
 2. The turtle shows covered bubbles' status (not done): what it does
    when one or many bubbles out of sight finish or need the user is yet
    to be designed.
+3. One kind of bubble (done): bubbles no longer close into an icon,
+   and double-clicking the title did nothing until `Resizing.md` gave
+   it a meaning, zooming. `Bubble` loses `isOpen` and its icon size, along with
+   the morph between bubble and icon (`Stage.toggle`) and opening on landing
+   (`openOnLanding`); `Appearance` loses `closedSide`, and its
+   `panelSize` becomes `size`. A store saved
+   with bubbles shrunk into icons brings them back as any other. The idle float
+   goes, so bubbles stay where they are put; collisions treat every
+   bubble as a rectangle with rounded corners. The flight out of the
+   turtle and the shrinking over the octopus stay, and so does
+   `honu-symbol`, for the launcher's tiles.

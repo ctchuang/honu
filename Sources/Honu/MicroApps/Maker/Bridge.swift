@@ -3,7 +3,7 @@ import WebKit
 
 /// The Swift side of `window.honu`, what a microapp's page can ask of Honu:
 /// to load and save its state in its data file, to fetch from
-/// the web without the page's CORS limits, and to resize its panel. It also
+/// the web without the page's CORS limits, and to resize its bubble. It also
 /// hears of the page's errors.
 @MainActor
 final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHandler {
@@ -50,6 +50,12 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
         guard message.frameInfo.isMainFrame, let body = message.body as? [String: Any] else {
             return (nil, "Not allowed")
         }
+        return await reply(to: body)
+    }
+
+    /// What to answer the request `body` with: a value for the page, or why
+    /// it failed.
+    func reply(to body: [String: Any]) async -> (Any?, String?) {
         switch body["op"] as? String {
         case "load":
             guard let data = try? Data(contentsOf: dataURL) else { return (NSNull(), nil) }
@@ -80,8 +86,14 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHa
         _ controller: WKUserContentController, didReceive message: WKScriptMessage
     ) {
         guard let body = message.body as? [String: Any] else { return }
+        onProblem(Self.problem(from: body))
+    }
+
+    /// The error the page reported in `body`, as kept: its kind and message,
+    /// cut to `problemLimit`.
+    static func problem(from body: [String: Any]) -> String {
         let problem = "\(body["kind"] ?? "error"): \(body["message"] ?? "")"
-        onProblem(String(problem.prefix(Self.problemLimit)))
+        return String(problem.prefix(problemLimit))
     }
 
     /// What `honu.fetch` may fetch: http and https URLs only.

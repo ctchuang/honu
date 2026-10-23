@@ -7,17 +7,13 @@ import Testing
 struct PersistenceTests {
     private let size = CGSize(width: 1200, height: 800)
 
-    private func notes(_ shell: Shell) -> NotesApp {
-        shell.registry.app(AppID("notes")) as! NotesApp
-    }
-
     @Test func bubblesAndItemsComeBackInPlace() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(size: size, storeURL: url)
         shell.turtle.move(to: CGPoint(x: 500, y: 400))
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.first)
-        notes(shell).setText("Groceries\nmilk", of: bubble.target.item)
+        shell.notes.setText("Groceries\nmilk", of: bubble.target.item)
         shell.save()
 
         // On a screen 200 points wider and taller, everything moves with its center.
@@ -28,10 +24,68 @@ struct PersistenceTests {
         #expect(back.target == bubble.target)
         #expect(
             back.center == CGPoint(x: bubble.destination.x + 100, y: bubble.destination.y + 100))
-        #expect(notes(restored).notes[back.target.item] == "Groceries\nmilk")
+        #expect(restored.notes.notes[back.target.item] == "Groceries\nmilk")
         #expect(restored.turtle.origin == CGPoint(x: 600, y: 500))
         // A restored note does not grab the focus.
         #expect((back.viewState as? NoteViewState)?.focusPending == false)
+    }
+
+    @Test func sizesTheUserChoseComeBackZoomedOrNot() throws {
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
+        let widened = shell.addNote(at: CGPoint(x: 400, y: 400))
+        let zoomed = shell.addNote(at: CGPoint(x: 800, y: 400))
+        for bubble in [widened, zoomed] {
+            shell.resizeBubble(bubble, edges: .right, by: CGSize(width: 60, height: 0))
+            shell.endBubbleResize()
+        }
+        shell.zoom(zoomed)
+        let chosen = CGSize(width: Appearance().size.width + 60, height: Appearance().size.height)
+        shell.save()
+
+        let restored = makeShell(size: size, storeURL: url)
+        let (wide, zoomedBack) = (restored.stage.bubbles[0], restored.stage.bubbles[1])
+        #expect(wide.userSize == chosen && !wide.isZoomed && wide.size == chosen)
+        #expect(zoomedBack.userSize == chosen && zoomedBack.isZoomed)
+        #expect(zoomedBack.size == Appearance().size)
+        // Zooming back works after a relaunch too.
+        restored.zoom(zoomedBack)
+        #expect(zoomedBack.size == chosen)
+    }
+
+    @Test func aSavedSizeFitsTheScreenOfTheLaunch() throws {
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
+        let bubble = shell.addNote(at: CGPoint(x: 600, y: 400))
+        shell.resizeBubble(bubble, edges: .bottomRight, by: CGSize(width: 500, height: 300))
+        shell.endBubbleResize()
+        shell.save()
+
+        #expect(bubble.size == CGSize(width: 774, height: 534))
+
+        // On a narrower screen, it gets narrower to fit, and stays on it.
+        let smaller = CGSize(width: 800, height: 800)
+        let back = try #require(makeShell(size: smaller, storeURL: url).stage.bubbles.first)
+        #expect(back.size == CGSize(width: 800 - 32, height: 534))
+        #expect(back.frame.minX == 16 && back.frame.maxX == 784)
+    }
+
+    @Test func bubblesSavedClosedComeBackAsAnyOther() throws {
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
+        shell.start(AppID("notes"))
+        shell.save()
+        // A store from when bubbles could close into an icon says whether each was open.
+        var state = try #require(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let bubbles = try #require(state["bubbles"] as? [[String: Any]])
+        state["bubbles"] = bubbles.map { $0.merging(["isOpen": false]) { $1 } }
+        try JSONSerialization.data(withJSONObject: state).write(to: url)
+
+        let restored = makeShell(size: size, storeURL: url)
+        let back = try #require(restored.stage.bubbles.first)
+        #expect(back.size == Appearance().size && back.userSize == nil)
+        #expect(restored.content(of: back) != nil)
     }
 
     @Test func showingOnAllDesktopsComesBack() throws {
@@ -57,24 +111,40 @@ struct PersistenceTests {
         #expect(restored.isOnAllDesktops)
     }
 
+    @Test func bubblesOfItemsNoLongerThereDoNotComeBack() throws {
+        let url = temporaryStoreURL()
+        let notes = NotesApp()
+        let kept = notes.create()
+        notes.setText("kept", of: kept)
+        let bubble = { (app: String, item: ItemID) in
+            SavedBubble(target: ViewTarget(app: AppID(app), item: item), offset: .zero)
+        }
+        var state = SavedState()
+        state.apps["notes"] = String(decoding: try #require(notes.save()), as: UTF8.self)
+        // A note that is gone, and a microapp Honu no longer has.
+        state.bubbles = [
+            bubble("notes", ItemID(rawValue: 99)), bubble("notes", kept), bubble("gone", kept),
+        ]
+        Autosave(url: url).save(state)
+
+        let shell = makeShell(size: size, storeURL: url)
+        #expect(shell.stage.bubbles.map(\.target) == [ViewTarget(app: AppID("notes"), item: kept)])
+        #expect(shell.notes.items == [kept] && shell.notes.notes[kept] == "kept")
+    }
+
     @Test func swallowedBubblesAndTheirItemsCountAsDeleted() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(size: size, storeURL: url)
         shell.start(AppID("notes"))
         shell.start(AppID("notes"))
         let doomed = try #require(shell.stage.bubbles.first)
-        // Drag it onto the octopus, which comes up once it has moved a little way.
-        shell.dragBubble(doomed, by: CGSize(width: 60, height: 0), pointer: doomed.center)
-        let mouth = shell.octopus.middle
-        shell.dragBubble(doomed, by: CGSize(width: 60, height: 0), pointer: mouth)
-        #expect(doomed.isDoomed)
-        shell.endBubbleDrag(pointer: mouth)
+        shell.drop(doomed)
         #expect(doomed.isSwallowed && shell.octopus.canUndo)
         shell.save()
 
         let restored = makeShell(size: size, storeURL: url)
         #expect(restored.stage.bubbles.count == 1)
-        #expect(notes(restored).items.count == 1, "kept the swallowed bubble's note")
+        #expect(restored.notes.items.count == 1, "kept the swallowed bubble's note")
         #expect(!restored.stage.shows(doomed.target))
     }
 
@@ -90,7 +160,7 @@ struct PersistenceTests {
         #expect(!FileManager.default.fileExists(atPath: url.path()), "wrote with nothing changed")
 
         let bubble = try #require(shell.stage.bubbles.first)
-        notes(shell).setText("changed", of: bubble.target.item)
+        shell.notes.setText("changed", of: bubble.target.item)
         shell.save()
         #expect(FileManager.default.fileExists(atPath: url.path()))
     }
@@ -99,10 +169,7 @@ struct PersistenceTests {
         let shell = makeShell(size: size)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.first)
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: bubble.center)
-        let mouth = shell.octopus.middle
-        shell.dragBubble(bubble, by: CGSize(width: 60, height: 0), pointer: mouth)
-        shell.endBubbleDrag(pointer: mouth)
+        shell.drop(bubble)
         shell.undoDelete()
         #expect(!bubble.isSwallowed && !shell.octopus.canUndo)
         #expect(shell.stage.bubbles.last === bubble)
@@ -110,13 +177,13 @@ struct PersistenceTests {
 }
 
 @MainActor
-struct AutosaveDriftTests {
-    @Test func driftingIsNotAChangeButDraggingIs() throws {
+struct AutosaveMoveTests {
+    @Test func movingByItselfIsNotAChangeButDraggingIs() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(storeURL: url)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.first)
-        // Let it land, open, and be saved.
+        // Let it land and be saved.
         for frame in 0...120 {
             shell.tick(at: 1000 + Double(frame) / 60)
         }
@@ -125,7 +192,7 @@ struct AutosaveDriftTests {
 
         bubble.center.x += 3
         shell.save()
-        #expect(!FileManager.default.fileExists(atPath: url.path()), "saved a drift")
+        #expect(!FileManager.default.fileExists(atPath: url.path()), "saved a push")
 
         shell.dragBubble(bubble, by: CGSize(width: 100, height: 0), pointer: bubble.center)
         shell.endBubbleDrag(pointer: bubble.center)

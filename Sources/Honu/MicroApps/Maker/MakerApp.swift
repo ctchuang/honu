@@ -18,14 +18,14 @@ final class MakerApp: MicroApp {
 
     /// The label of a microapp not yet described.
     static let emptyLabel = "Microapp"
-    /// The closed bubble's symbol when the page names none, or none that exists.
+    /// The tile's symbol when the page names none, or none that exists.
     static let defaultSymbol = "sparkles"
     /// The size of a page that says nothing of its size.
     static let defaultPageSize = CGSize(width: 360, height: 480)
-    /// The panel while asking for a description, and while the page is written.
+    /// The bubble's size while asking for a description, and while the page is written.
     static let describingSize = CGSize(width: 420, height: 190)
     static let writingSize = CGSize(width: 440, height: 320)
-    /// Panel size not taken by the page: the title bar, margins, and the bar
+    /// The bubble's size not taken by the page: the title bar, margins, and the bar
     /// for asking for changes.
     static let chrome = CGSize(width: 20, height: 46 + ChangeBar.height)
 
@@ -68,6 +68,11 @@ final class MakerApp: MicroApp {
         apps.filter { $0.hasPage && !withdrawn.contains($0.folder.name) }
     }
 
+    /// The installed microapp whose folder is named `name`.
+    func installed(named name: String) -> GeneratedApp? {
+        library.first { $0.folder.name == name }
+    }
+
     /// The microapp `item` runs.
     func microapp(of item: ItemID) -> GeneratedApp? {
         instances[item]?.app
@@ -89,21 +94,21 @@ final class MakerApp: MicroApp {
     /// Starts a new instance of the installed microapp whose folder is
     /// named `name`, its page running at once.
     func launch(_ name: String) -> ItemID? {
-        guard let microapp = library.first(where: { $0.folder.name == name }) else { return nil }
+        guard let microapp = installed(named: name) else { return nil }
         return instances.insert(Instance(app: microapp))
     }
 
     func appearance(of item: ItemID) -> Appearance {
         guard let instance = instances[item] else { return Appearance() }
-        let microapp = instance.app
-        let panel: CGSize =
-            switch microapp.status {
-            case .describing: Self.describingSize
-            case .writing(.making): Self.writingSize
-            case .writing, .running:
-                (instance.size ?? Self.defaultPageSize) + Self.chrome
-            }
-        return Appearance(symbol: Self.symbol(of: microapp), panelSize: panel)
+        switch instance.app.status {
+        case .describing: return Appearance(size: Self.describingSize)
+        case .writing(.making): return Appearance(size: Self.writingSize)
+        case .writing, .running:
+            // A page is never smaller than pages may ask to be.
+            return Appearance(
+                size: (instance.size ?? Self.defaultPageSize) + Self.chrome,
+                minSize: AppSource.minSize + Self.chrome)
+        }
     }
 
     /// The SF Symbol of `microapp`: the one its page names, if it exists.
@@ -131,12 +136,21 @@ final class MakerApp: MicroApp {
 
     /// Takes in what Claude has written, and fixes pages' errors when due.
     /// The bubbles of every instance of a microapp wobble when writing it
-    /// fails, and rise when its new page has loaded.
+    /// fails, and rise when its new page has loaded. A bubble resized while
+    /// it asked for a description takes the first page's size, since the
+    /// size given to the description says nothing about the page.
     func update(_ context: Context) {
         let time = now()
-        for microapp in apps where microapp.poll(services.claude, at: time) == .needsAttention {
+        for microapp in apps {
+            let wasMaking = microapp.status == .writing(.making)
+            let outcome = microapp.poll(services.claude, at: time)
             for item in items(of: microapp) {
-                context.play(.wobble, for: item)
+                if outcome == .needsAttention {
+                    context.play(.wobble, for: item)
+                }
+                if wasMaking, microapp.status == .running {
+                    context.resetSize(for: item)
+                }
             }
         }
         for item in risen.sorted() {
@@ -215,16 +229,14 @@ final class MakerApp: MicroApp {
         instance.deleteData()
         let microapp = instance.app
         if !microapp.hasPage, items(of: microapp).isEmpty {
-            microapp.cancel()
-            microapp.folder.trash()
-            apps.removeAll { $0 === microapp }
+            discard(microapp)
         }
     }
 
     /// Takes the installed microapp whose folder is named `name` out of the
     /// library, to be uninstalled unless it is reinstated.
     func withdraw(_ name: String) {
-        guard library.contains(where: { $0.folder.name == name }) else { return }
+        guard installed(named: name) != nil else { return }
         withdrawn.insert(name)
     }
 
@@ -242,6 +254,11 @@ final class MakerApp: MicroApp {
             instances.remove(item)
             risen.remove(item)
         }
+        discard(microapp)
+    }
+
+    /// Forgets `microapp`, stopping Claude, and moves its folder to the Trash.
+    private func discard(_ microapp: GeneratedApp) {
         microapp.cancel()
         microapp.folder.trash()
         apps.removeAll { $0 === microapp }
@@ -292,51 +309,12 @@ final class MakerApp: MicroApp {
         return try? JSONEncoder().encode(saved)
     }
 
-    /// A microapp as saved before a microapp could run more than once: the
-    /// one instance it had, and what the page saved in its folder.
-    private struct OldSavedMicroapp: Codable {
-        var id: ItemID
-        var folder: String
-        var description: String?
-        var draft: String
-        var width: CGFloat?
-        var height: CGFloat?
-        var error: String?
-    }
-
-    /// Takes in microapps saved before a microapp could run more than once:
-    /// each becomes a microapp with one instance, and what its page saved
-    /// moves to that instance's file.
-    private func upgrade(_ data: Data) -> Saved? {
-        guard let old = try? JSONDecoder().decode([OldSavedMicroapp].self, from: data) else {
-            return nil
-        }
-        var saved = Saved(apps: [], instances: [])
-        for microapp in old {
-            let instance = SavedInstance(
-                id: microapp.id, folder: microapp.folder, data: UUID(), width: microapp.width,
-                height: microapp.height)
-            saved.apps.append(
-                SavedMicroapp(
-                    folder: microapp.folder, description: microapp.description,
-                    draft: microapp.draft, error: microapp.error))
-            saved.instances.append(instance)
-            let folder = folder(named: microapp.folder)
-            let files = FileManager.default
-            guard files.fileExists(atPath: folder.oldDataURL.path()) else { continue }
-            try? files.createDirectory(at: folder.instancesURL, withIntermediateDirectories: true)
-            try? files.moveItem(at: folder.oldDataURL, to: folder.dataURL(for: instance.data))
-        }
-        return saved
-    }
-
     /// Takes back the saved microapps and instances. A microapp not
     /// installed that no instance runs is forgotten, and folders no
     /// microapp has, such as one deleted while Honu was not running to see
     /// it, go to the Trash, as do the files of instances no longer kept.
     func load(_ data: Data) {
-        guard let saved = (try? JSONDecoder().decode(Saved.self, from: data)) ?? upgrade(data)
-        else { return }
+        guard let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return }
         var byFolder: [String: GeneratedApp] = [:]
         for microapp in saved.apps where byFolder[microapp.folder] == nil {
             byFolder[microapp.folder] = GeneratedApp(

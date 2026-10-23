@@ -41,41 +41,97 @@ struct StageView: View {
         let frame = bubble.drawnFrame
         let scale = max(bubble.drawnScale, 0.01)
         let center = CGPoint(x: frame.midX, y: frame.midY)
+        let bounds = bubble.drawnBounds
+        // From the stage's coordinates to the bubble's own, before its scale.
+        func local(_ point: CGPoint) -> CGPoint {
+            CGPoint(
+                x: (point.x - center.x) / scale + bubble.size.width / 2,
+                y: (point.y - center.y) / scale + bubble.size.height / 2)
+        }
         return bubbles[(index + 1)...].compactMap { cover in
             guard !cover.isHidden else { return nil }
             // Its glass swells while it breathes.
             let grow = gap + cover.swell * cover.drawnScale
+            if let outline = cover.drawnOutline(grownBy: grow) {
+                guard CGRect(around: outline).intersects(bounds) else { return nil }
+                return Cut(rect: .zero, cornerRadius: 0, outline: outline.map(local))
+            }
             let outline = cover.drawnFrame.insetBy(dx: -grow, dy: -grow)
-            guard outline.intersects(frame) else { return nil }
+            guard outline.intersects(bounds) else { return nil }
+            let corner = local(outline.origin)
             let rect = CGRect(
-                x: (outline.minX - center.x) / scale + bubble.size.width / 2,
-                y: (outline.minY - center.y) / scale + bubble.size.height / 2,
-                width: outline.width / scale, height: outline.height / scale)
+                x: corner.x, y: corner.y, width: outline.width / scale,
+                height: outline.height / scale)
             return Cut(
                 rect: rect, cornerRadius: (cover.cornerRadius * cover.drawnScale + grow) / scale)
         }
     }
 }
 
-/// The outline of a bubble above another, to cut away from the one below.
+/// The outline of a bubble above another, to cut away from the one below:
+/// a rounded rectangle, or the curve through the points of a wobbling one.
 struct Cut: Equatable {
     var rect: CGRect
     var cornerRadius: CGFloat
+    var outline: [CGPoint]? = nil
+
+    var path: Path {
+        if let outline {
+            return Path(smoothlyClosedThrough: outline)
+        }
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect)
+    }
 }
 
-/// `shape`, grown by `swell` on every side (past the view's own bounds),
-/// with the outlines of the bubbles above cut away.
+/// A bubble's glass: `shape`, or the curve along its wobbling `outline`,
+/// grown by `swell` on every side (past the view's own bounds), with the
+/// outlines of the bubbles above cut away. The outline and the cuts are in
+/// the coordinates of a bubble of `size`, and are fitted to the rectangle the
+/// shape is drawn in, which Liquid Glass hands over already scaled while the
+/// bubble is.
 struct CutAway: Shape {
     let shape: RoundedRectangle
+    let size: CGSize
+    var outline: Outline? = nil
     var swell: CGFloat = 0
     let cuts: [Cut]
 
     func path(in rect: CGRect) -> Path {
-        var path = shape.inset(by: -swell).path(in: rect)
+        let fit = CGAffineTransform(
+            a: rect.width / max(size.width, 1), b: 0, c: 0, d: rect.height / max(size.height, 1),
+            tx: rect.minX, ty: rect.minY)
+        var path: Path
+        if let outline {
+            let middle = CGPoint(x: size.width / 2, y: size.height / 2)
+            path = Path(
+                smoothlyClosedThrough: zip(outline.points, outline.normals).map {
+                    middle + $0 + $1 * swell
+                }
+            ).applying(fit)
+        } else {
+            path = shape.inset(by: -swell).path(in: rect)
+        }
         for cut in cuts {
-            let outline = RoundedRectangle(cornerRadius: cut.cornerRadius, style: .continuous)
-            path = path.subtracting(outline.path(in: cut.rect))
+            path = path.subtracting(cut.path.applying(fit))
         }
         return path
+    }
+}
+
+extension Path {
+    /// A smooth closed curve through `points` (a Catmull-Rom spline).
+    init(smoothlyClosedThrough points: [CGPoint]) {
+        self.init()
+        let count = points.count
+        guard count > 2 else { return }
+        move(to: points[0])
+        for i in 0..<count {
+            let (before, from) = (points[(i - 1 + count) % count], points[i])
+            let (to, after) = (points[(i + 1) % count], points[(i + 2) % count])
+            addCurve(
+                to: to, control1: from + (to - before) * (1.0 / 6),
+                control2: to - (after - from) * (1.0 / 6))
+        }
+        closeSubpath()
     }
 }

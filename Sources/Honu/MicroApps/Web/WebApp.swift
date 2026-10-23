@@ -9,6 +9,9 @@ final class WebApp: MicroApp {
     let id = AppID("web")
     let launcherLabel = "Web Page"
     let launcherSymbol = "safari"
+    /// Web pages leave the menu for now, until they are worked out as Ask AI
+    /// is to be; pages already open stay.
+    let isLaunchable = false
 
     /// The model: each page's address, empty until one is entered.
     private(set) var pages = ItemTable<String>()
@@ -23,11 +26,7 @@ final class WebApp: MicroApp {
     }
 
     func appearance(of item: ItemID) -> Appearance {
-        let video = url(of: item).flatMap(youTubeID) != nil
-        return Appearance(
-            symbol: video ? "play.rectangle.fill" : "safari.fill",
-            panelSize: CGSize(width: 600, height: 440)
-        )
+        Appearance(size: CGSize(width: 600, height: 440))
     }
 
     func title(of item: ItemID) -> String {
@@ -123,7 +122,7 @@ enum LoadEnd: Equatable {
     /// The page could not be loaded, as when the address is wrong or the
     /// network is down; the user is needed.
     case failed
-    /// Nobody wants the page anymore: its bubble closed, or a new load,
+    /// Nobody wants the page anymore: its bubble went away, or a new load,
     /// such as a link followed, replaced it.
     case cancelled
 

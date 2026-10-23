@@ -83,6 +83,23 @@ struct TurtleTests {
         #expect(turtle.grid(at: time).pixel(22, 7) == "E")
         #expect(turtle.grid(at: time + 1).pixel(22, 7) != "E")
     }
+
+    @Test func itBobsWhileIdleAndHopsWhenClicked() {
+        let turtle = Turtle(stageSize: screen)
+        // Idle, it rises a sprite pixel on every other bob.
+        let bobs = Set(stride(from: 0.0, to: 4, by: 0.1).map { turtle.lift(at: $0) })
+        #expect(bobs == [0, spritePixel])
+
+        turtle.hop(at: 10)
+        let peak = turtle.lift(at: 10 + Turtle.hopSeconds / 2)
+        let height = CGFloat(Turtle.hopPixels) * spritePixel
+        #expect(peak == height)
+        let hop = stride(from: 10.0, to: 10 + Turtle.hopSeconds, by: 0.01).map {
+            turtle.lift(at: $0)
+        }
+        #expect(hop.allSatisfy { $0 >= 0 && $0 <= peak })
+        #expect(hop.allSatisfy { $0.truncatingRemainder(dividingBy: spritePixel) == 0 })
+    }
 }
 
 @MainActor
@@ -166,11 +183,33 @@ struct OctopusTests {
         let spat = octopus.spitBack(at: 1001)
         #expect(spat?.morsels == morsels && spat?.microapp == "A1")
 
-        // Even a microapp with no bubble open can be brought back.
+        // Even a microapp with no bubble left can be brought back.
         octopus.swallow([], microapp: "B2", at: 1002)
         #expect(octopus.canUndo)
         let gone = octopus.forget(at: 1002 + Octopus.undoSeconds + 1)
         #expect(gone.map(\.microapp) == ["B2"] && gone.flatMap(\.bubbles).isEmpty)
+    }
+
+    @Test func gulpsComeBackLastFirstAndAreForgottenTogether() {
+        let octopus = Octopus(stageSize: screen)
+        let (a, b) = (BubbleID(rawValue: 1), BubbleID(rawValue: 2))
+        let kept = Bubble.swallowSeconds + Octopus.undoSeconds
+        octopus.swallow(a, home: .zero, at: 1000)
+        // A gulp keeps the one before it for as long as itself.
+        octopus.swallow(b, home: .zero, at: 1000 + Octopus.undoSeconds)
+        #expect(octopus.forget(at: 1000 + kept + 1).isEmpty, "forgot the first gulp alone")
+
+        let time = 1000 + Octopus.undoSeconds + 1
+        #expect(octopus.spitBack(at: time)?.bubbles == [b])
+        // Spitting one back leaves time to bring back the one before it.
+        #expect(octopus.forget(at: time + Octopus.undoSeconds - 1).isEmpty)
+        #expect(octopus.spitBack(at: time + 1)?.bubbles == [a])
+        #expect(!octopus.canUndo)
+
+        octopus.swallow(a, home: .zero, at: 2000)
+        octopus.swallow(b, home: .zero, at: 2001)
+        #expect(octopus.forget(at: 2001 + kept).flatMap(\.bubbles) == [a, b])
+        #expect(!octopus.canUndo)
     }
 
     @Test func picksTheCornerOnlyWhileOutOfSight() {

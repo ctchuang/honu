@@ -33,14 +33,14 @@ final class Chat {
     /// Counts the times the chat needed the user to type again, after a
     /// failure, so its views know to take the focus.
     private(set) var focusRequests = 0
-    /// How tall the content is, as last laid out, for the panel to fit it.
+    /// How tall the content is, as last laid out, for the bubble to fit it.
     var contentHeight: CGFloat = 0
 
-    /// What Claude is told about answering in a chat's panel.
+    /// What Claude is told about answering in a chat's bubble.
     static let systemPrompt = """
-        You answer questions inside a small floating panel on the user's desktop. \
+        You answer questions inside a small floating bubble on the user's desktop. \
         Keep answers short and to the point. Write plain text without Markdown, \
-        since the panel shows the raw text.
+        since the bubble shows the raw text.
         """
 
     init() {}

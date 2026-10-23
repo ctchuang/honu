@@ -12,15 +12,7 @@ struct UninstallTests {
     /// bubble, returning the shell and the microapp.
     private func shellWithMicroapp(_ title: String = "Clock") throws -> (Shell, GeneratedApp) {
         let shell = makeShell(claude: claude)
-        shell.choose(.make)
-        let item = try #require(shell.maker.items.last)
-        let microapp = try #require(shell.maker.microapp(of: item))
-        microapp.draft = "a \(title)"
-        shell.maker.make(item)
-        claude.streams.last!.send(
-            .text("<!doctype html><html><head><title>\(title)</title></head></html>"))
-        claude.streams.last!.send(.done)
-        shell.tick(at: 1)
+        let (_, microapp) = try shell.makeMicroapp(title, claude: claude)
         return (shell, microapp)
     }
 
@@ -133,17 +125,29 @@ struct UninstallTests {
         #expect(shell.tileDrag == nil && !shell.octopus.isSummoned)
     }
 
+    @Test func closingTheLauncherMidDragLetsGoOfTheTile() throws {
+        let (shell, microapp) = try shellWithMicroapp()
+        let name = microapp.folder.name
+        let tile = try #require(shell.launcherTiles.first { $0.kind == .installed(name) })
+        let start = CGPoint(x: 200, y: 600)
+        shell.clickTurtle(at: shell.turtle.center)
+        #expect(shell.dragTile(tile, from: start, to: CGPoint(x: 600, y: 600)))
+        let middle = shell.octopus.middle
+        #expect(shell.dragTile(tile, from: start, to: middle))
+        #expect(shell.octopus.isEager)
+
+        #expect(InputRouter(shell: shell).handle(.escape, typing: false))
+        #expect(shell.popup == nil && shell.tileDrag == nil)
+        #expect(!shell.octopus.isEager && !shell.octopus.isSummoned)
+        // The drag ending afterwards, over the octopus, uninstalls nothing.
+        shell.endTileDrag(at: middle, time: 10)
+        #expect(shell.swallowedTile == nil && !shell.octopus.canUndo)
+        #expect(hasTile(name, in: shell))
+    }
+
     @Test func uninstallingLeavesOtherMicroappsAlone() throws {
         let (shell, clock) = try shellWithMicroapp("Clock")
-        shell.choose(.make)
-        let item = try #require(shell.maker.items.last)
-        let timer = try #require(shell.maker.microapp(of: item))
-        timer.draft = "a timer"
-        shell.maker.make(item)
-        claude.streams.last!.send(
-            .text("<!doctype html><html><head><title>Timer</title></head></html>"))
-        claude.streams.last!.send(.done)
-        shell.tick(at: 2)
+        let (_, timer) = try shell.makeMicroapp("Timer", claude: claude, at: 2)
 
         shell.uninstall(clock.folder.name, at: 10)
         shell.tick(at: 10 + Bubble.swallowSeconds + Octopus.undoSeconds + 1)

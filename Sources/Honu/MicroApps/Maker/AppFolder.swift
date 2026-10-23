@@ -10,9 +10,6 @@ struct AppFolder: Equatable {
     var name: String { url.lastPathComponent }
     var pageURL: URL { url.appending(path: "index.html") }
     var historyURL: URL { url.appending(path: "history", directoryHint: .isDirectory) }
-    /// Where the page's state was saved before a microapp could run more
-    /// than once.
-    var oldDataURL: URL { url.appending(path: "data.json") }
     /// Where each instance of the microapp saves its state, which the page
     /// is never served.
     var instancesURL: URL { url.appending(path: Self.instances, directoryHint: .isDirectory) }
