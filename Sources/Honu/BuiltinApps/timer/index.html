@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Timer</title>
+<meta name="honu-size" content="300x240">
+<meta name="honu-symbol" content="timer">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1d1d1f;
+    --muted: #6e6e73;
+    --track: #e8e8ed;
+    --accent: #0a84ff;
+    --done: #ff9f0a;
+    --chip: #f2f2f7;
+    --chip-hover: #e5e5ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --fg: #f5f5f7;
+      --muted: #98989d;
+      --track: #3a3a3c;
+      --chip: #2c2c2e;
+      --chip-hover: #3a3a3c;
+    }
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px -apple-system, system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px 12px;
+    box-sizing: border-box;
+    gap: 8px;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+  #display {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: 300;
+    font-size: clamp(28px, min(22vw, 34vh), 120px);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  body.done #display {
+    color: var(--done);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% { opacity: 0.35; }
+  }
+  #track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--track);
+    overflow: hidden;
+    flex: none;
+  }
+  #bar {
+    height: 100%;
+    width: 100%;
+    background: var(--accent);
+    transform-origin: left;
+  }
+  body.done #bar { background: var(--done); }
+  .row {
+    display: flex;
+    gap: 6px;
+    flex: none;
+  }
+  button, input {
+    font: inherit;
+    color: inherit;
+    border: none;
+    border-radius: 8px;
+    background: var(--chip);
+    padding: 6px 0;
+    min-width: 0;
+  }
+  button {
+    flex: 1;
+    cursor: pointer;
+  }
+  button:hover { background: var(--chip-hover); }
+  button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  button.primary {
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 600;
+  }
+  button.primary:hover { filter: brightness(1.1); }
+  input {
+    flex: 1.4;
+    text-align: center;
+    -webkit-user-select: text;
+    user-select: text;
+    outline: none;
+  }
+  input:focus { box-shadow: 0 0 0 2px var(--accent); }
+  input::-webkit-inner-spin-button { display: none; }
+</style>
+</head>
+<body>
+  <div id="display" aria-live="polite">5:00</div>
+  <div id="track"><div id="bar"></div></div>
+  <div class="row" id="presets">
+    <button data-minutes="1">1m</button>
+    <button data-minutes="5">5m</button>
+    <button data-minutes="10">10m</button>
+    <button data-minutes="25">25m</button>
+    <input id="minutes" type="number" min="1" max="1440" placeholder="min" title="Minutes; press Return to set">
+  </div>
+  <div class="row">
+    <button id="toggle" class="primary">Start</button>
+    <button id="reset">Reset</button>
+  </div>
+<script>
+(() => {
+  const display = document.getElementById("display");
+  const bar = document.getElementById("bar");
+  const toggle = document.getElementById("toggle");
+  const reset = document.getElementById("reset");
+  const minutesField = document.getElementById("minutes");
+
+  const DEFAULT_DURATION = 5 * 60 * 1000;
+  const MAX_DURATION = 24 * 60 * 60 * 1000;
+
+  // duration: what the timer counts down from, in milliseconds.
+  // remaining: what is left while it is paused or not started.
+  // endsAt: when it ends, in milliseconds since 1970, while it runs.
+  let state = { duration: DEFAULT_DURATION, remaining: DEFAULT_DURATION, endsAt: null };
+  let ticker = null;
+  let audio = null;
+  let chimed = false;
+
+  const isValid = (value) =>
+    value && typeof value === "object" &&
+    Number.isFinite(value.duration) && value.duration > 0 &&
+    Number.isFinite(value.remaining) && value.remaining >= 0 &&
+    (value.endsAt === null || Number.isFinite(value.endsAt));
+
+  const left = () =>
+    state.endsAt === null ? state.remaining : Math.max(0, state.endsAt - Date.now());
+
+  const running = () => state.endsAt !== null && left() > 0;
+
+  const save = () => {
+    if (window.honu) {
+      window.honu.save(state).catch(() => {});
+    }
+  };
+
+  const format = (ms) => {
+    const total = Math.ceil(ms / 1000);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    const two = (n) => String(n).padStart(2, "0");
+    return hours > 0 ? `${hours}:${two(minutes)}:${two(seconds)}` : `${minutes}:${two(seconds)}`;
+  };
+
+  const chime = () => {
+    if (chimed) return;
+    chimed = true;
+    try {
+      audio = audio || new AudioContext();
+      const start = audio.currentTime;
+      for (let i = 0; i < 3; i++) {
+        const tone = audio.createOscillator();
+        const gain = audio.createGain();
+        tone.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, start + i * 0.35);
+        gain.gain.exponentialRampToValueAtTime(0.25, start + i * 0.35 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + i * 0.35 + 0.25);
+        tone.connect(gain).connect(audio.destination);
+        tone.start(start + i * 0.35);
+        tone.stop(start + i * 0.35 + 0.3);
+      }
+    } catch {
+      // No sound where audio is not allowed; the display still says it is done.
+    }
+  };
+
+  const render = () => {
+    const ms = left();
+    const done = state.endsAt !== null && ms <= 0;
+    document.body.classList.toggle("done", done);
+    display.textContent = done ? "Done" : format(ms);
+    bar.style.transform = `scaleX(${Math.min(1, ms / state.duration)})`;
+    toggle.textContent = running() ? "Pause" : ms < state.duration && !done ? "Resume" : "Start";
+    toggle.disabled = done;
+    reset.disabled = !done && state.endsAt === null && state.remaining === state.duration;
+    if (done) {
+      chime();
+      stopTicking();
+    }
+  };
+
+  const startTicking = () => {
+    if (ticker === null) {
+      ticker = setInterval(render, 200);
+    }
+  };
+
+  const stopTicking = () => {
+    if (ticker !== null) {
+      clearInterval(ticker);
+      ticker = null;
+    }
+  };
+
+  const set = (duration) => {
+    const clamped = Math.min(Math.max(duration, 1000), MAX_DURATION);
+    state = { duration: clamped, remaining: clamped, endsAt: null };
+    chimed = false;
+    stopTicking();
+    save();
+    render();
+  };
+
+  toggle.addEventListener("click", () => {
+    // Made on a click, so the chime may play later.
+    try { audio = audio || new AudioContext(); } catch {}
+    if (running()) {
+      state = { ...state, remaining: left(), endsAt: null };
+      stopTicking();
+    } else {
+      state = { ...state, endsAt: Date.now() + state.remaining };
+      chimed = false;
+      startTicking();
+    }
+    save();
+    render();
+  });
+
+  reset.addEventListener("click", () => set(state.duration));
+
+  document.getElementById("presets").addEventListener("click", (event) => {
+    const minutes = Number(event.target.dataset?.minutes);
+    if (minutes > 0) set(minutes * 60 * 1000);
+  });
+
+  minutesField.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const minutes = Number(minutesField.value);
+    if (Number.isFinite(minutes) && minutes > 0) {
+      set(Math.round(minutes * 60) * 1000);
+      minutesField.value = "";
+      minutesField.blur();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === " " && document.activeElement !== minutesField) {
+      event.preventDefault();
+      if (!toggle.disabled) toggle.click();
+    }
+  });
+
+  const begin = async () => {
+    try {
+      const saved = window.honu ? await window.honu.load() : null;
+      if (isValid(saved)) {
+        state = saved;
+        // A timer that ended while Honu was closed says so, without a chime.
+        chimed = saved.endsAt !== null && saved.endsAt <= Date.now();
+      }
+    } catch {
+      // Nothing saved to go on; start fresh.
+    }
+    if (running()) startTicking();
+    render();
+  };
+
+  begin();
+})();
+</script>
+</body>
+</html>

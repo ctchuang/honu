@@ -402,6 +402,18 @@ struct BundledTests {
         #expect(BuiltinCatalog.shipped.map(\.name).sorted() == names.sorted())
     }
 
+    @Test func honuShipsATimerInTheReef() throws {
+        let timer = try #require(BuiltinCatalog.shipped.first { $0.name == "timer" })
+        #expect(
+            timer.meta
+                == PageMeta(title: "Timer", size: CGSize(width: 300, height: 240), symbol: "timer"))
+        let shell = Shell(
+            size: CGSize(width: 1200, height: 800), storeURL: temporaryStoreURL(),
+            services: Services(claude: FakeClaude()))
+        #expect(shell.launcherTiles(in: .builtIn).map(\.label).contains("Timer"))
+        #expect(shell.launcherTiles.first?.preview.contains("timer") == true)
+    }
+
     @Test func everyPageHonuShipsSaysWhatItIsCalledAndItsSymbol() {
         for page in BuiltinCatalog.shipped {
             #expect(page.meta.title != nil, "\(page.name) has no title")

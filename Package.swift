@@ -7,7 +7,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Honu",
-            resources: [.copy("Resources/icon.png")]
+            resources: [.copy("Resources/icon.png"), .copy("BuiltinApps")]
         ),
         .testTarget(
             name: "HonuTests",

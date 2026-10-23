@@ -168,11 +168,6 @@ instance's data file and the size its page asked for.
 - `swift build`, `swift test`, and `swift format lint --strict` pass at
   every step.
 
-### Open questions
-
-- The first web built-in microapp, to prove the path (a timer, a world
-  clock, a calculator).
-
 ## Plan
 
 Each step is one or more commits that build, pass the tests, and pass the
@@ -223,10 +218,12 @@ A refactor; no behavior changes.
   inside the folder and refuses `instances/`; a store naming a microapp
   no longer shipped loads without its bubbles.
 
-### Step 4: The first web built-in microapp
+### Step 4: The first web built-in microapp (done)
 
-- One small page in `BuiltinApps/`, declaring its title, size, and
-  symbol, saving its state through `honu.save`.
+- `BuiltinApps/timer/`: a countdown Timer, with presets and a field for
+  minutes, Start, Pause, and Reset, which chimes when done. It saves its
+  state through `honu.save`, when it ends rather than what is left, so a
+  timer keeps running while Honu is closed. It needs no network.
 - `Package.swift` copies `BuiltinApps/` into the resources (SwiftPM
   wants the folder to hold something).
 
