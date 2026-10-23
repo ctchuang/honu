@@ -9,6 +9,9 @@ final class WebApp: MicroApp {
     let id = AppID("web")
     let launcherLabel = "Web Page"
     let launcherSymbol = "safari"
+    /// Web pages leave the menu for now, until they are worked out as Ask AI
+    /// is to be; pages already open stay.
+    let isLaunchable = false
 
     /// The model: each page's address, empty until one is entered.
     private(set) var pages = ItemTable<String>()

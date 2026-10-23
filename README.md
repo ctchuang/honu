@@ -57,8 +57,8 @@ swift run                # build and launch
 ### Using Honu
 
 - **Click** the turtle for its launcher, and click a microapp: the turtle spits out a
-  new bubble of it, such as a **Note**, a **Web Page** (YouTube links play), one Claude
-  made, or **+** to describe a new one for Claude to write.
+  new bubble of it, such as a **Note**, one Claude made, or **+** to describe a new
+  one for Claude to write.
 - To change a microapp, say what you want in the bar below it.
 - **Drag** bubbles around, or throw them; crowded ones push each other aside.
 - To delete a bubble, drag it to the octopus. To uninstall a microapp, drag it from the

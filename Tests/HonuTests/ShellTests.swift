@@ -139,10 +139,10 @@ struct ShellTests {
         #expect(shell.undoManager(for: second) !== history)
     }
 
-    @Test func theLauncherListsTheBuiltInMicroappsButAskAIThenPlus() {
+    @Test func theLauncherListsTheBuiltInMicroappsButAskAIAndWebThenPlus() {
         let tiles = makeShell().launcherTiles
-        #expect(tiles.map(\.kind) == [.stock(AppID("notes")), .stock(AppID("web")), .make])
-        #expect(tiles.map(\.label) == ["Note", "Web Page", "New Microapp"])
+        #expect(tiles.map(\.kind) == [.stock(AppID("notes")), .make])
+        #expect(tiles.map(\.label) == ["Note", "New Microapp"])
         #expect(tiles.last?.symbol == "plus")
     }
 
@@ -196,7 +196,7 @@ struct ShellTests {
         microapp.draft = "a clock"
         shell.maker.make(item)
         shell.tick(at: 1)
-        #expect(shell.launcherTiles.count == 3, "a tile before the page was written")
+        #expect(shell.launcherTiles.count == 2, "a tile before the page was written")
 
         claude.streams[0].send(
             .text(
@@ -207,13 +207,13 @@ struct ShellTests {
         claude.streams[0].send(.done)
         shell.tick(at: 2)
         let tiles = shell.launcherTiles
-        #expect(tiles.map(\.label) == ["Note", "Web Page", "Clock", "New Microapp"])
+        #expect(tiles.map(\.label) == ["Note", "Clock", "New Microapp"])
         #expect(
-            tiles[2]
+            tiles[1]
                 == LauncherTile(
                     kind: .installed(microapp.folder.name), label: "Clock", symbol: "clock"))
 
-        shell.choose(tiles[2].kind)
+        shell.choose(tiles[1].kind)
         #expect(shell.maker.items.count == 2)
         let bubble = try #require(shell.stage.bubbles.last)
         #expect(shell.maker.microapp(of: bubble.target.item) === microapp)
