@@ -173,6 +173,28 @@ struct OctopusTests {
         #expect(gone.map(\.microapp) == ["B2"] && gone.flatMap(\.bubbles).isEmpty)
     }
 
+    @Test func gulpsComeBackLastFirstAndAreForgottenTogether() {
+        let octopus = Octopus(stageSize: screen)
+        let (a, b) = (BubbleID(rawValue: 1), BubbleID(rawValue: 2))
+        let kept = Bubble.swallowSeconds + Octopus.undoSeconds
+        octopus.swallow(a, home: .zero, at: 1000)
+        // A gulp keeps the one before it for as long as itself.
+        octopus.swallow(b, home: .zero, at: 1000 + Octopus.undoSeconds)
+        #expect(octopus.forget(at: 1000 + kept + 1).isEmpty, "forgot the first gulp alone")
+
+        let time = 1000 + Octopus.undoSeconds + 1
+        #expect(octopus.spitBack(at: time)?.bubbles == [b])
+        // Spitting one back leaves time to bring back the one before it.
+        #expect(octopus.forget(at: time + Octopus.undoSeconds - 1).isEmpty)
+        #expect(octopus.spitBack(at: time + 1)?.bubbles == [a])
+        #expect(!octopus.canUndo)
+
+        octopus.swallow(a, home: .zero, at: 2000)
+        octopus.swallow(b, home: .zero, at: 2001)
+        #expect(octopus.forget(at: 2001 + kept).flatMap(\.bubbles) == [a, b])
+        #expect(!octopus.canUndo)
+    }
+
     @Test func picksTheCornerOnlyWhileOutOfSight() {
         let octopus = Octopus(stageSize: screen)
         octopus.summon(true, turtle: CGPoint(x: 900, y: 650))

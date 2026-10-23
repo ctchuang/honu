@@ -129,6 +129,43 @@ struct MakerTests {
         #expect(Bridge.fetchable("honu-app://A1/data.json") == nil)
     }
 
+    @Test func aPageSavesAndLoadsItsOwnState() async throws {
+        let bridge = Bridge(dataURL: root.appending(path: "instances/A.json"))
+        let nothing = await bridge.reply(to: ["op": "load"])
+        #expect(nothing.0 is NSNull && nothing.1 == nil, "loaded state never saved")
+        let saved = await bridge.reply(to: ["op": "save", "state": #"{"n":1}"#])
+        #expect(saved.0 == nil && saved.1 == nil)
+        let loaded = await bridge.reply(to: ["op": "load"])
+        #expect(loaded.0 as? String == #"{"n":1}"#)
+
+        // Where nothing can be written, saving says why.
+        let stuck = Bridge(dataURL: URL(filePath: "/dev/null/instances/A.json"))
+        #expect(await stuck.reply(to: ["op": "save", "state": "1"]).1 != nil)
+    }
+
+    @Test func aPageAsksForWhatTheBridgeKnows() async {
+        var sizes: [CGSize] = []
+        let bridge = Bridge(dataURL: root.appending(path: "A.json"), onResize: { sizes.append($0) })
+        let resized = await bridge.reply(to: ["op": "resize", "width": 320.0, "height": 240.0])
+        #expect(resized.1 == nil && sizes == [CGSize(width: 320, height: 240)])
+        let unsized = await bridge.reply(to: ["op": "resize", "width": "wide"])
+        #expect(unsized.1 == "honu.resize takes a width and a height")
+        #expect(sizes.count == 1)
+
+        let local = await bridge.reply(to: ["op": "fetch", "url": "file:///etc/passwd"])
+        #expect(local.1 == "Only http and https URLs can be fetched")
+        #expect(await bridge.reply(to: ["op": "delete"]).1 == "Unknown request")
+        #expect(await bridge.reply(to: [:]).1 == "Unknown request")
+    }
+
+    @Test func errorsThePageReportsAreKeptShort() {
+        let rejection = Bridge.problem(from: ["kind": "rejection", "message": "boom"])
+        #expect(rejection == "rejection: boom")
+        #expect(Bridge.problem(from: [:]) == "error: ")
+        let long = Bridge.problem(from: ["message": String(repeating: "x", count: 5000)])
+        #expect(long.count == Bridge.problemLimit && long.hasPrefix("error: x"))
+    }
+
     @Test func claudeMakesTheMicroappDescribedAndItRisesOnceLoaded() throws {
         let maker = app()
         let item = maker.create()
@@ -296,6 +333,33 @@ struct MakerTests {
         #expect(restored.microapp(of: blank)?.draft == "a half-typed descr")
         #expect(!FileManager.default.fileExists(atPath: stray.url.path()))
         #expect(back.folder.page() != nil)
+    }
+
+    @Test func aPageCutShortByQuittingLeavesThePageBeforeRunning() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        #expect(microapp.status == .writing(.changing))
+
+        let restored = app()
+        restored.load(try #require(maker.save()))
+        let back = try #require(restored.microapp(of: item))
+        #expect(back.status == .running)
+        #expect(back.notice == "Honu quit before Claude finished the page.")
+        #expect(back.draft == "make it blue")
+        #expect(restored.title(of: item) == "Clock")
+        #expect(restored.library.map { $0 === back } == [true])
+
+        // A fix cut short, too.
+        back.report("error: x is not defined", at: 100)
+        restored.fix(item)
+        #expect(back.status == .writing(.fixing))
+        let again = app()
+        again.load(try #require(restored.save()))
+        #expect(again.microapp(of: item)?.status == .running)
+        #expect(again.microapp(of: item)?.notice == "Honu quit before Claude finished the page.")
     }
 
     @Test func microappsSavedBeforeInstancesComeBackWithTheirData() throws {

@@ -133,6 +133,26 @@ struct UninstallTests {
         #expect(shell.tileDrag == nil && !shell.octopus.isSummoned)
     }
 
+    @Test func closingTheLauncherMidDragLetsGoOfTheTile() throws {
+        let (shell, microapp) = try shellWithMicroapp()
+        let name = microapp.folder.name
+        let tile = try #require(shell.launcherTiles.first { $0.kind == .installed(name) })
+        let start = CGPoint(x: 200, y: 600)
+        shell.clickTurtle(at: shell.turtle.center)
+        #expect(shell.dragTile(tile, from: start, to: CGPoint(x: 600, y: 600)))
+        let middle = shell.octopus.middle
+        #expect(shell.dragTile(tile, from: start, to: middle))
+        #expect(shell.octopus.isEager)
+
+        #expect(InputRouter(shell: shell).handle(.escape, typing: false))
+        #expect(shell.popup == nil && shell.tileDrag == nil)
+        #expect(!shell.octopus.isEager && !shell.octopus.isSummoned)
+        // The drag ending afterwards, over the octopus, uninstalls nothing.
+        shell.endTileDrag(at: middle, time: 10)
+        #expect(shell.swallowedTile == nil && !shell.octopus.canUndo)
+        #expect(hasTile(name, in: shell))
+    }
+
     @Test func uninstallingLeavesOtherMicroappsAlone() throws {
         let (shell, clock) = try shellWithMicroapp("Clock")
         shell.choose(.make)

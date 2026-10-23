@@ -3,9 +3,141 @@ import Testing
 
 @testable import Honu
 
+extension Hit {
+    /// Which layer was hit, to compare.
+    fileprivate var layer: String {
+        switch self {
+        case .popup: "popup"
+        case .turtle: "turtle"
+        case .octopus: "octopus"
+        case .bubble: "bubble"
+        case .nothing: "nothing"
+        }
+    }
+
+    fileprivate var bubble: Bubble? {
+        if case .bubble(let bubble) = self { bubble } else { nil }
+    }
+}
+
 /// What the views get from the shell, rather than from the microapps.
 @MainActor
 struct ShellTests {
+    /// A note's bubble in `shell`, at rest at `center`.
+    private func note(in shell: Shell, at center: CGPoint) -> Bubble {
+        let notes = shell.registry.app(AppID("notes"))!
+        return shell.addBubble(showing: notes.create(), of: notes, at: center, fresh: false)
+    }
+
+    @Test func whatIsUnderAPointGoesFromTheTopLayerDown() throws {
+        let shell = makeShell()
+        let empty = CGPoint(x: 600, y: 100)
+        #expect(shell.hit(empty).layer == "nothing")
+        #expect(!shell.takesClick(at: empty), "kept a click from the apps below")
+
+        let bubble = note(in: shell, at: CGPoint(x: 600, y: 300))
+        #expect(shell.hit(bubble.center).bubble === bubble)
+        #expect(shell.takesClick(at: bubble.center))
+
+        // The sprites are above the bubbles.
+        let turtle = shell.turtle.center
+        try #require(shell.turtle.contains(turtle))
+        _ = note(in: shell, at: turtle)
+        #expect(shell.hit(turtle).layer == "turtle")
+        shell.octopus.summon(true, turtle: turtle)
+        let octopus = shell.octopus.middle
+        _ = note(in: shell, at: octopus)
+        #expect(shell.hit(octopus).layer == "octopus")
+        #expect(shell.takesClick(at: octopus))
+        shell.octopus.summon(false, turtle: turtle)
+
+        // An open menu takes every click, as a native one does.
+        shell.clickTurtle(at: turtle)
+        for point in [empty, bubble.center, octopus] {
+            #expect(shell.hit(point).layer == "popup")
+            #expect(shell.takesClick(at: point))
+        }
+        shell.closePopup()
+        #expect(!shell.takesClick(at: empty))
+    }
+
+    @Test func aDragTakesEveryClickUntilLetGo() {
+        let shell = makeShell()
+        let empty = CGPoint(x: 600, y: 100)
+        let bubble = note(in: shell, at: CGPoint(x: 600, y: 300))
+        shell.dragBubble(bubble, by: CGSize(width: 10, height: 0), pointer: bubble.center)
+        #expect(shell.takesEveryClick && shell.takesClick(at: empty))
+        shell.endBubbleDrag(pointer: bubble.center)
+        #expect(!shell.takesEveryClick && !shell.takesClick(at: empty))
+
+        shell.dragTurtle(by: CGSize(width: 50, height: -50))
+        #expect(shell.takesEveryClick)
+        shell.endTurtleDrag()
+        #expect(!shell.takesEveryClick)
+    }
+
+    @Test func aDraggedTurtleStaysWhereItWasLeftAfterARelaunch() {
+        let url = temporaryStoreURL()
+        let shell = makeShell(storeURL: url)
+        let start = shell.turtle.origin
+        // Each step of a drag is how far it is from where the drag began.
+        shell.dragTurtle(by: CGSize(width: 300, height: -200))
+        shell.dragTurtle(by: CGSize(width: 400, height: -300))
+        let place = CGPoint(x: start.x + 400, y: start.y - 300)
+        #expect(shell.turtle.origin == place)
+        shell.endTurtleDrag()
+        #expect(makeShell(storeURL: url).turtle.origin == place)
+
+        // The next drag starts where this one ended.
+        shell.dragTurtle(by: CGSize(width: 10, height: 0))
+        #expect(shell.turtle.origin == CGPoint(x: place.x + 10, y: place.y))
+    }
+
+    @Test func aLongPauseMovesNothingFar() {
+        let shell = makeShell()
+        let bubble = note(in: shell, at: CGPoint(x: 600, y: 400))
+        let start = bubble.center
+        bubble.velocity = CGPoint(x: 600, y: 0)
+        shell.tick(at: 100)
+        #expect(bubble.center == start, "moved on the first tick")
+        // As when the Mac wakes from sleep an hour later.
+        shell.tick(at: 100 + 3600)
+        #expect((bubble.center - start).length <= 600.0 / 30 + 1)
+    }
+
+    @Test func bubblesShowWhatTheirItemIsDoing() throws {
+        let shell = makeShell()
+        let web = try #require(shell.registry.app(AppID("web")) as? WebApp)
+        shell.start(web.id)
+        let bubble = try #require(shell.stage.bubbles.last)
+        let item = bubble.target.item
+        web.open("en.wikipedia.org", in: item)
+        web.startedLoading(item)
+        shell.tick(at: 1)
+        #expect(bubble.isBusy)
+        web.stoppedLoading(item, .finished)
+        shell.tick(at: 2)
+        #expect(!bubble.isBusy)
+        #expect(bubble.motion?.motion == .rise)
+    }
+
+    @Test func anOpenPanelTakesTheSizeItsMicroappAsksFor() throws {
+        let claude = FakeClaude()
+        let shell = makeShell(claude: claude)
+        shell.choose(.make)
+        let bubble = try #require(shell.stage.bubbles.last)
+        let item = bubble.target.item
+        shell.maker.microapp(of: item)?.draft = "a clock"
+        shell.maker.make(item)
+        claude.streams[0].send(
+            .text("<!doctype html><html><head><title>Clock</title></head></html>"))
+        claude.streams[0].send(.done)
+        shell.tick(at: 1)
+
+        shell.maker.resize(item, to: CGSize(width: 500, height: 300))
+        shell.tick(at: 2)
+        #expect(bubble.panelSize == CGSize(width: 500, height: 300) + MakerApp.chrome)
+    }
     @Test func everyBubbleKeepsItsOwnUndoHistory() {
         let shell = makeShell()
         let target = ViewTarget(app: AppID("notes"), item: ItemID(rawValue: 1))
