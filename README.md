@@ -1,5 +1,7 @@
 # Honu
 
+[![CI](https://github.com/ctchuang/honu/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ctchuang/honu/actions/workflows/ci.yml)
+
 <p align="center">
   <img src="docs/images/honu.svg" alt="Honu, a little green sea turtle" width="240">
 </p>
