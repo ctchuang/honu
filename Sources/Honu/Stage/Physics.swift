@@ -20,7 +20,7 @@ enum Physics {
     static let pushDamping = 0.45
     /// The deepest a bubble pushing another presses its jelly in, relative
     /// to how far the pressed one reaches from its center that way.
-    static let dent = 0.25
+    static let dent = 0.125
     /// Fraction of speed kept after bouncing off a screen edge.
 
     static let bounce = 0.5

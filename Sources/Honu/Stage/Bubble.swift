@@ -99,7 +99,7 @@ final class Bubble: Identifiable {
     static let splat: Double = 4
     /// How much more its jelly feels other bubbles pushing it than the push
     /// moves it, so a bump shows even when the push is gentle.
-    static let knockInertia: Double = 6
+    static let knockInertia: Double = 3
     /// How much its jelly lags behind it growing or shrinking as it flies
     /// out of the turtle, so it overshoots and wobbles.
     static let growthInertia: Double = 1
