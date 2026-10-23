@@ -88,10 +88,10 @@ behind every other window.
 | Click another app, or switch to it | Honu goes behind every window. |
 | Click where Honu shows nothing | The click goes to whatever is below; if that is another app, Honu goes back. |
 
-**Launcher.** A glass panel of microapps: Note, each installed microapp,
-and **+** for a new one; Web Page is left off for now, as Ask AI is. See
-`Launcher.md`. The built-in microapps are moving into the **Reef**
-folder; see `BuiltinApps.md`.
+**Launcher.** A glass panel of microapps: the **Reef**, a folder of the
+microapps built into Honu (Note, and those written as web pages, such as
+the Timer), each installed microapp, and **+** for a new one; Web Page is
+left off for now, as Ask AI is. See `Launcher.md` and `BuiltinApps.md`.
 
 **Bubbles.** Each shows one item: a note, a web page, or an instance of a
 microapp, under its title (or, as a note does, with the title in its

@@ -5,7 +5,7 @@ desktop. It follows `../UI.md`.
 
 ## Behavior
 
-- The **Note** tile in the launcher has the turtle spit out a new, empty
+- The **Note** tile in the launcher's Reef has the turtle spit out a new, empty
   note. It takes the keyboard focus, so the user can start writing at
   once; text typed before it has the focus goes into it.
 - A note is yellow-tinted glass with dark text, written in directly:

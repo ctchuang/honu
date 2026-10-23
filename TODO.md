@@ -30,8 +30,9 @@
 - Migrate the existing Note app to Web-based (managed in the same way
   as other microapps).
 - Add top 20 web sites as built-in microapps.
-- Add more built-in apps in a subfolder as examples, native or web
-  (`docs/BuiltinApps.md`).
+- Add more built-in apps to the Reef, native or web
+  (`docs/BuiltinApps.md`): a web page in `Sources/Honu/BuiltinApps/<name>/`
+  needs no Swift.
 
 ### Works with Claude (TBD)
 

@@ -81,8 +81,8 @@ gesture is out of scope here.
 
 - Tiles, in order: the built-in apps (Notes, Web), then the installed
   apps in the order they were installed, then **+**. Ask AI has no tile.
-  (The built-in apps are moving into the **Reef** folder tile, which
-  takes their place at the top level: see `BuiltinApps.md`.)
+  (The built-in apps have since moved into the **Reef** folder tile,
+  which takes their place at the top level: see `BuiltinApps.md`.)
 - A tile shows the app's SF Symbol and name. An installed app's symbol
   is its page's `honu-symbol` (`sparkles` if none, or none that exists);
   its name is its page's `<title>`, or else its description, shortened.

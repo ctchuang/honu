@@ -227,7 +227,7 @@ A refactor; no behavior changes.
 - `Package.swift` copies `BuiltinApps/` into the resources (SwiftPM
   wants the folder to hold something).
 
-### Step 5: Docs
+### Step 5: Docs (done)
 
 - `CLAUDE.md`: the folder, the three kinds of microapps, `BundledWebApp`,
   `BuiltinCatalog`, the `honu-builtin://` scheme, and where its data
