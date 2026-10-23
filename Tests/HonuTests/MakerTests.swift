@@ -511,6 +511,49 @@ struct MakerTests {
         #expect(FileManager.default.fileExists(atPath: instance.app.folder.url.path()))
     }
 
+    @Test func aNewPageDropsTheSizeTheOldOneAskedFor() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock", size: "300x400"))
+        let other = try #require(maker.launch(maker.library[0].folder.name))
+        let instance = try #require(maker.instances[item])
+        maker.resize(item, to: CGSize(width: 500, height: 600))
+        #expect(instance.size == CGSize(width: 500, height: 600))
+        #expect(maker.instances[other]?.size == CGSize(width: 300, height: 400))
+
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        claude.streams[1].send(.text(answer("Blue Clock", size: "320x240")))
+        claude.streams[1].send(.done)
+        _ = update(maker)
+        #expect(instance.size == CGSize(width: 320, height: 240))
+
+        maker.resize(item, to: CGSize(width: 700, height: 500))
+        maker.revert(item)
+        #expect(instance.size == CGSize(width: 300, height: 400), "kept a size across a revert")
+    }
+
+    @Test func deletingAMicroappStopsClaudeWritingIt() throws {
+        let maker = app()
+        let unmade = maker.create()
+        maker.microapp(of: unmade)!.draft = "a clock"
+        maker.make(unmade)
+        maker.remove(unmade)
+        #expect(claude.streams[0].isCancelled)
+
+        // An installed one goes on being changed while an instance is left.
+        let item = made(maker, "a timer", answer("Timer"))
+        let other = try #require(maker.launch(maker.library[0].folder.name))
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        maker.remove(item)
+        maker.remove(other)
+        #expect(!claude.streams[2].isCancelled && microapp.isBusy)
+        maker.uninstall(microapp.folder.name)
+        #expect(claude.streams[2].isCancelled)
+    }
+
     @Test func aMicroappNeverMadeGoesToTheTrashWithItsBubble() throws {
         let maker = app()
         let item = maker.create()

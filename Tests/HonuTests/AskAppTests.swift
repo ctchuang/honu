@@ -136,8 +136,11 @@ struct AskAppTests {
     @Test func deletingAChatStopsItsAnswer() {
         let asks = app()
         let item = ask(asks, "Why?")
+        let kept = ask(asks, "Why not?")
         asks.remove(item)
-        #expect(asks.items.isEmpty)
+        #expect(asks.items == [kept])
+        #expect(claude.streams[0].isCancelled)
+        #expect(!claude.streams[1].isCancelled && asks.isBusy(kept))
         #expect(update(asks).isEmpty)
     }
 }
