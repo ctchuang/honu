@@ -100,19 +100,28 @@ final class Autosave {
         }
     }
 
-    /// Where a store that could not be read is kept, beside it.
-    var unreadableURL: URL {
-        url.deletingPathExtension().appendingPathExtension("unreadable.json")
+    /// Where the `number`th store that could not be read is kept, beside it:
+    /// `state.unreadable.json`, then `state.unreadable-2.json`, and so on.
+    func unreadableURL(_ number: Int = 1) -> URL {
+        let name = url.deletingPathExtension().lastPathComponent
+        let suffix = number == 1 ? "" : "-\(number)"
+        return url.deletingLastPathComponent().appending(path: "\(name).unreadable\(suffix).json")
     }
 
     /// What was saved on the last launch, if anything was, which counts as
-    /// saved already. A store that cannot be read is moved to
-    /// `unreadableURL` rather than written over, so nothing in it is lost.
+    /// saved already. A store that cannot be read is moved to the first free
+    /// `unreadableURL` rather than written over, so nothing in it is lost,
+    /// nor in one kept aside before.
     func restore() -> SavedState? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         guard let state = try? JSONDecoder().decode(SavedState.self, from: data) else {
-            try? FileManager.default.removeItem(at: unreadableURL)
-            try? FileManager.default.moveItem(at: url, to: unreadableURL)
+            var number = 1
+            while FileManager.default.fileExists(
+                atPath: unreadableURL(number).path(percentEncoded: false))
+            {
+                number += 1
+            }
+            try? FileManager.default.moveItem(at: url, to: unreadableURL(number))
             return nil
         }
         lastSaved = try? Self.encode(Self.canonical(state).unplaced)
