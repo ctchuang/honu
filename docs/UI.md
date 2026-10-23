@@ -4,7 +4,7 @@ A PRD for how Honu looks and behaves: the principles every part of the UI
 follows, and the behavior that comes from them. Changes to the UI should
 keep to it; a change that departs from it updates this document first.
 The launcher's own design is in `Launcher.md`, resizing bubbles in
-`Resizing.md`, and each built-in microapp's in `microapps/` (`Note.md`,
+`Resizing.md`, jelly bubbles in `Jelly.md`, and each built-in microapp's in `microapps/` (`Note.md`,
 `WebPage.md`).
 
 ## Vision
@@ -41,8 +41,9 @@ stays small while what it can do grows.
    surface.
 4. **Bubbles are physical.** A bubble is Liquid Glass with weight: it can
    be thrown and glides to a stop, crowded ones push each other apart,
-   and they bounce off the screen edges. Left alone, a bubble stays
-   where it is put. The bubble
+   and they bounce off the screen edges. It is soft, too: it squashes,
+   stretches, and wobbles like cartoon jelly, what it shows and all, and
+   springs back into shape. Left alone, a bubble stays where it is put. The bubble
    pressed last comes to the top and covers the others completely.
 5. **Status shows through motion.** A bubble breathes while busy, rises
    once when something finishes, and wobbles when it needs the user.
@@ -96,7 +97,10 @@ closes, and it leaves only through the octopus. A new
 bubble flies out of the turtle, growing on the way, and text typed
 before its field has the focus goes into it. A bubble starts at the size
 its microapp asks for; once the user resizes it, it keeps the user's
-size, across launches too. See `Resizing.md`.
+size, across launches too. See `Resizing.md`. It is jelly: it flattens
+against an edge it hits, trails behind the pointer and stretches when
+moved fast, splats when it lands, and wobbles back into shape within
+about a second, its content squashing along. See `Jelly.md`.
 
 | Input | Result |
 |---|---|

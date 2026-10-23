@@ -255,7 +255,7 @@ lint on their own.
   seconds. The look in the running app is still to be checked against
   these.
 
-### Step 5: Docs
+### Step 5: Docs (done)
 
 - `UI.md`: jelly in principle 4 and in **Bubbles**; `CLAUDE.md`: the
   architecture; `TODO.md`: the jelly effect is off the list; the steps
