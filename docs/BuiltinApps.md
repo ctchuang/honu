@@ -192,7 +192,7 @@ lint on their own.
   order; opening and leaving the folder; Escape twice; the launcher
   opening at the top level.
 
-### Step 2: Run web pages apart from the Maker
+### Step 2: Run web pages apart from the Maker (done)
 
 A refactor; no behavior changes.
 

@@ -2,23 +2,38 @@ import Foundation
 import UniformTypeIdentifiers
 import WebKit
 
-/// Serves a microapp's folder at `honu-app://<folder name>/`, so each
+/// Serves a microapp's folder at `<scheme>://<folder name>/`, so each
 /// microapp has an origin of its own, a secure context, and relative links
-/// to the files beside its page. It never serves what its instances saved
-/// (`instances/`): a page reads only its own, through `honu.load`.
+/// to the files beside its page. It only reads the folder, and never serves
+/// what its instances saved (`instances/`): a page reads only its own,
+/// through `honu.load`.
 struct MicroappScheme: URLSchemeHandler {
+    /// The scheme of the microapps Claude makes.
     static let scheme = "honu-app"
 
+    /// The scheme it serves, which is part of the page's origin.
+    let scheme: String
     let folder: URL
 
-    /// Where the page at the root of a microapp's folder is.
-    static func url(of folder: URL) -> URL {
+    init(folder: URL, scheme: String = Self.scheme) {
+        self.folder = folder
+        self.scheme = scheme
+    }
+
+    /// Where the page at the root of its folder is.
+    var pageURL: URL {
         URL(string: "\(scheme)://\(folder.lastPathComponent)/index.html")!
+    }
+
+    /// Where the page at the root of a microapp's folder is, served by the
+    /// microapps' scheme.
+    static func url(of folder: URL) -> URL {
+        MicroappScheme(folder: folder).pageURL
     }
 
     func reply(for request: URLRequest) -> AsyncThrowingStream<URLSchemeTaskResult, any Error> {
         AsyncThrowingStream { replies in
-            let url = request.url ?? Self.url(of: folder)
+            let url = request.url ?? pageURL
             if let file = file(at: url), let data = try? Data(contentsOf: file) {
                 let type = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType
                 replies.yield(

@@ -2,23 +2,36 @@ import AppKit
 import SwiftUI
 import WebKit
 
-/// Runs a microapp: its folder's page, served at `honu-app://`, with
-/// `window.honu` to save its state in `dataURL`. It loads the page again for each new
-/// `version`, and tells `app` when the page has loaded, what errors it
-/// reports, and what size it asks for.
+/// What hears from a microapp's page as it runs: when it has loaded, what
+/// errors it reports, both at the time they happen, and what size it asks
+/// for. The Maker is one, for the microapps Claude makes, and each
+/// microapp built into Honu as a web page is another.
+@MainActor
+protocol PageHost: AnyObject {
+    func loaded(_ item: ItemID, at time: TimeInterval)
+    func report(_ problem: String, in item: ItemID, at time: TimeInterval)
+    func resize(_ item: ItemID, to size: CGSize)
+}
+
+/// Runs a microapp: the page `site` serves, with `window.honu` to save its
+/// state in `dataURL`. It loads the page again for each new `version`, and
+/// tells `host` when the page has loaded, what errors it reports, and what
+/// size it asks for.
 struct MicroappView: View {
     let version: Int
     // Spelled out instead of `@State`, whose macro ships only with Xcode.
     private let runner: State<MicroappRunner>
 
-    init(app: MakerApp, item: ItemID, folder: URL, dataURL: URL, version: Int) {
+    init(
+        host: any PageHost, item: ItemID, site: MicroappScheme, dataURL: URL, version: Int
+    ) {
         self.version = version
         runner = State(
             initialValue: MicroappRunner(
-                folder: folder, dataURL: dataURL,
-                onLoad: { [weak app] in app?.loaded(item) },
-                onProblem: { [weak app] in app?.report($0, in: item) },
-                onResize: { [weak app] in app?.resize(item, to: $0) }))
+                site: site, dataURL: dataURL,
+                onLoad: { [weak host] in host?.loaded(item, at: now()) },
+                onProblem: { [weak host] in host?.report($0, in: item, at: now()) },
+                onResize: { [weak host] in host?.resize(item, to: $0) }))
     }
 
     var body: some View {
@@ -26,8 +39,7 @@ struct MicroappView: View {
         WebView(runner.page)
             .task(id: version) {
                 do {
-                    for try await event in runner.page.load(
-                        URLRequest(url: MicroappScheme.url(of: runner.folder)))
+                    for try await event in runner.page.load(URLRequest(url: runner.site.pageURL))
                     where event == .finished {
                         runner.onLoad()
                     }
@@ -43,17 +55,17 @@ struct MicroappView: View {
 /// initial value every time the view is recreated and keeps only the first.
 @MainActor
 final class MicroappRunner {
-    let folder: URL
+    let site: MicroappScheme
     let dataURL: URL
     let onLoad: () -> Void
     private let onProblem: (String) -> Void
     private let onResize: (CGSize) -> Void
 
     init(
-        folder: URL, dataURL: URL, onLoad: @escaping () -> Void,
+        site: MicroappScheme, dataURL: URL, onLoad: @escaping () -> Void,
         onProblem: @escaping (String) -> Void, onResize: @escaping (CGSize) -> Void
     ) {
-        self.folder = folder
+        self.site = site
         self.dataURL = dataURL
         self.onLoad = onLoad
         self.onProblem = onProblem
@@ -64,10 +76,10 @@ final class MicroappRunner {
 
     lazy var page: WebPage = {
         var configuration = WebPage.Configuration()
-        configuration.urlSchemeHandlers[URLScheme(MicroappScheme.scheme)!] = MicroappScheme(
-            folder: folder)
+        configuration.urlSchemeHandlers[URLScheme(site.scheme)!] = site
         configuration.userContentController = bridge.controller()
-        let page = WebPage(configuration: configuration, navigationDecider: StaysHome())
+        let page = WebPage(
+            configuration: configuration, navigationDecider: StaysHome(scheme: site.scheme))
         page.isInspectable = true
         return page
     }()
@@ -76,11 +88,14 @@ final class MicroappRunner {
 /// Keeps a microapp's page where it is: a link leaving it opens in the
 /// browser instead, while frames inside the page go anywhere.
 struct StaysHome: WebPage.NavigationDeciding {
+    /// The scheme the page is served by, which it stays in.
+    let scheme: String
+
     func decidePolicy(
         for action: WebPage.NavigationAction, preferences: inout WebPage.NavigationPreferences
     ) async -> WKNavigationActionPolicy {
         guard let url = action.request.url, action.target?.isMainFrame ?? true,
-            url.scheme != MicroappScheme.scheme
+            url.scheme != scheme
         else { return .allow }
         if ["http", "https"].contains(url.scheme?.lowercased()) {
             NSWorkspace.shared.open(url)

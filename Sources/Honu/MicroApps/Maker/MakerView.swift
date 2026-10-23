@@ -21,7 +21,7 @@ struct MakerView: View {
         case .writing, .running:
             VStack(spacing: 0) {
                 MicroappView(
-                    app: app, item: item, folder: microapp.folder.url,
+                    host: app, item: item, site: MicroappScheme(folder: microapp.folder.url),
                     dataURL: instance.dataURL, version: microapp.version)
                 ChangeBar(app: app, item: item, microapp: microapp)
             }

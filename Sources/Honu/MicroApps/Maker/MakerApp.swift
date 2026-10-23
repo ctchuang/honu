@@ -11,7 +11,7 @@ import SwiftUI
 /// own.
 @Observable
 @MainActor
-final class MakerApp: MicroApp {
+final class MakerApp: MicroApp, PageHost {
     let id = AppID("maker")
     let launcherLabel = "New Microapp"
     let launcherSymbol = "plus"
