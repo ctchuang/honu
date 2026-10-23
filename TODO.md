@@ -8,7 +8,8 @@
 
 ## UI Tweaking
 
-- [P2] Can we make the bubble look like bubble (jelly effect)?
+- [P2] **Jelly bubbles** (started): bubbles squash, stretch, and wobble
+  like jelly, content and all (`docs/Jelly.md`).
 - [P2] Fade-in effect of the speech bubble doesn't come from the
   octopus.
 - [P2] **Physics shows status** (started): bubbles breathe when
