@@ -3,7 +3,8 @@
 A PRD for how Honu looks and behaves: the principles every part of the UI
 follows, and the behavior that comes from them. Changes to the UI should
 keep to it; a change that departs from it updates this document first.
-The launcher's own design is in `Launcher.md`, resizing bubbles in
+The launcher's own design is in `Launcher.md` (its folder of built-in
+microapps in `BuiltinApps.md`), resizing bubbles in
 `Resizing.md`, jelly bubbles in `Jelly.md`, and each built-in microapp's in `microapps/` (`Note.md`,
 `WebPage.md`).
 
@@ -89,7 +90,8 @@ behind every other window.
 
 **Launcher.** A glass panel of microapps: Note, each installed microapp,
 and **+** for a new one; Web Page is left off for now, as Ask AI is. See
-`Launcher.md`.
+`Launcher.md`. The built-in microapps are moving into the **Reef**
+folder; see `BuiltinApps.md`.
 
 **Bubbles.** Each shows one item: a note, a web page, or an instance of a
 microapp, under its title (or, as a note does, with the title in its

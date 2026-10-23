@@ -30,7 +30,8 @@
 - Migrate the existing Note app to Web-based (managed in the same way
   as other microapps).
 - Add top 20 web sites as built-in microapps.
-- Add more built-in apps in a subfolder as examples.
+- Add more built-in apps in a subfolder as examples, native or web
+  (`docs/BuiltinApps.md`).
 
 ### Works with Claude (TBD)
 
