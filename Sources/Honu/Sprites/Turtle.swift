@@ -78,9 +78,10 @@ final class Turtle {
         hoppedAt = time
     }
 
-    /// Opens the mouth for a moment and returns where a bubble should come out.
-    func spit() -> CGPoint {
-        spatAt = now()
+    /// Opens the mouth for a moment at `time` and returns where a bubble
+    /// should come out.
+    func spit(at time: TimeInterval = now()) -> CGPoint {
+        spatAt = time
         return PixelGrid.point(Self.mouth, origin: origin)
     }
 

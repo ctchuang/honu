@@ -140,10 +140,9 @@ final class MakerApp: MicroApp {
     /// it asked for a description takes the first page's size, since the
     /// size given to the description says nothing about the page.
     func update(_ context: Context) {
-        let time = now()
         for microapp in apps {
             let wasMaking = microapp.status == .writing(.making)
-            let outcome = microapp.poll(services.claude, at: time)
+            let outcome = microapp.poll(services.claude, at: context.time)
             for item in items(of: microapp) {
                 if outcome == .needsAttention {
                     context.play(.wobble, for: item)
@@ -200,17 +199,18 @@ final class MakerApp: MicroApp {
         microapp(of: item)?.revert()
     }
 
-    /// Notes that an instance's page loaded; a new page rises in every
-    /// instance of its microapp.
-    func loaded(_ item: ItemID) {
+    /// Notes that an instance's page loaded at `time`; a new page rises in
+    /// every instance of its microapp.
+    func loaded(_ item: ItemID, at time: TimeInterval = now()) {
         guard let microapp = microapp(of: item) else { return }
-        if microapp.loaded(at: now()) {
+        if microapp.loaded(at: time) {
             risen.formUnion(items(of: microapp))
         }
     }
 
-    func report(_ problem: String, in item: ItemID) {
-        microapp(of: item)?.report(problem, at: now())
+    /// Notes that an instance's page reported `problem` at `time`.
+    func report(_ problem: String, in item: ItemID, at time: TimeInterval = now()) {
+        microapp(of: item)?.report(problem, at: time)
     }
 
     func resize(_ item: ItemID, to size: CGSize) {

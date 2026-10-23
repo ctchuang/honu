@@ -68,15 +68,18 @@ enum Effect: Equatable {
     case resetSize(ViewTarget)
 }
 
-/// What a microapp gets to work with while it catches up: a way to ask
-/// things of the bubbles showing its items.
+/// What a microapp gets to work with while it catches up: the time, on the
+/// `now()` clock, and a way to ask things of the bubbles showing its items.
 @MainActor
 final class Context {
     let app: AppID
+    /// When the microapp is catching up.
+    let time: TimeInterval
     private(set) var effects: [Effect] = []
 
-    init(app: AppID) {
+    init(app: AppID, time: TimeInterval = now()) {
         self.app = app
+        self.time = time
     }
 
     /// Has every bubble showing `item` play `motion`.

@@ -80,9 +80,9 @@ struct MakerTests {
         MakerApp(root: root, services: Services(claude: claude))
     }
 
-    /// Runs `update` on `maker` and returns what it asked of the bubbles.
-    private func update(_ maker: MakerApp) -> [Effect] {
-        let context = Context(app: maker.id)
+    /// Runs `update` on `maker` at `time` and returns what it asked of the bubbles.
+    private func update(_ maker: MakerApp, at time: TimeInterval = now()) -> [Effect] {
+        let context = Context(app: maker.id, time: time)
         maker.update(context)
         return context.effects
     }
@@ -400,6 +400,18 @@ struct MakerTests {
         #expect(restored.microapp(of: blank)?.draft == "a half-typed descr")
         #expect(!FileManager.default.fileExists(atPath: stray.url.path()))
         #expect(back.folder.page() != nil)
+    }
+
+    @Test func errorsSoonAfterLoadingAreFixedOnceTheDelayIsUp() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        maker.loaded(item, at: 100)
+        maker.report("error: x is not defined", in: item, at: 101)
+        _ = update(maker, at: 101 + GeneratedApp.fixDelay / 2)
+        #expect(microapp.status == .running, "fixed before the delay")
+        _ = update(maker, at: 101 + GeneratedApp.fixDelay)
+        #expect(microapp.status == .writing(.fixing))
     }
 
     @Test func aPageCutShortByQuittingLeavesThePageBeforeRunning() throws {

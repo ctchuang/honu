@@ -35,10 +35,11 @@ final class Registry {
         app(target.app)?.isBusy(target.item) ?? false
     }
 
-    /// Lets every microapp catch up, returning what they ask of their bubbles.
-    func update() -> [Effect] {
+    /// Lets every microapp catch up at `time`, returning what they ask of
+    /// their bubbles.
+    func update(at time: TimeInterval = now()) -> [Effect] {
         apps.flatMap { app in
-            let context = Context(app: app.id)
+            let context = Context(app: app.id, time: time)
             app.update(context)
             return context.effects
         }

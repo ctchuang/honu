@@ -407,7 +407,7 @@ final class Shell {
         // A long pause, such as while the Mac slept, moves nothing far.
         let dt = min(time - (lastTick ?? time), 1.0 / 30)
         lastTick = time
-        updateApps()
+        updateApps(at: time)
         stage.step(dt: dt)
         if let swallowed = swallowedTile, time - swallowed.start >= swallowed.flight.seconds {
             swallowedTile = nil
@@ -430,12 +430,12 @@ final class Shell {
         autosave.tick(snapshot)
     }
 
-    /// Lets the microapps catch up, shows on each bubble what its item is
-    /// doing (it breathes while busy, and takes the size its microapp asks
-    /// for, unless the user resized it), and plays the motions and drops the
-    /// sizes they ask for.
-    private func updateApps() {
-        for effect in registry.update() {
+    /// Lets the microapps catch up at `time`, shows on each bubble what its
+    /// item is doing (it breathes while busy, and takes the size its
+    /// microapp asks for, unless the user resized it), and plays the motions
+    /// and drops the sizes they ask for.
+    private func updateApps(at time: TimeInterval) {
+        for effect in registry.update(at: time) {
             switch effect {
             case .motion(let target, let motion):
                 for bubble in stage.bubbles where bubble.target == target {
