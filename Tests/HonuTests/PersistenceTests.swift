@@ -182,7 +182,7 @@ struct AutosaveTests {
 
         let shell = makeShell(storeURL: url)
         #expect(shell.stage.bubbles.isEmpty)
-        let aside = Autosave(url: url).unreadableURL
+        let aside = Autosave(url: url).unreadableURL()
         #expect(aside.lastPathComponent == "state.unreadable.json")
         #expect(try Data(contentsOf: aside) == unreadable)
 
@@ -190,6 +190,23 @@ struct AutosaveTests {
         shell.save()
         #expect(try Data(contentsOf: aside) == unreadable, "wrote over the unreadable store")
         #expect(makeShell(storeURL: url).stage.bubbles.count == 1)
+    }
+
+    @Test func aStoreKeptAsideIsNotWrittenOverByTheNext() throws {
+        let url = temporaryStoreURL()
+        let first = Data(#"{"bubbles": "first"}"#.utf8)
+        let second = Data(#"{"bubbles": "second"}"#.utf8)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try first.write(to: url)
+        #expect(Autosave(url: url).restore() == nil)
+        try second.write(to: url)
+        #expect(Autosave(url: url).restore() == nil)
+
+        let autosave = Autosave(url: url)
+        #expect(try Data(contentsOf: autosave.unreadableURL()) == first)
+        #expect(autosave.unreadableURL(2).lastPathComponent == "state.unreadable-2.json")
+        #expect(try Data(contentsOf: autosave.unreadableURL(2)) == second)
     }
 }
 
