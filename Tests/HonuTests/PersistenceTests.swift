@@ -152,6 +152,45 @@ struct AutosaveTests {
         autosave.save(state)
         #expect(!FileManager.default.fileExists(atPath: url.path()), "wrote with nothing changed")
     }
+
+    @Test func changesAreCheckedForOnceASecond() {
+        let url = temporaryStoreURL()
+        let autosave = Autosave(url: url)
+        var state = SavedState()
+        var checks = 0
+        let snapshot = {
+            checks += 1
+            return state
+        }
+        autosave.tick(at: 100, snapshot)
+        #expect(checks == 1 && FileManager.default.fileExists(atPath: url.path()))
+
+        state.allDesktops = false
+        autosave.tick(at: 100.5, snapshot)
+        #expect(checks == 1, "checked again within a second")
+        autosave.tick(at: 101, snapshot)
+        #expect(checks == 2)
+        #expect(Autosave(url: url).restore()?.allDesktops == false)
+    }
+
+    @Test func aStoreThatCannotBeReadIsKeptAsideNotWrittenOver() throws {
+        let url = temporaryStoreURL()
+        let unreadable = Data(#"{"bubbles": "not bubbles"}"#.utf8)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try unreadable.write(to: url)
+
+        let shell = makeShell(storeURL: url)
+        #expect(shell.stage.bubbles.isEmpty)
+        let aside = Autosave(url: url).unreadableURL
+        #expect(aside.lastPathComponent == "state.unreadable.json")
+        #expect(try Data(contentsOf: aside) == unreadable)
+
+        shell.start(AppID("notes"))
+        shell.save()
+        #expect(try Data(contentsOf: aside) == unreadable, "wrote over the unreadable store")
+        #expect(makeShell(storeURL: url).stage.bubbles.count == 1)
+    }
 }
 
 struct CanonicalJSONTests {
