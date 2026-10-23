@@ -370,7 +370,7 @@ final class Shell {
     /// the launcher, and the octopus swallows it with every bubble of it,
     /// keeping them for a while in case the user takes it back.
     func uninstall(_ name: String, at time: TimeInterval = now()) {
-        guard let microapp = maker.library.first(where: { $0.folder.name == name }) else { return }
+        guard let microapp = maker.installed(named: name) else { return }
         maker.withdraw(name)
         let targets = Set(maker.items(of: microapp).map { ViewTarget(app: maker.id, item: $0) })
         var morsels: [Octopus.Swallowed.Morsel] = []
