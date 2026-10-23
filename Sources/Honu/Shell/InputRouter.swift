@@ -57,7 +57,7 @@ struct InputRouter {
                 return true
             }
             // ⌘Z undoes a delete, unless a text field wants it.
-            if command, unmodified == "z", !typing, shell.octopus.canUndo {
+            if command, unmodified == "z", !typing, shell.trash.canUndo {
                 shell.undoDelete()
                 return true
             }

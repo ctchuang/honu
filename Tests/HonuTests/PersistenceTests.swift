@@ -139,7 +139,7 @@ struct PersistenceTests {
         shell.start(AppID("notes"))
         let doomed = try #require(shell.stage.bubbles.first)
         shell.drop(doomed)
-        #expect(doomed.isSwallowed && shell.octopus.canUndo)
+        #expect(doomed.isSwallowed && shell.trash.canUndo)
         shell.save()
 
         let restored = makeShell(size: size, storeURL: url)
@@ -171,7 +171,7 @@ struct PersistenceTests {
         let bubble = try #require(shell.stage.bubbles.first)
         shell.drop(bubble)
         shell.undoDelete()
-        #expect(!bubble.isSwallowed && !shell.octopus.canUndo)
+        #expect(!bubble.isSwallowed && !shell.trash.canUndo)
         #expect(shell.stage.bubbles.last === bubble)
     }
 }

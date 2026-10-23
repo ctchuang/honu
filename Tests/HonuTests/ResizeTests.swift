@@ -170,7 +170,7 @@ struct ShellResizeTests {
         let rim = CGPoint(x: 600, y: 545)
         let mouth = shell.octopus.middle
         drag(shell, bubble, from: rim, by: CGSize(width: mouth.x - rim.x, height: mouth.y - rim.y))
-        #expect(!bubble.isSwallowed && !shell.octopus.canUndo)
+        #expect(!bubble.isSwallowed && !shell.trash.canUndo)
         #expect(bubble.userSize != nil)
     }
 

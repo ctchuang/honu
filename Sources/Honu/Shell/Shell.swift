@@ -44,6 +44,8 @@ final class Shell {
     let stage: Stage
     let turtle: Turtle
     let octopus: Octopus
+    /// What was deleted recently enough to be brought back.
+    let trash: Trash
     /// The microapp that makes microapps, which the launcher's **+** starts.
     let maker: MakerApp
     /// What the turtle has open, if anything.
@@ -85,7 +87,8 @@ final class Shell {
         registry = Registry([NotesApp(), AskApp(services: services), WebApp(), maker])
         stage = Stage(size: size)
         turtle = Turtle(stageSize: size)
-        octopus = Octopus(stageSize: size)
+        trash = Trash()
+        octopus = Octopus(stageSize: size, trash: trash)
         if let state = autosave.restore() {
             restore(state)
         }
@@ -293,7 +296,7 @@ final class Shell {
         guard let (bubble, home) = stage.endDrag() else { return }
         autosave.moved()
         if doomed {
-            octopus.swallow(bubble.id, home: home)
+            trash.swallow(bubble.id, home: home)
             stage.swallow(bubble, into: octopus.mouth)
         }
         octopus.summon(false, turtle: turtle.center)
@@ -373,19 +376,20 @@ final class Shell {
         guard let microapp = maker.installed(named: name) else { return }
         maker.withdraw(name)
         let targets = Set(maker.items(of: microapp).map { ViewTarget(app: maker.id, item: $0) })
-        var morsels: [Octopus.Swallowed.Morsel] = []
+        var morsels: [Trash.Swallowed.Morsel] = []
         for bubble in stage.bubbles where targets.contains(bubble.target) && !bubble.isSwallowed {
-            morsels.append(Octopus.Swallowed.Morsel(bubble: bubble.id, home: bubble.destination))
+            morsels.append(Trash.Swallowed.Morsel(bubble: bubble.id, home: bubble.destination))
             stage.swallow(bubble, into: octopus.mouth)
         }
-        octopus.swallow(morsels, microapp: name, at: time)
+        trash.swallow(morsels, microapp: name, at: time)
         octopus.summon(false, turtle: turtle.center)
     }
 
-    /// Has the octopus spit back what it swallowed last, if it still can:
-    /// a bubble, or a microapp with its bubbles, whose tile comes back.
-    func undoDelete() {
-        guard let swallowed = octopus.spitBack() else { return }
+    /// Has the octopus spit back what it swallowed last, if it still can at
+    /// `time`: a bubble, or a microapp with its bubbles, whose tile comes back.
+    func undoDelete(at time: TimeInterval = now()) {
+        guard let swallowed = trash.spitBack(at: time) else { return }
+        octopus.spit(at: time)
         if let microapp = swallowed.microapp {
             maker.reinstate(microapp)
         }
@@ -397,7 +401,7 @@ final class Shell {
     }
 
     /// Catches up on what happens over time: moves the bubbles, deletes for
-    /// good the bubbles and microapps the octopus forgets, and saves what
+    /// good the bubbles and microapps the trash forgets, and saves what
     /// changed. Called many times a second.
     func tick(at time: TimeInterval = now()) {
         // A long pause, such as while the Mac slept, moves nothing far.
@@ -408,7 +412,11 @@ final class Shell {
         if let swallowed = swallowedTile, time - swallowed.start >= swallowed.flight.seconds {
             swallowedTile = nil
         }
-        for swallowed in octopus.forget(at: time) {
+        let forgotten = trash.forget(at: time)
+        if !forgotten.isEmpty {
+            octopus.riseOrSink()
+        }
+        for swallowed in forgotten {
             for id in swallowed.bubbles {
                 undoManagers[id] = nil
                 if let bubble = stage.remove(id), !stage.shows(bubble.target) {

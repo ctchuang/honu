@@ -7,7 +7,8 @@ import SwiftUI
 /// bubble dropped on it is swallowed; a tile dropped on it is swallowed with
 /// every bubble of its microapp. For a few seconds afterwards the octopus
 /// waits with them still inside, and clicking it (or pressing ⌘Z) spits them
-/// back to where they were, so a slip of the hand loses nothing.
+/// back to where they were, so a slip of the hand loses nothing. What it
+/// holds is kept in the `Trash`; the octopus shows it.
 @Observable
 @MainActor
 final class Octopus {
@@ -52,8 +53,6 @@ final class Octopus {
     /// How far from the octopus's middle the pointer may be for a dropped
     /// bubble to be swallowed. Wider than the sprite, so dropping takes no aim.
     private static let reach: CGFloat = 80
-    /// Seconds a swallowed bubble can still be brought back.
-    static let undoSeconds: TimeInterval = 5
     /// Seconds a bubble takes to go down, and the gulp afterwards lasts.
     private static let swallowSeconds = Bubble.swallowSeconds
     private static let gulpSeconds: TimeInterval = 0.3
@@ -65,23 +64,6 @@ final class Octopus {
     /// The gap between the hint and the top of the octopus.
     nonisolated static let hintGap: CGFloat = 6
 
-    /// What the octopus swallowed in one gulp: bubbles, each with where it
-    /// was, to return it there, and the microapp uninstalled with them, if
-    /// any. The bubbles themselves stay on the stage, out of sight.
-    struct Swallowed {
-        struct Morsel: Equatable {
-            let bubble: BubbleID
-            let home: CGPoint
-        }
-
-        let morsels: [Morsel]
-        /// The folder name of the microapp uninstalled.
-        let microapp: String?
-        let at: TimeInterval
-
-        var bubbles: [BubbleID] { morsels.map(\.bubble) }
-    }
-
     /// What is being dragged to it, which its speech bubble names.
     enum Offer {
         case bubble
@@ -89,6 +71,8 @@ final class Octopus {
     }
 
     let stageSize: CGSize
+    /// What it has swallowed that can still come back, which keeps it up.
+    let trash: Trash
     /// Whether it is up, in view, rather than hidden below the bottom edge.
     private(set) var isUp = false
     /// Whether it sits in the bottom-right corner rather than the bottom-left.
@@ -100,13 +84,10 @@ final class Octopus {
     /// Whether a bubble is held over it, ready to be dropped.
     var isEager = false
     private var spatAt = -TimeInterval.infinity
-    /// Until when swallowed bubbles can be brought back.
-    private(set) var undoUntil = -TimeInterval.infinity
-    /// What was swallowed recently enough to be brought back, the latest last.
-    private(set) var stomach: [Swallowed] = []
 
-    init(stageSize: CGSize) {
+    init(stageSize: CGSize, trash: Trash) {
         self.stageSize = stageSize
+        self.trash = trash
     }
 
     var size: CGSize { Self.frames[0].size }
@@ -125,14 +106,12 @@ final class Octopus {
         CGPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
     }
 
-    var canUndo: Bool { !stomach.isEmpty }
-
     /// Whether it says it can take what is dragged: while summoned, in place
     /// of the undo hint.
     var offersHelp: Bool { isUp && isSummoned }
 
     /// Whether it shows the "Click to undo" hint, which takes clicks.
-    var showsUndoHint: Bool { canUndo && !isSummoned }
+    var showsUndoHint: Bool { trash.canUndo && !isSummoned }
 
     /// Where swallowed bubbles go in and spat-out ones come out.
     var mouth: CGPoint {
@@ -153,12 +132,13 @@ final class Octopus {
             // Only pick a corner while out of sight, so it never jumps sideways.
             isRight = turtle.x < stageSize.width / 2
         }
-        rise()
+        riseOrSink()
     }
 
-    /// Rises or sinks to match what it is wanted for.
-    private func rise() {
-        let wanted = isSummoned || canUndo
+    /// Rises or sinks to match what it is wanted for: while summoned, or
+    /// while the trash holds something it can spit back.
+    func riseOrSink() {
+        let wanted = isSummoned || trash.canUndo
         if wanted != isUp {
             withAnimation(.easeOut(duration: 0.3)) { isUp = wanted }
         }
@@ -194,46 +174,16 @@ final class Octopus {
         return grid(at: time).isOpaque(at: point, origin: drawnOrigin(at: time))
     }
 
-    /// Swallows `bubble`, which was picked up at `home`, at `time`.
-    func swallow(_ bubble: BubbleID, home: CGPoint, at time: TimeInterval = now()) {
-        swallow([Swallowed.Morsel(bubble: bubble, home: home)], at: time)
-    }
-
-    /// Swallows `morsels` in one gulp at `time`, with the microapp whose
-    /// folder is named `microapp`, if it is uninstalling one.
-    func swallow(
-        _ morsels: [Swallowed.Morsel], microapp: String? = nil, at time: TimeInterval = now()
-    ) {
-        stomach.append(Swallowed(morsels: morsels, microapp: microapp, at: time))
-        undoUntil = time + Self.swallowSeconds + Self.undoSeconds
-        rise()
-    }
-
-    /// Spits out what it swallowed last, returning it; its bubbles should
-    /// fly back to where they were from `mouth`.
-    func spitBack(at time: TimeInterval = now()) -> Swallowed? {
-        guard let swallowed = stomach.popLast() else { return nil }
+    /// Spits something back out of the trash at `time`, with a gulp.
+    func spit(at time: TimeInterval) {
         spatAt = time
-        // Leave time to bring back the one swallowed before it, too.
-        undoUntil = time + Self.undoSeconds
-        rise()
-        return swallowed
-    }
-
-    /// Forgets what is too old to bring back at `time`, returning it; it is
-    /// now deleted for good.
-    func forget(at time: TimeInterval = now()) -> [Swallowed] {
-        guard canUndo, time >= undoUntil else { return [] }
-        let gone = stomach
-        stomach = []
-        rise()
-        return gone
+        riseOrSink()
     }
 
     /// How far it is lifted at `time`: a sprite pixel while gulping or eager.
     func lift(at time: TimeInterval) -> CGFloat {
         let gulp = { (since: TimeInterval) in (0..<Self.gulpSeconds).contains(time - since) }
-        let gulping = gulp(spatAt) || stomach.contains { gulp($0.at + Self.swallowSeconds) }
+        let gulping = gulp(spatAt) || trash.gulps.contains { gulp($0.at + Self.swallowSeconds) }
         return gulping || isEager ? spritePixel : 0
     }
 
@@ -242,13 +192,13 @@ final class Octopus {
     func grid(at time: TimeInterval) -> PixelGrid {
         let rate = isEager ? Self.eagerSwayRate : Self.swayRate
         let frame = Int(time * rate) % 2
-        let swallowing = stomach.contains { time - $0.at < Self.swallowSeconds }
+        let swallowing = trash.gulps.contains { time - $0.at < Self.swallowSeconds }
         return isEager || swallowing ? Self.openFrames[frame] : Self.frames[frame]
     }
 
     /// How visible the undo hint is at `time`, fading out over its last second.
     func hintOpacity(at time: TimeInterval) -> Double {
-        showsUndoHint ? min(max(undoUntil - time, 0), 1) : 0
+        showsUndoHint ? min(max(trash.undoUntil - time, 0), 1) : 0
     }
 
     static func color(_ c: Character) -> Color? {

@@ -112,7 +112,7 @@ struct OctopusTests {
     }
 
     @Test func risesAwayFromTheTurtleOnlyWhileNeeded() {
-        let octopus = Octopus(stageSize: screen)
+        let octopus = Octopus(stageSize: screen, trash: Trash())
         #expect(!octopus.contains(octopus.middle), "visible while idle")
 
         octopus.summon(true, turtle: turtle)
@@ -129,7 +129,7 @@ struct OctopusTests {
     }
 
     @Test func onlyThePixelsDrawnAtTheTimeAreHit() throws {
-        let octopus = Octopus(stageSize: screen)
+        let octopus = Octopus(stageSize: screen, trash: Trash())
         octopus.summon(true, turtle: turtle)
         // A pixel visible in one frame of the swaying tentacles but not in the other.
         let (a, b) = (octopus.grid(at: 0), octopus.grid(at: 0.6))
@@ -144,76 +144,33 @@ struct OctopusTests {
         #expect(octopus.contains(point, at: 0.6) == (b.pixel(pixel.0, pixel.1) != "."))
     }
 
-    @Test func swallowedBubbleCanBeBroughtBackUntilItIsTooLate() {
-        let octopus = Octopus(stageSize: screen)
+    @Test func staysUpWithAnUndoHintWhileTheTrashCanUndo() {
+        let trash = Trash()
+        let octopus = Octopus(stageSize: screen, trash: trash)
         octopus.summon(true, turtle: turtle)
         let (bubble, home, time) = (BubbleID(rawValue: 7), CGPoint(x: 400, y: 300), 1000.0)
-        octopus.swallow(bubble, home: home, at: time)
+        trash.swallow(bubble, home: home, at: time)
         octopus.summon(false, turtle: turtle)
-        #expect(octopus.forget(at: time + 1).isEmpty && octopus.canUndo)
         #expect(octopus.inReach(octopus.middle), "hid while it could undo")
         #expect(octopus.showsUndoHint && !octopus.offersHelp)
         // The hint above it takes clicks too, but only while it applies.
         let hint = octopus.hintCenter(at: time + 1)
         #expect(octopus.contains(hint, at: time + 1), "hint does not take clicks")
 
-        let spat = octopus.spitBack(at: time + 1)
-        #expect(spat?.morsels == [Octopus.Swallowed.Morsel(bubble: bubble, home: home)])
+        _ = trash.spitBack(at: time + 1)
+        octopus.spit(at: time + 1)
         #expect(!octopus.contains(hint, at: time + 1), "hint takes clicks with nothing to undo")
-        #expect(!octopus.canUndo)
-
-        octopus.swallow(bubble, home: home, at: time + 2)
-        #expect(
-            octopus.forget(at: time + 2 + Octopus.undoSeconds + 1).flatMap(\.bubbles) == [bubble])
-        #expect(!octopus.canUndo, "kept the bubble too long")
-        #expect(octopus.spitBack(at: time + 10) == nil)
+        #expect(!octopus.inReach(octopus.middle), "stayed up with nothing to undo")
     }
 
-    @Test func aMicroappIsSwallowedWithItsBubblesInOneGulp() {
-        let octopus = Octopus(stageSize: screen)
+    @Test func offersToUninstallATileDraggedToIt() {
+        let octopus = Octopus(stageSize: screen, trash: Trash())
         octopus.summon(true, turtle: turtle, offer: .microapp)
-        #expect(octopus.offer == .microapp)
-        let morsels = [
-            Octopus.Swallowed.Morsel(bubble: BubbleID(rawValue: 1), home: CGPoint(x: 1, y: 1)),
-            Octopus.Swallowed.Morsel(bubble: BubbleID(rawValue: 2), home: CGPoint(x: 2, y: 2)),
-        ]
-        octopus.swallow(morsels, microapp: "A1", at: 1000)
-        octopus.summon(false, turtle: turtle)
-        #expect(octopus.canUndo)
-        let spat = octopus.spitBack(at: 1001)
-        #expect(spat?.morsels == morsels && spat?.microapp == "A1")
-
-        // Even a microapp with no bubble left can be brought back.
-        octopus.swallow([], microapp: "B2", at: 1002)
-        #expect(octopus.canUndo)
-        let gone = octopus.forget(at: 1002 + Octopus.undoSeconds + 1)
-        #expect(gone.map(\.microapp) == ["B2"] && gone.flatMap(\.bubbles).isEmpty)
-    }
-
-    @Test func gulpsComeBackLastFirstAndAreForgottenTogether() {
-        let octopus = Octopus(stageSize: screen)
-        let (a, b) = (BubbleID(rawValue: 1), BubbleID(rawValue: 2))
-        let kept = Bubble.swallowSeconds + Octopus.undoSeconds
-        octopus.swallow(a, home: .zero, at: 1000)
-        // A gulp keeps the one before it for as long as itself.
-        octopus.swallow(b, home: .zero, at: 1000 + Octopus.undoSeconds)
-        #expect(octopus.forget(at: 1000 + kept + 1).isEmpty, "forgot the first gulp alone")
-
-        let time = 1000 + Octopus.undoSeconds + 1
-        #expect(octopus.spitBack(at: time)?.bubbles == [b])
-        // Spitting one back leaves time to bring back the one before it.
-        #expect(octopus.forget(at: time + Octopus.undoSeconds - 1).isEmpty)
-        #expect(octopus.spitBack(at: time + 1)?.bubbles == [a])
-        #expect(!octopus.canUndo)
-
-        octopus.swallow(a, home: .zero, at: 2000)
-        octopus.swallow(b, home: .zero, at: 2001)
-        #expect(octopus.forget(at: 2001 + kept).flatMap(\.bubbles) == [a, b])
-        #expect(!octopus.canUndo)
+        #expect(octopus.offer == .microapp && octopus.offersHelp)
     }
 
     @Test func picksTheCornerOnlyWhileOutOfSight() {
-        let octopus = Octopus(stageSize: screen)
+        let octopus = Octopus(stageSize: screen, trash: Trash())
         octopus.summon(true, turtle: CGPoint(x: 900, y: 650))
         #expect(!octopus.isRight)
         // The turtle crossing over while it is up does not move it.

@@ -36,7 +36,7 @@ struct UninstallTests {
         shell.uninstall(name, at: 10)
         #expect(!hasTile(name, in: shell))
         #expect(shown.allSatisfy { $0.isSwallowed })
-        #expect(shell.octopus.canUndo)
+        #expect(shell.trash.canUndo)
 
         shell.undoDelete()
         #expect(hasTile(name, in: shell))
@@ -51,7 +51,7 @@ struct UninstallTests {
         shell.tick(at: 11)
         #expect(FileManager.default.fileExists(atPath: microapp.folder.url.path()))
 
-        shell.tick(at: 10 + Bubble.swallowSeconds + Octopus.undoSeconds + 1)
+        shell.tick(at: 10 + Bubble.swallowSeconds + Trash.undoSeconds + 1)
         #expect(shell.maker.apps.isEmpty && shell.maker.items.isEmpty)
         #expect(bubbles(of: microapp, in: shell).isEmpty)
         #expect(shell.stage.bubbles.isEmpty)
@@ -82,7 +82,7 @@ struct UninstallTests {
         shell.tick(at: 10 + Bubble.swallowSeconds)
         #expect(shell.swallowedTile == nil)
         #expect(!hasTile(name, in: shell))
-        #expect(shell.octopus.canUndo)
+        #expect(shell.trash.canUndo)
         #expect(bubbles(of: microapp, in: shell).allSatisfy { $0.isSwallowed })
     }
 
@@ -141,7 +141,7 @@ struct UninstallTests {
         #expect(!shell.octopus.isEager && !shell.octopus.isSummoned)
         // The drag ending afterwards, over the octopus, uninstalls nothing.
         shell.endTileDrag(at: middle, time: 10)
-        #expect(shell.swallowedTile == nil && !shell.octopus.canUndo)
+        #expect(shell.swallowedTile == nil && !shell.trash.canUndo)
         #expect(hasTile(name, in: shell))
     }
 
@@ -150,7 +150,7 @@ struct UninstallTests {
         let (_, timer) = try shell.makeMicroapp("Timer", claude: claude, at: 2)
 
         shell.uninstall(clock.folder.name, at: 10)
-        shell.tick(at: 10 + Bubble.swallowSeconds + Octopus.undoSeconds + 1)
+        shell.tick(at: 10 + Bubble.swallowSeconds + Trash.undoSeconds + 1)
         #expect(shell.maker.library.map { $0 === timer } == [true])
         #expect(bubbles(of: timer, in: shell).count == 1)
         #expect(bubbles(of: timer, in: shell).allSatisfy { !$0.isSwallowed })

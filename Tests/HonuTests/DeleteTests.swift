@@ -20,7 +20,7 @@ struct DeleteTests {
 
         shell.endBubbleDrag(pointer: aside)
         #expect(!bubble.isSwallowed && bubble.center == aside)
-        #expect(!shell.octopus.isSummoned && !shell.octopus.canUndo)
+        #expect(!shell.octopus.isSummoned && !shell.trash.canUndo)
         #expect(!shell.octopus.inReach(shell.octopus.middle), "stayed up")
     }
 
@@ -42,7 +42,7 @@ struct DeleteTests {
         shell.dragBubble(bubble, by: CGSize(width: -300, height: 0), pointer: middle)
         #expect(bubble.isDoomed && shell.octopus.isEager)
         shell.endBubbleDrag(pointer: middle)
-        #expect(bubble.isSwallowed && shell.octopus.canUndo)
+        #expect(bubble.isSwallowed && shell.trash.canUndo)
         #expect(!shell.octopus.isEager && !shell.octopus.isSummoned)
         #expect(shell.octopus.inReach(middle), "sank while it could still undo")
     }
@@ -57,7 +57,7 @@ struct DeleteTests {
         shell.undoDelete()
         #expect(a.isSwallowed && !b.isSwallowed)
         shell.undoDelete()
-        #expect(!a.isSwallowed && !shell.octopus.canUndo)
+        #expect(!a.isSwallowed && !shell.trash.canUndo)
     }
 
     @Test func whatTheOctopusForgetsIsDeletedWithItemsNoOtherBubbleShows() throws {
@@ -69,9 +69,9 @@ struct DeleteTests {
         shell.drop(a)
         shell.drop(b)
 
-        shell.tick(at: now() + Bubble.swallowSeconds + Octopus.undoSeconds + 1)
+        shell.tick(at: now() + Bubble.swallowSeconds + Trash.undoSeconds + 1)
         #expect(shell.stage.bubbles.map(\.id) == [twin.id])
         #expect(shell.notes.items == [a.target.item], "kept a note no bubble shows, or lost one")
-        #expect(!shell.octopus.canUndo)
+        #expect(!shell.trash.canUndo)
     }
 }
