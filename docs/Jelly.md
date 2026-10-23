@@ -252,8 +252,10 @@ lint on their own.
   edge at about 400 points/s squashes its content to 0.90 of its width,
   at 1000 to 0.83, and at 2000 to 0.75; a dragged one stretches by about
   16%; a landing splats it about 17% wider; each settles in 1.2 to 1.8
-  seconds. The look in the running app is still to be checked against
-  these.
+  seconds. In the running app, a throw at the screen's bottom edge, a
+  bump into another bubble, and a new note landing all looked as
+  described, the text squashing sharply with the glass; squashed corners
+  came to a point with three points per corner, so they have five.
 
 ### Step 5: Docs (done)
 
