@@ -49,7 +49,7 @@ it.
 - **Content transform**: the squash, stretch, and shear the bubble's
   content (its title and its microapp's view) takes while the outline
   wobbles: the linear map that best fits the ring's points from where
-  they rest to where they are.
+  they rest to where they are, a little exaggerated.
 - **At rest**: a bubble whose ring has settled; it has no ring, its
   outline is the rounded rectangle, and its content transform is the
   identity.
@@ -97,8 +97,9 @@ the octopus): it flattens and widens, then wobbles back.
   edge, bulging or caving in elsewhere, with corners that stay round.
 - The content takes the content transform, about the bubble's center:
   it squashes, stretches, and shears with the glass, and moves with it.
-  It never pokes out past the glass: where the outline caves in more
-  than the rim, the content shrinks a little more.
+  It squashes a little more than the glass does, for a cartoon look, and
+  never pokes out past it: where it would, the glass grows there, so the
+  rim stays.
 - The deformation is large enough to see from across the screen: a hard
   bounce squashes a bubble by up to about a quarter, and it wobbles
   about three times a second for around a second before it settles.
@@ -188,9 +189,10 @@ center, at full scale, pure value code that tests can drive:
 - Low stiffness and damping make it wobble slowly and a few times; it
   runs in substeps, since the walls are stiff.
 
-The **content transform** is the best-fit linear map and the ring's
-offset, about the center, shrunk where the outline caves in past the
-rim.
+The **content transform** is the best-fit linear map, exaggerated by
+a third, and the ring's offset, about the center. The outline the glass
+takes is the ring pushed out wherever it caves in past the content's
+edge less a margin, so the content never pokes out and the rim stays.
 
 `Bubble` owns its jelly while it wobbles, and publishes only what views
 read: the outline's points (none at rest) and the content transform
@@ -223,8 +225,8 @@ lint on their own.
 - Tests (`JellyTests`): a ring left alone stays at rest; a change in
   velocity sets it wobbling and it settles exactly; a hit on a wall
   flattens the side that hit and bulges the others; area is roughly
-  kept; a fast ring stretches along its velocity; the content stays
-  inside the outline.
+  kept; a fast ring stretches along its velocity; the glass covers the
+  content.
 
 ### Step 3: Bubbles wobble (done)
 
@@ -247,9 +249,9 @@ lint on their own.
   bubble above.
 - Tune the stiffness, damping, caps, and stretch until the look is
   cartoon-like but readable. Measured on the stage: a bubble hitting the
-  edge at about 400 points/s squashes its content to 0.86 of its width,
-  at 1000 or more to about 0.76; a dragged one stretches by about 12%;
-  a landing splats it about 13% wider; each settles in 1.2 to 1.8
+  edge at about 400 points/s squashes its content to 0.90 of its width,
+  at 1000 to 0.83, and at 2000 to 0.75; a dragged one stretches by about
+  16%; a landing splats it about 17% wider; each settles in 1.2 to 1.8
   seconds. The look in the running app is still to be checked against
   these.
 

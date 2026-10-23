@@ -309,10 +309,10 @@ final class Bubble: Identifiable {
             return
         }
         self.jelly = jelly
-        outline = jelly.outline
+        outline = jelly.outline(margin: Self.rimWidth - 4)
         let middle = CGAffineTransform(translationX: size.width / 2, y: size.height / 2)
         contentTransform = middle.inverted()
-            .concatenating(jelly.contentTransform(margin: Self.rimWidth - 4))
+            .concatenating(jelly.contentTransform)
             .concatenating(middle)
     }
 

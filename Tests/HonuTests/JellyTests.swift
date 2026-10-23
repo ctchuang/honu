@@ -56,7 +56,7 @@ struct JellyTests {
         var jelly = jelly()
         run(&jelly, 2)
         #expect(jelly.isSettled)
-        #expect(jelly.contentTransform(margin: 6).isNearlyIdentity)
+        #expect(jelly.contentTransform.isNearlyIdentity)
     }
 
     @Test func changeInVelocitySetsItWobblingAndItSettles() {
@@ -115,7 +115,7 @@ struct JellyTests {
         #expect(box.width < Self.size.width * 0.93, "narrowed only to \(box.width)")
     }
 
-    @Test func contentFollowsTheRingAndStaysInsideIt() {
+    @Test func contentFollowsTheRingAndTheGlassCoversIt() {
         var jelly = jelly()
         let walls = CGRect(x: -Self.size.width / 2, y: -5000, width: 10000, height: 10000)
         jelly.feel(CGPoint(x: 1800, y: 600))
@@ -130,9 +130,9 @@ struct JellyTests {
         ]
         var squashed = 1.0
         run(&jelly, 1, walls: walls) { jelly in
-            let transform = jelly.contentTransform(margin: 6)
+            let transform = jelly.contentTransform
             squashed = min(squashed, transform.a)
-            let outline = Path { $0.addLines(jelly.points) }
+            let outline = Path { $0.addLines(jelly.outline(margin: 6).points) }
             for corner in corners {
                 let moved = corner.applying(transform)
                 #expect(outline.contains(moved), "content corner \(moved) left the outline")

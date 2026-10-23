@@ -35,6 +35,9 @@ struct Jelly {
     /// How much less of a kick the side the ring is flung toward feels than
     /// the middle, and how much more the side behind it does.
     static let squash = 0.6
+    /// How much more the content squashes, stretches, and shears than the
+    /// ring does; where it would poke out, the glass grows to cover it.
+    static let contentExaggeration = 1.3
     /// How much a fast bubble stretches along its velocity at most, and
     /// the speed (points/s) at which it does.
     static let stretch = 0.2
@@ -126,9 +129,6 @@ struct Jelly {
         corner(around: CGPoint(x: left, y: top), from: .pi)
         return (points, normals)
     }
-
-    /// The outline the ring draws now.
-    var outline: Outline { Outline(points: points, normals: normals) }
 
     /// Whether every point is back where it rests and nearly still.
     var isSettled: Bool {
@@ -274,29 +274,27 @@ struct Jelly {
     }
 
     /// The squash, stretch, and shear of the content, relative to the
-    /// center: the map that best fits the ring, moved with it, and shrunk
-    /// wherever the ring caves in deeper than `margin` past it, so the
-    /// content stays inside the outline.
-    func contentTransform(margin: CGFloat) -> CGAffineTransform {
+    /// center: the map that best fits the ring, exaggerated by
+    /// `contentExaggeration` for a cartoon look, moved with the ring.
+    var contentTransform: CGAffineTransform {
         let (linear, offset) = fit()
-        var map = linear
-        map.tx = offset.x
-        map.ty = offset.y
-        // Shrinking about the center by `shrink` pulls the content in by
-        // `1 - shrink` of how far out it reaches; wherever the ring caves in
-        // past the margin, it must be pulled in by that much more.
-        var shrink: CGFloat = 1
-        for i in points.indices {
-            let fitted = rest[i].applying(map)
-            let dent = (fitted - points[i]).dot(normals[i]) - margin
-            guard dent > 0 else { continue }
-            let reach = max((fitted - offset).dot(normals[i]), 1)
-            shrink = min(shrink, 1 - dent / reach)
-        }
-        shrink = max(shrink, 0.5)
+        let more = Self.contentExaggeration
         return CGAffineTransform(
-            a: map.a * shrink, b: map.b * shrink, c: map.c * shrink, d: map.d * shrink,
-            tx: map.tx, ty: map.ty)
+            a: 1 + (linear.a - 1) * more, b: linear.b * more, c: linear.c * more,
+            d: 1 + (linear.d - 1) * more, tx: offset.x, ty: offset.y)
+    }
+
+    /// The outline the glass takes: the ring, pushed out wherever it caves
+    /// in more than `margin` past where the content follows it, so the rim
+    /// grows a little there rather than the content poking out past it.
+    func outline(margin: CGFloat) -> Outline {
+        let map = contentTransform
+        let points = zip(rest, zip(self.points, normals)).map { rest, pointAndNormal in
+            let (point, normal) = pointAndNormal
+            let dent = (rest.applying(map) - point).dot(normal) - margin
+            return dent > 0 ? point + normal * dent : point
+        }
+        return Outline(points: points, normals: normals)
     }
 }
 
