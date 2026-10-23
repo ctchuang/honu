@@ -2,11 +2,12 @@
 
 ## UI Tweaking
 
-- Allow bubble resizing.
-- Decide whether to keep the minimized mode. It's annoying that the
-  bubble shrinks after double-click.
-- Fade-in effect of the speech bubble doesn't come from the octopus.
-- **Physics shows status** (started): bubbles breathe when
+- [P1] Allow bubble resizing.
+- [P1] Decide whether to keep the minimized mode. It's annoying that
+  the bubble shrinks after double-click.
+- [P2] Fade-in effect of the speech bubble doesn't come from the
+  octopus.
+- [P2] **Physics shows status** (started): bubbles breathe when
   active. Rise when something finishes, and wobble when the user is
   needed (`MicroApp.isBusy`, `Context.play`). Ask AI and the Web
   microapp do all three (rises once it has, and wobbles if it
@@ -18,7 +19,7 @@
 
 - Type to filter the launcher's tiles (`docs/Launcher.md`, Later).
 
-### More apps
+### More apps (TBD)
 
 - Add a stock Facebook app.
 - Migrate the existing YouTube app to Web-based.
@@ -27,7 +28,7 @@
 - Add top 20 web sites as built-in microapps.
 - Add more built-in apps in a subfolder as examples.
 
-### Works with Claude
+### Works with Claude (TBD)
 
 - Each generated microapp should have its own memory context.
 - **The key step:** Drag a bubble to the turtle creates a request to
@@ -36,18 +37,11 @@
   and what can be done with them as MCP tools, so Claude can read and
   change them, and drive Honu through the same interface a microapp it
   generated would offer.
-
-### Gimmicks?
-
 - **Bumping and sticking bubbles together shares their context with
-  Claude**: dragging one bubble into another hands both to Claude. The
-  collision physics gives the gesture, and Liquid Glass already shows
-  bubbles merging. Need to change it to bubble *sticking together*.
-
-### Advanced
-
-- **Install microapps from external place**: let a microapp be installed
-  separately, without rebuilding Honu.
+  Claude** (Gimmicks?): dragging one bubble into another hands both to
+  Claude. The collision physics gives the gesture, and Liquid Glass
+  already shows bubbles merging. Need to change it to bubble *sticking
+  together*.
 
 ## Project
 
@@ -71,3 +65,4 @@
   (`FloatingWindow`, `ClickThrough`, the event monitor) needs a UIKit
   counterpart, and dragging and the turtle's menu need to work by
   touch.
+- Coding agent other than Claude Code.
