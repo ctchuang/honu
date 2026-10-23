@@ -30,6 +30,24 @@ struct PersistenceTests {
         #expect((back.viewState as? NoteViewState)?.focusPending == false)
     }
 
+    @Test func bubblesSavedClosedComeBackAsAnyOther() throws {
+        let url = temporaryStoreURL()
+        let shell = makeShell(size: size, storeURL: url)
+        shell.start(AppID("notes"))
+        shell.save()
+        // A store from when bubbles could close into an icon says whether each was open.
+        var state = try #require(
+            try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let bubbles = try #require(state["bubbles"] as? [[String: Any]])
+        state["bubbles"] = bubbles.map { $0.merging(["isOpen": false]) { $1 } }
+        try JSONSerialization.data(withJSONObject: state).write(to: url)
+
+        let restored = makeShell(size: size, storeURL: url)
+        let back = try #require(restored.stage.bubbles.first)
+        #expect(back.size == Appearance().size)
+        #expect(restored.content(of: back) != nil)
+    }
+
     @Test func showingOnAllDesktopsComesBack() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(size: size, storeURL: url)
@@ -59,8 +77,7 @@ struct PersistenceTests {
         let kept = notes.create()
         notes.setText("kept", of: kept)
         let bubble = { (app: String, item: ItemID) in
-            SavedBubble(
-                target: ViewTarget(app: AppID(app), item: item), offset: .zero, isOpen: true)
+            SavedBubble(target: ViewTarget(app: AppID(app), item: item), offset: .zero)
         }
         var state = SavedState()
         state.apps["notes"] = String(decoding: try #require(notes.save()), as: UTF8.self)
@@ -72,7 +89,6 @@ struct PersistenceTests {
 
         let shell = makeShell(size: size, storeURL: url)
         #expect(shell.stage.bubbles.map(\.target) == [ViewTarget(app: AppID("notes"), item: kept)])
-        #expect(shell.stage.bubbles.first?.isOpen == true)
         #expect(shell.notes.items == [kept] && shell.notes.notes[kept] == "kept")
     }
 
@@ -121,13 +137,13 @@ struct PersistenceTests {
 }
 
 @MainActor
-struct AutosaveDriftTests {
-    @Test func driftingIsNotAChangeButDraggingIs() throws {
+struct AutosaveMoveTests {
+    @Test func movingByItselfIsNotAChangeButDraggingIs() throws {
         let url = temporaryStoreURL()
         let shell = makeShell(storeURL: url)
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.first)
-        // Let it land, open, and be saved.
+        // Let it land and be saved.
         for frame in 0...120 {
             shell.tick(at: 1000 + Double(frame) / 60)
         }
@@ -136,7 +152,7 @@ struct AutosaveDriftTests {
 
         bubble.center.x += 3
         shell.save()
-        #expect(!FileManager.default.fileExists(atPath: url.path()), "saved a drift")
+        #expect(!FileManager.default.fileExists(atPath: url.path()), "saved a push")
 
         shell.dragBubble(bubble, by: CGSize(width: 100, height: 0), pointer: bubble.center)
         shell.endBubbleDrag(pointer: bubble.center)

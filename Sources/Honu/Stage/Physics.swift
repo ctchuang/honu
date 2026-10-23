@@ -1,20 +1,15 @@
 import Foundation
 
-/// Bubble motion: momentum after a throw, an idle float, soft pushing between
-/// crowded bubbles, and bounces off the screen edges. Open bubbles act like
-/// windows: they can still be thrown and they push and are pushed, but they
-/// do not float, so they stay where they are put until something bumps
-/// them. Bubbles flying out of the turtle or into the octopus follow their
-/// own path and are left alone.
+/// Bubble motion: momentum after a throw, soft pushing between crowded
+/// bubbles, and bounces off the screen edges. Left alone, a bubble stays
+/// where it is put, as a window does. Bubbles flying out of the turtle or
+/// into the octopus follow their own path and are left alone.
 enum Physics {
     /// Velocity decay rate (1/s); higher stops a thrown bubble sooner.
     static let friction = 4.0
-    /// Peak acceleration (points/s²) of the idle float.
-    static let floatAcceleration = 14.0
     /// Bubbles only push each other once they overlap by more than
-    /// `1 - personalSpace` of the sum of their roundnesses (the radii of
-    /// closed bubbles), so partial overlaps (which show off the glass) are
-    /// left alone.
+    /// `1 - personalSpace` of the sum of their corner radii, so slight
+    /// overlaps (which show off the glass) are left alone.
     static let personalSpace = 0.8
     /// Spring stiffness of the push between crowded bubbles; a bubble of
     /// radius 100 pressed in by 1 point is pushed back at this many points/s².
@@ -27,19 +22,18 @@ enum Physics {
     static let bounce = 0.5
     /// Speed limit (points/s) for thrown bubbles.
     static let maxSpeed = 2500.0
-    /// Speed (points/s) below which a bubble that does not float stops, so
-    /// a panel comes to rest instead of creeping, and redrawing, for ever.
+    /// Speed (points/s) below which a bubble stops, so it comes to rest
+    /// instead of creeping, and redrawing, for ever.
     static let restSpeed = 1.0
 
-    /// Advances `bubbles` by `dt` seconds at `time` inside `bounds`. The
+    /// Advances `bubbles` by `dt` seconds inside `bounds`. The
     /// `held` bubble follows the pointer, so it pushes others but is not
     /// moved by any force itself.
     @MainActor
     static func step(
-        _ bubbles: [Bubble], bounds: CGSize, held: Bubble?, time: Double, dt: Double
+        _ bubbles: [Bubble], bounds: CGSize, held: Bubble?, dt: Double
     ) {
-        let floating = { (b: Bubble) in b.isFree && !b.isOpen }
-        var accel = bubbles.map { floating($0) ? floatAccel($0, time: time) : .zero }
+        var accel = [CGPoint](repeating: .zero, count: bubbles.count)
 
         for i in bubbles.indices where bubbles[i].isFree {
             for j in bubbles.indices where j > i && bubbles[j].isFree {
@@ -63,7 +57,7 @@ enum Physics {
                 let speed = velocity.length
                 if speed > maxSpeed {
                     velocity = velocity * (maxSpeed / speed)
-                } else if speed < restSpeed && !floating(bubble) && accel == .zero {
+                } else if speed < restSpeed && accel == .zero {
                     velocity = .zero
                 }
                 if velocity != bubble.velocity {
@@ -77,20 +71,11 @@ enum Physics {
         }
     }
 
-    /// A slow, per-bubble wobble so idle bubbles drift instead of sitting still.
-    @MainActor
-    private static func floatAccel(_ bubble: Bubble, time: Double) -> CGPoint {
-        let t = time + bubble.phase
-        return CGPoint(x: sin(t * 0.6), y: cos(t * 0.45)) * floatAcceleration
-    }
-
-    /// How round `bubble` is taken to be when bubbles collide: a closed
-    /// bubble is a circle, and an open one a rectangle with rounded corners.
+    /// The corner radius of `bubble` as drawn, no more than half its side.
     @MainActor
     private static func roundness(_ bubble: Bubble) -> Double {
         let frame = bubble.frame
-        let half = min(frame.width, frame.height) / 2
-        return bubble.isOpen ? min(bubble.cornerRadius * bubble.drawnScale, half) : half
+        return min(bubble.cornerRadius * bubble.drawnScale, min(frame.width, frame.height) / 2)
     }
 
     /// How far apart the cores of `a` and `b` are, and the direction from

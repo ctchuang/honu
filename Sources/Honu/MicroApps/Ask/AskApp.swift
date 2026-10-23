@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The Ask AI microapp: any number of chats with Claude. In a chat's bubble
-/// you type a question, and Claude's answer streams into the panel, which
+/// you type a question, and Claude's answer streams into the bubble, which
 /// grows to fit it.
 @Observable
 @MainActor
@@ -19,12 +19,12 @@ final class AskApp: MicroApp {
 
     /// The label of a chat with no question asked yet.
     static let emptyLabel = "Ask"
-    static let panelWidth: CGFloat = 400
-    /// Panel height while asking for a question.
+    static let width: CGFloat = 400
+    /// The bubble's height while asking for a question.
     static let startHeight: CGFloat = 150
-    /// The tallest the panel grows; longer answers scroll.
+    /// The tallest the bubble grows; longer answers scroll.
     static let maxHeight: CGFloat = 560
-    /// Panel height not taken by the content: the title bar and the margins.
+    /// The bubble's height not taken by the content: the title bar and the margins.
     static let chromeHeight: CGFloat = 70
     /// The near-black a chat is written in, on its pale glass.
     static let ink = Color(white: 0.12)
@@ -38,14 +38,13 @@ final class AskApp: MicroApp {
         chats.insert(Chat())
     }
 
-    /// A panel tall enough for what the chat shows, within limits.
+    /// A bubble tall enough for what the chat shows, within limits.
     func appearance(of item: ItemID) -> Appearance {
         let content = chats[item]?.contentHeight ?? 0
         let height = min(max(content + Self.chromeHeight, Self.startHeight), Self.maxHeight)
         return Appearance(
             tint: Color(white: 0.98).opacity(0.55),
-            closedSide: 120,
-            panelSize: CGSize(width: Self.panelWidth, height: height),
+            size: CGSize(width: Self.width, height: height),
             textColor: Self.ink
         )
     }

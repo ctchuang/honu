@@ -18,14 +18,14 @@ final class MakerApp: MicroApp {
 
     /// The label of a microapp not yet described.
     static let emptyLabel = "Microapp"
-    /// The closed bubble's symbol when the page names none, or none that exists.
+    /// The tile's symbol when the page names none, or none that exists.
     static let defaultSymbol = "sparkles"
     /// The size of a page that says nothing of its size.
     static let defaultPageSize = CGSize(width: 360, height: 480)
-    /// The panel while asking for a description, and while the page is written.
+    /// The bubble's size while asking for a description, and while the page is written.
     static let describingSize = CGSize(width: 420, height: 190)
     static let writingSize = CGSize(width: 440, height: 320)
-    /// Panel size not taken by the page: the title bar, margins, and the bar
+    /// The bubble's size not taken by the page: the title bar, margins, and the bar
     /// for asking for changes.
     static let chrome = CGSize(width: 20, height: 46 + ChangeBar.height)
 
@@ -95,15 +95,14 @@ final class MakerApp: MicroApp {
 
     func appearance(of item: ItemID) -> Appearance {
         guard let instance = instances[item] else { return Appearance() }
-        let microapp = instance.app
-        let panel: CGSize =
-            switch microapp.status {
+        let size: CGSize =
+            switch instance.app.status {
             case .describing: Self.describingSize
             case .writing(.making): Self.writingSize
             case .writing, .running:
                 (instance.size ?? Self.defaultPageSize) + Self.chrome
             }
-        return Appearance(symbol: Self.symbol(of: microapp), panelSize: panel)
+        return Appearance(size: size)
     }
 
     /// The SF Symbol of `microapp`: the one its page names, if it exists.

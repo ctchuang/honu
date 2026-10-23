@@ -5,8 +5,8 @@ struct BubbleID: Hashable, Sendable {
     let rawValue: Int
 }
 
-/// One bubble: a view of one item of one microapp. A glass square when
-/// closed, a panel showing the item when open.
+/// One bubble: a view of one item of one microapp, showing the item under
+/// its title.
 @Observable
 @MainActor
 final class Bubble: Identifiable {
@@ -15,13 +15,9 @@ final class Bubble: Identifiable {
     var center: CGPoint
     /// Speed and direction, in points per second.
     var velocity: CGPoint = .zero
-    /// Offset in seconds into the idle float, so bubbles drift out of step.
-    @ObservationIgnored var phase: Double
-    var isOpen = false
-    let closedSide: CGFloat
-    /// The size when open, which its microapp may change, as an Ask panel
+    /// The size its microapp asks for, which may change, as an Ask chat
     /// grows with its answer.
-    var panelSize: CGSize
+    var size: CGSize
     /// What the bubble keeps for itself about its item, made by its microapp.
     @ObservationIgnored let viewState: AnyObject?
     /// Held over the octopus, where letting go deletes it; it shrinks.
@@ -60,14 +56,8 @@ final class Bubble: Identifiable {
         self.id = id
         self.target = target
         self.center = center
-        phase = Double(id.rawValue) * 37.3
-        closedSide = appearance.closedSide
-        panelSize = appearance.panelSize
+        size = appearance.size
         self.viewState = viewState
-    }
-
-    var size: CGSize {
-        isOpen ? panelSize : CGSize(width: closedSide, height: closedSide)
     }
 
     /// Size relative to full size: small, growing (with a little overshoot)
@@ -90,11 +80,9 @@ final class Bubble: Identifiable {
             width: size.width, height: size.height)
     }
 
-    /// The corner radius of its outline at full size: like a macOS app icon
-    /// when closed, a little rounder than a window when open.
-    var cornerRadius: CGFloat {
-        isOpen ? 30 : closedSide * 0.28
-    }
+    /// The corner radius of its outline at full size, a little rounder than
+    /// a window's.
+    var cornerRadius: CGFloat { 30 }
 
     /// Whether `point` is inside its outline as drawn, so presses on the
     /// transparent area past its rounded corners go to whatever is below.
@@ -138,15 +126,13 @@ final class Bubble: Identifiable {
         self.motion = (motion, 0)
     }
 
-    /// Flies from `start`, small, to `place`, growing on the way, and opens
-    /// on landing if `openOnLanding`.
-    func fly(from start: CGPoint, to place: CGPoint, openOnLanding: Bool) {
+    /// Flies from `start`, small, to `place`, growing on the way.
+    func fly(from start: CGPoint, to place: CGPoint) {
         isSwallowed = false
         isDoomed = false
-        isOpen = false
         velocity = .zero
         center = start
-        flight = Flight(kind: .spawn(openOnLanding: openOnLanding), from: start, to: place)
+        flight = Flight(kind: .spawn, from: start, to: place)
     }
 
     /// Goes down into the octopus's `mouth`, shrinking to nothing.
@@ -158,8 +144,7 @@ final class Bubble: Identifiable {
     }
 
     /// Advances the breathing, the motion, and the flight by `dt` seconds.
-    /// Returns whether the bubble just landed and should open.
-    func animate(dt: Double) -> Bool {
+    func animate(dt: Double) {
         let target: Double = isBusy ? 1 : 0
         if breath != target {
             breath += (target - breath) * (1 - exp(-Self.breathFadeRate * dt))
@@ -176,17 +161,9 @@ final class Bubble: Identifiable {
             self.motion = time + dt < motion.seconds ? (motion, time + dt) : nil
         }
 
-        guard var flight else { return false }
+        guard var flight else { return }
         flight.progress = min(flight.progress + dt / flight.seconds, 1)
         center = flight.position
-        if flight.progress < 1 {
-            self.flight = flight
-            return false
-        }
-        self.flight = nil
-        if case .spawn(let openOnLanding) = flight.kind {
-            return openOnLanding
-        }
-        return false
+        self.flight = flight.progress < 1 ? flight : nil
     }
 }

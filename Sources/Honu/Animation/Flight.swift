@@ -4,7 +4,7 @@ import Foundation
 struct Flight {
     enum Kind {
         /// Out of the turtle, or back out of the octopus.
-        case spawn(openOnLanding: Bool)
+        case spawn
         /// Into the octopus, from a bubble already drawn at `fromScale`.
         case swallow(fromScale: CGFloat)
     }

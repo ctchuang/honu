@@ -87,10 +87,8 @@ struct WebAppTests {
         web.open(" en.wikipedia.org/wiki/Sea_turtle\n", in: item)
         #expect(web.url(of: item)?.absoluteString == "https://en.wikipedia.org/wiki/Sea_turtle")
         #expect(web.title(of: item) == "en.wikipedia.org")
-        #expect(web.appearance(of: item).symbol == "safari.fill")
         web.open("http://youtu.be/aqz-KE-bpKQ", in: item)
         #expect(web.url(of: item)?.absoluteString == "http://youtu.be/aqz-KE-bpKQ")
-        #expect(web.appearance(of: item).symbol == "play.rectangle.fill")
 
         let restored = WebApp()
         restored.load(try #require(web.save()))

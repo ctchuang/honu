@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Every bubble in back-to-front paint order (pressing on a bubble moves it
-/// to the top), and how they are picked up, dragged, opened, spat out, and
-/// set moving.
+/// to the top), and how they are picked up, dragged, spat out, and set
+/// moving.
 /// Bubbles swallowed by the octopus stay here too, out of sight, until it
 /// forgets them. The stage knows nothing of what a bubble shows.
 @Observable
@@ -14,11 +14,11 @@ final class Stage {
     /// The bubble being dragged, always the top one, and where it was picked up.
     private(set) var drag: (bubble: Bubble, home: CGPoint)?
 
-    /// How far a new panel steps aside from one already in its place.
+    /// How far a new bubble steps aside from one already in its place.
     static let cascadeStep: CGFloat = 28
-    /// Most steps aside a new panel takes before landing where it is.
+    /// Most steps aside a new bubble takes before landing where it is.
     private static let cascadeLimit = 10
-    /// Gap kept between a panel and the edges of the screen.
+    /// Gap kept between a bubble and the edges of the screen.
     private static let margin: CGFloat = 16
 
     init(size: CGSize) {
@@ -75,15 +75,6 @@ final class Stage {
         bubbles.first { $0.id == id }
     }
 
-    /// Opens or closes `bubble` with a springy morph, nudging an open panel
-    /// back on screen.
-    func toggle(_ bubble: Bubble) {
-        withAnimation(.bouncy(duration: 0.5, extraBounce: 0.15)) {
-            bubble.isOpen.toggle()
-            bubble.center = clamped(bubble.center, size: bubble.size)
-        }
-    }
-
     /// Keeps a bubble of `size` centered at `point` on screen.
     private func clamped(_ point: CGPoint, size bubbleSize: CGSize) -> CGPoint {
         let half = CGSize(
@@ -129,27 +120,27 @@ final class Stage {
     // MARK: Flying in and out
 
     /// Has `bubble`, just added, pop out of `mouth` and fly to a place up and
-    /// to the right of it, where it opens into its panel.
-    func spitPanel(_ bubble: Bubble, from mouth: CGPoint) {
-        // Land with the whole panel on screen.
+    /// to the right of it.
+    func spit(_ bubble: Bubble, from mouth: CGPoint) {
+        // Land with the whole bubble on screen.
         var place = clamped(
             CGPoint(
-                x: mouth.x + bubble.panelSize.width / 2 + 40,
-                y: mouth.y - bubble.panelSize.height / 2 - 20),
-            size: bubble.panelSize)
-        // Step down and to the right of any panel already there, as windows
+                x: mouth.x + bubble.size.width / 2 + 40,
+                y: mouth.y - bubble.size.height / 2 - 20),
+            size: bubble.size)
+        // Step down and to the right of any bubble already there, as windows
         // cascade, so the two push apart diagonally rather than stacked.
         for _ in 0..<Self.cascadeLimit {
             let taken = bubbles.contains {
-                $0 !== bubble && ($0.isOpen || $0.isInFlight) && !$0.isSwallowed
+                $0 !== bubble && !$0.isSwallowed
                     && ($0.destination - place).length < Self.cascadeStep
             }
             if !taken { break }
             place = clamped(
                 CGPoint(x: place.x + Self.cascadeStep, y: place.y + Self.cascadeStep),
-                size: bubble.panelSize)
+                size: bubble.size)
         }
-        bubble.fly(from: mouth, to: place, openOnLanding: true)
+        bubble.fly(from: mouth, to: place)
     }
 
     /// Sends `bubble` into the octopus's `mouth`, where it stays out of sight.
@@ -158,20 +149,20 @@ final class Stage {
     }
 
     /// Brings swallowed `bubble` back on top: it pops out of `mouth` and
-    /// flies back to `home`, opening again there if it was open.
+    /// flies back to `home`.
     func spitBack(_ bubble: Bubble, from mouth: CGPoint, to home: CGPoint) {
         guard let index = bubbles.firstIndex(where: { $0 === bubble }) else { return }
         bubbles.remove(at: index)
         putOnTop(bubble)
-        bubble.fly(from: mouth, to: home, openOnLanding: bubble.isOpen)
+        bubble.fly(from: mouth, to: home)
     }
 
-    /// Advances every bubble's flight and motion by `dt` seconds at `time`. A
-    /// dragged bubble follows the pointer instead of the physics.
-    func step(time: Double, dt: Double) {
-        for bubble in bubbles where bubble.animate(dt: dt) {
-            toggle(bubble)
+    /// Advances every bubble's flight and motion by `dt` seconds. A dragged
+    /// bubble follows the pointer instead of the physics.
+    func step(dt: Double) {
+        for bubble in bubbles {
+            bubble.animate(dt: dt)
         }
-        Physics.step(bubbles, bounds: size, held: drag?.bubble, time: time, dt: dt)
+        Physics.step(bubbles, bounds: size, held: drag?.bubble, dt: dt)
     }
 }

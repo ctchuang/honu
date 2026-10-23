@@ -3,7 +3,7 @@ import WebKit
 
 /// The Swift side of `window.honu`, what a microapp's page can ask of Honu:
 /// to load and save its state in its data file, to fetch from
-/// the web without the page's CORS limits, and to resize its panel. It also
+/// the web without the page's CORS limits, and to resize its bubble. It also
 /// hears of the page's errors.
 @MainActor
 final class Bridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMessageHandler {

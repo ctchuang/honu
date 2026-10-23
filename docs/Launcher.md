@@ -59,7 +59,7 @@ gesture is out of scope here.
 3. As a user, I click a tile twice and get two bubbles, each keeping its
    own data.
 4. As a user, I ask for a change in one bubble of a microapp, and every
-   open bubble of it shows the new version, keeping its own data.
+   bubble of it shows the new version, keeping its own data.
 5. As a user, I ask for a change in the bar below a microapp, and send it
    with Return or its Go button; I right-click a tile to uninstall it.
 6. As a user, I drag a tile onto the octopus to uninstall it, as I drag a
@@ -87,7 +87,7 @@ gesture is out of scope here.
 - The panel grows with the tiles and is kept on screen; past a few rows
   it scrolls.
 - Clicking a tile closes the launcher, and the turtle spits out a new
-  instance's bubble, which opens on landing.
+  instance's bubble.
   - Notes and Web: as their menu items do today.
   - An installed app: its page runs at once (no description step).
   - **+**: a new microapp waiting for its description, as Make a
@@ -118,7 +118,7 @@ gesture is out of scope here.
 - Deleting an instance's bubble (feeding it to the octopus) deletes only
   that instance's data, once the octopus forgets it. The app stays
   installed.
-- Uninstalling an app has the octopus swallow it and every open bubble
+- Uninstalling an app has the octopus swallow it and every bubble
   of it, and its tile leaves the launcher. As with a deleted bubble, the
   octopus keeps them for `undoSeconds`: clicking it or ⌘Z spits the
   bubbles back where they were and puts the tile back. Once the octopus

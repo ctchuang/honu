@@ -11,7 +11,8 @@ struct ZOrderTests {
     @discardableResult
     private func add(_ x: CGFloat, _ y: CGFloat) -> Bubble {
         stage.add(
-            target: target, center: CGPoint(x: x, y: y), appearance: Appearance(closedSide: 100),
+            target: target, center: CGPoint(x: x, y: y),
+            appearance: Appearance(size: CGSize(width: 100, height: 100)),
             viewState: nil)
     }
 
@@ -27,7 +28,7 @@ struct ZOrderTests {
         #expect(
             cut.rect
                 == CGRect(x: 60 - gap, y: 30 - gap, width: 100 + 2 * gap, height: 100 + 2 * gap))
-        #expect(abs(cut.cornerRadius - (28 + gap)) < 0.001)
+        #expect(abs(cut.cornerRadius - (30 + gap)) < 0.001)
         // Nothing lies above the top one.
         #expect(StageView.cuts(of: 1, in: stage.bubbles).isEmpty)
     }
@@ -38,7 +39,7 @@ struct ZOrderTests {
         let swallowed = add(520, 300)
         stage.swallow(swallowed, into: CGPoint(x: 1100, y: 750))
         for frame in 0..<60 {
-            stage.step(time: Double(frame) / 60, dt: 1.0 / 60)
+            stage.step(dt: 1.0 / 60)
         }
         #expect(StageView.cuts(of: 0, in: stage.bubbles).isEmpty)
     }
@@ -61,10 +62,10 @@ struct ZOrderTests {
         let target = ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1))
         let below = shell.stage.add(
             target: target, center: CGPoint(x: 500, y: 300),
-            appearance: Appearance(closedSide: 100), viewState: nil)
+            appearance: Appearance(size: CGSize(width: 100, height: 100)), viewState: nil)
         shell.stage.add(
             target: target, center: CGPoint(x: 560, y: 330),
-            appearance: Appearance(closedSide: 100), viewState: nil)
+            appearance: Appearance(size: CGSize(width: 100, height: 100)), viewState: nil)
         shell.press(at: CGPoint(x: 470, y: 290))
         #expect(shell.stage.bubbles.last === below)
         #expect(StageView.cuts(of: 1, in: shell.stage.bubbles).isEmpty)

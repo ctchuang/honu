@@ -1,7 +1,7 @@
 import Foundation
 
 /// What a microapp's page says about itself in its head: its name, the size
-/// it wants, and the symbol for its closed bubble.
+/// it wants, and the symbol for its launcher tile.
 struct PageMeta: Equatable {
     var title: String?
     var size: CGSize?

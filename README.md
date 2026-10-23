@@ -60,7 +60,7 @@ swift run                # build and launch
   new bubble of it, such as a **Note**, a **Web Page** (YouTube links play), one Claude
   made, or **+** to describe a new one for Claude to write.
 - To change a microapp, say what you want in the bar below it.
-- **Drag** bubbles around, or throw them. **Double-click** one to open or close it.
+- **Drag** bubbles around, or throw them; crowded ones push each other aside.
 - To delete a bubble, drag it to the octopus. To uninstall a microapp, drag it from the
   launcher there. Changed your mind? Click the octopus, or press <kbd>⌘</kbd><kbd>Z</kbd>.
 - **Right-click** the turtle to keep Honu on just one desktop, or to quit. Clicks

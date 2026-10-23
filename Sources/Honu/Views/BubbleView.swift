@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// One bubble in interactive Liquid Glass, tinted the way its microapp says.
-/// A closed bubble shows its title (or a symbol), an open one its title over
-/// the content its microapp makes. Dragging moves it, and double-clicking
-/// opens or closes it.
+/// It shows its title over the content its microapp makes, and dragging
+/// moves it.
 struct BubbleView: View {
     let bubble: Bubble
     let shell: Shell
@@ -30,7 +29,6 @@ struct BubbleView: View {
                 glassStyle(appearance), in: CutAway(shape: shape, swell: bubble.swell, cuts: cuts)
             )
             .glassEffectID(bubble.id, in: glass)
-            .onTapGesture(count: 2) { shell.toggle(bubble) }
             .gesture(drag)
     }
 
@@ -39,38 +37,18 @@ struct BubbleView: View {
         return glass.interactive()
     }
 
-    @ViewBuilder
     private func content(appearance: Appearance, title: String) -> some View {
-        if bubble.isOpen {
-            VStack(spacing: 0) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(appearance.textColor)
-                    .lineLimit(1)
-                    .padding(.horizontal, 24)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
-                UndoScope(
-                    history: shell.undoManager(for: bubble), content: shell.content(of: bubble)
-                )
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(appearance.textColor)
+                .lineLimit(1)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity)
+                .frame(height: 36)
+            UndoScope(history: shell.undoManager(for: bubble), content: shell.content(of: bubble))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .padding([.horizontal, .bottom], 10)
-            }
-            .transition(.opacity)
-        } else if let symbol = appearance.symbol {
-            Image(systemName: symbol)
-                .font(.system(size: bubble.closedSide * 0.38, weight: .medium))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-                .transition(.opacity)
-        } else {
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(appearance.textColor)
-                .multilineTextAlignment(.center)
-                .lineLimit(3)
-                .padding(12)
-                .transition(.opacity)
         }
     }
 

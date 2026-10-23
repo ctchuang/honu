@@ -11,7 +11,7 @@ struct SavedState: Codable {
     /// Each microapp's items, as the JSON it saved, by microapp id.
     var apps: [String: String] = [:]
 
-    /// The same without where the bubbles are, to tell real changes from drifting.
+    /// The same without where the bubbles are, to tell real changes from bubbles moving by themselves.
     var unplaced: SavedState {
         var state = self
         state.bubbles = bubbles.map {
@@ -28,7 +28,9 @@ struct SavedBubble: Codable {
     /// Where it was relative to the center of the screen, so it comes back in
     /// place on a screen of another size.
     var offset: CGPoint
-    var isOpen: Bool
+    // Stores from when bubbles could close into an icon also say whether
+    // each was open; decoding leaves that out, and every bubble comes back
+    // as any other.
 }
 
 /// Writes the shell's `SavedState` for the next launch, in
@@ -54,7 +56,8 @@ final class Autosave {
     private var lastSaved: Data?
     private var lastCheck = -TimeInterval.infinity
     /// Whether a bubble was moved on purpose since the last save. Bubbles
-    /// drifting idly are not a change worth writing, but a dragged one is.
+    /// gliding or pushed aside are not a change worth writing, but a dragged
+    /// one is.
     private var isMoved = false
 
     init(url: URL) {

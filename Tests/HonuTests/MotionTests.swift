@@ -104,7 +104,7 @@ struct FlightTests {
     }
 
     @Test func aBubbleSpatOutGrowsOnTheWayAndLandsFullSize() {
-        let flight = Flight(kind: .spawn(openOnLanding: true), from: from, to: to)
+        let flight = Flight(kind: .spawn, from: from, to: to)
         #expect(flight.after(0).position == from && flight.after(0).scale == 0)
         let steps = stride(from: 0.0, through: flight.seconds, by: flight.seconds / 50)
         #expect(steps.contains { flight.after($0).scale > 1 }, "did not pop")

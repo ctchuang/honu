@@ -183,7 +183,7 @@ struct OctopusTests {
         let spat = octopus.spitBack(at: 1001)
         #expect(spat?.morsels == morsels && spat?.microapp == "A1")
 
-        // Even a microapp with no bubble open can be brought back.
+        // Even a microapp with no bubble left can be brought back.
         octopus.swallow([], microapp: "B2", at: 1002)
         #expect(octopus.canUndo)
         let gone = octopus.forget(at: 1002 + Octopus.undoSeconds + 1)

@@ -198,9 +198,9 @@ struct MakerTests {
         #expect(!maker.isBusy(item))
         #expect(microapp.folder.page()?.hasPrefix("<!doctype html>") == true)
         #expect(maker.title(of: item) == "Pomodoro")
-        #expect(maker.appearance(of: item).symbol == "timer")
+        #expect(MakerApp.symbol(of: microapp) == "timer")
         #expect(
-            maker.appearance(of: item).panelSize
+            maker.appearance(of: item).size
                 == CGSize(width: 300, height: 400) + MakerApp.chrome)
 
         let target = ViewTarget(app: maker.id, item: item)

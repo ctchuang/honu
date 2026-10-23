@@ -132,13 +132,13 @@ undo"; clicking it, or ⌘Z, spits back what it swallowed, where it was.
 2. The turtle shows covered bubbles' status (not done): what it does
    when one or many bubbles out of sight finish or need the user is yet
    to be designed.
-3. One kind of bubble (not done): bubbles no longer close into an icon,
+3. One kind of bubble (done): bubbles no longer close into an icon,
    and double-clicking the title does nothing until `Resizing.md` gives
-   it a meaning. `Bubble` loses `isOpen` and its closed size, along with
-   the morph between the two (`Stage.toggle`) and opening on landing
+   it a meaning. `Bubble` loses `isOpen` and its icon size, along with
+   the morph between bubble and icon (`Stage.toggle`) and opening on landing
    (`openOnLanding`); `Appearance` loses `closedSide`, and its
    `panelSize` becomes `size`. A store saved
-   with closed bubbles brings them back as any other. The idle float
+   with bubbles shrunk into icons brings them back as any other. The idle float
    goes, so bubbles stay where they are put; collisions treat every
    bubble as a rectangle with rounded corners. The flight out of the
    turtle and the shrinking over the octopus stay, and so does

@@ -115,14 +115,14 @@ struct ShellTests {
         #expect(bubble.motion?.motion == .rise)
     }
 
-    @Test func anOpenPanelTakesTheSizeItsMicroappAsksFor() throws {
+    @Test func aBubbleTakesTheSizeItsMicroappAsksFor() throws {
         let claude = FakeClaude()
         let shell = makeShell(claude: claude)
         let (bubble, _) = try shell.makeMicroapp("Clock", claude: claude)
 
         shell.maker.resize(bubble.target.item, to: CGSize(width: 500, height: 300))
         shell.tick(at: 2)
-        #expect(bubble.panelSize == CGSize(width: 500, height: 300) + MakerApp.chrome)
+        #expect(bubble.size == CGSize(width: 500, height: 300) + MakerApp.chrome)
     }
 
     @Test func everyBubbleKeepsItsOwnUndoHistory() {
@@ -235,12 +235,7 @@ struct ShellTests {
         shell.start(AppID("notes"))
         let bubble = try #require(shell.stage.bubbles.last)
         #expect(shell.title(of: bubble) == NotesApp.emptyLabel)
-        #expect(shell.appearance(of: bubble).closedSide == 120)
+        #expect(bubble.size == shell.appearance(of: bubble).size)
         #expect(shell.content(of: bubble) != nil)
-
-        shell.toggle(bubble)
-        let opened = bubble.isOpen
-        shell.toggle(bubble)
-        #expect(bubble.isOpen != opened)
     }
 }

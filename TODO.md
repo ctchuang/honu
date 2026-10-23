@@ -4,8 +4,6 @@
 
 - [P1] Allow bubble resizing (started; design and plan in
   `docs/Resizing.md`).
-- [P1] Drop the minimized mode, so there is one kind of bubble
-  (decided; step 3 of the plan in `docs/UI.md`).
 - [P2] Fade-in effect of the speech bubble doesn't come from the
   octopus.
 - [P2] **Physics shows status** (started): bubbles breathe when

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The Notes microapp: any number of notes, each typed straight into its
 /// bubble. A note's bubble takes its label from the note's first line, so
-/// closed notes can be told apart.
+/// notes can be told apart.
 @Observable
 @MainActor
 final class NotesApp: MicroApp {
@@ -25,11 +25,7 @@ final class NotesApp: MicroApp {
     }
 
     func appearance(of item: ItemID) -> Appearance {
-        Appearance(
-            tint: Self.yellow.opacity(0.75),
-            closedSide: 120,
-            textColor: Self.ink
-        )
+        Appearance(tint: Self.yellow.opacity(0.75), textColor: Self.ink)
     }
 
     /// A short label for a note's bubble: its first line with anything on it.
