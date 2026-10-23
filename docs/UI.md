@@ -39,7 +39,8 @@ stays small while what it can do grows.
    surface.
 4. **Bubbles are physical.** A bubble is Liquid Glass with weight: it can
    be thrown and glides to a stop, idle bubbles drift, crowded ones push
-   each other apart, and they bounce off the screen edges. The bubble
+   each other apart (open panels too, which otherwise stay put), and they
+   bounce off the screen edges. The bubble
    pressed last comes to the top and covers the others completely.
 5. **Status shows through motion.** A bubble breathes while busy, rises
    once when something finishes, and wobbles when it needs the user.

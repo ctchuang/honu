@@ -104,6 +104,48 @@ struct PhysicsTests {
         #expect(held.center.x > 520)
     }
 
+    /// An open panel of the default size, 380 by 300 points, at (`x`, `y`).
+    private func panel(_ x: CGFloat, _ y: CGFloat = 500) -> Bubble {
+        let bubble = ball(x)
+        bubble.center.y = y
+        bubble.isOpen = true
+        return bubble
+    }
+
+    @Test func overlappingPanelsArePushedApartAndComeToRest() {
+        let (a, b) = (panel(1000), panel(1150, 520))
+        simulate(4)
+        let gap = b.center.x - a.center.x
+        // Side by side, overlapping by no more than their rounded corners allow.
+        #expect(gap > 360, "still \(gap) points apart")
+        #expect(abs(b.center.y - a.center.y - 20) < 1, "pushed sideways, not up or down")
+        #expect(a.velocity == .zero && b.velocity == .zero, "still creeping")
+    }
+
+    @Test func aClosedBubbleIsPushedOffAPanelMoreThanThePanelMoves() {
+        let (open, closed) = (panel(1000), ball(1170))
+        simulate(3)
+        let panelMoved = 1000 - open.center.x
+        let ballMoved = closed.center.x - 1170
+        #expect(closed.frame.minX > open.frame.maxX - 30, "still on the panel")
+        #expect(ballMoved > panelMoved * 2, "panel moved \(panelMoved), ball \(ballMoved)")
+    }
+
+    @Test func aHeldBubblePushesAPanelAside() {
+        let (held, open) = (ball(1000), panel(1150))
+        stage.startDrag(held)
+        simulate(2)
+        #expect(held.center == CGPoint(x: 1000, y: 500))
+        #expect(open.frame.minX > held.frame.maxX - 30, "the panel was not pushed aside")
+    }
+
+    @Test func panelsCornerToCornerArePushedApartDiagonally() {
+        let (a, b) = (panel(1000, 300), panel(1340, 550))
+        simulate(3)
+        let apart = b.center - a.center
+        #expect(apart.x > 340 && apart.y > 250, "only \(apart) apart")
+    }
+
     @Test func swallowedBubbleShrinksIntoTheMouthAndStaysThere() {
         let bubble = ball(500)
         bubble.isDoomed = true

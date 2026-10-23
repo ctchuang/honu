@@ -2,17 +2,19 @@ import Foundation
 
 /// Bubble motion: momentum after a throw, an idle float, soft pushing between
 /// crowded bubbles, and bounces off the screen edges. Open bubbles act like
-/// windows: they can still be thrown, but they neither float nor push.
-/// Bubbles flying out of the turtle or into the octopus follow their own
-/// path and are left alone.
+/// windows: they can still be thrown and they push and are pushed, but they
+/// do not float, so they stay where they are put until something bumps
+/// them. Bubbles flying out of the turtle or into the octopus follow their
+/// own path and are left alone.
 enum Physics {
     /// Velocity decay rate (1/s); higher stops a thrown bubble sooner.
     static let friction = 4.0
     /// Peak acceleration (points/s²) of the idle float.
     static let floatAcceleration = 14.0
-    /// Bubbles only push each other once their centers are closer than this
-    /// fraction of the sum of their radii, so partial overlaps (which show
-    /// off the glass) are left alone.
+    /// Bubbles only push each other once they overlap by more than
+    /// `1 - personalSpace` of the sum of their roundnesses (the radii of
+    /// closed bubbles), so partial overlaps (which show off the glass) are
+    /// left alone.
     static let personalSpace = 0.8
     /// Spring stiffness of the push between crowded bubbles; a bubble of
     /// radius 100 pressed in by 1 point is pushed back at this many points/s².
@@ -25,6 +27,9 @@ enum Physics {
     static let bounce = 0.5
     /// Speed limit (points/s) for thrown bubbles.
     static let maxSpeed = 2500.0
+    /// Speed (points/s) below which a bubble that does not float stops, so
+    /// a panel comes to rest instead of creeping, and redrawing, for ever.
+    static let restSpeed = 1.0
 
     /// Advances `bubbles` by `dt` seconds at `time` inside `bounds`. The
     /// `held` bubble follows the pointer, so it pushes others but is not
@@ -36,15 +41,12 @@ enum Physics {
         let floating = { (b: Bubble) in b.isFree && !b.isOpen }
         var accel = bubbles.map { floating($0) ? floatAccel($0, time: time) : .zero }
 
-        for i in bubbles.indices {
-            for j in bubbles.indices where j > i {
+        for i in bubbles.indices where bubbles[i].isFree {
+            for j in bubbles.indices where j > i && bubbles[j].isFree {
                 let (a, b) = (bubbles[i], bubbles[j])
-                guard floating(a), floating(b) else { continue }
-                let delta = b.center - a.center
-                let dist = delta.length
-                let minDist = personalSpace * (radius(a) + radius(b))
+                let (dist, dir) = separation(a, b)
+                let minDist = personalSpace * (roundness(a) + roundness(b))
                 guard dist < minDist else { continue }
-                let dir = dist > 1e-3 ? delta * (1 / dist) : CGPoint(x: 1, y: 0)
                 let (ma, mb) = (mass(a), mass(b))
                 let closingSpeed = (a.velocity - b.velocity).dot(dir)
                 let damping = pushDamping * 2 * (pushStiffness * ma * mb / (ma + mb)).squareRoot()
@@ -61,6 +63,8 @@ enum Physics {
                 let speed = velocity.length
                 if speed > maxSpeed {
                     velocity = velocity * (maxSpeed / speed)
+                } else if speed < restSpeed && !floating(bubble) && accel == .zero {
+                    velocity = .zero
                 }
                 if velocity != bubble.velocity {
                     bubble.velocity = velocity
@@ -80,15 +84,46 @@ enum Physics {
         return CGPoint(x: sin(t * 0.6), y: cos(t * 0.45)) * floatAcceleration
     }
 
+    /// How round `bubble` is taken to be when bubbles collide: a closed
+    /// bubble is a circle, and an open one a rectangle with rounded corners.
     @MainActor
-    private static func radius(_ bubble: Bubble) -> Double {
-        bubble.closedSide / 2
+    private static func roundness(_ bubble: Bubble) -> Double {
+        let frame = bubble.frame
+        let half = min(frame.width, frame.height) / 2
+        return bubble.isOpen ? min(bubble.cornerRadius * bubble.drawnScale, half) : half
+    }
+
+    /// How far apart the cores of `a` and `b` are, and the direction from
+    /// `a` to `b` to push them apart along. A bubble's core is its frame
+    /// inset by its roundness, so two bubbles touch where the distance
+    /// between their cores is the sum of their roundnesses. Cores that
+    /// overlap are a negative distance apart, and are pushed apart along
+    /// whichever axis frees them sooner.
+    @MainActor
+    private static func separation(_ a: Bubble, _ b: Bubble)
+        -> (distance: Double, direction: CGPoint)
+    {
+        let (ra, rb) = (roundness(a), roundness(b))
+        // How far the cores reach from the center each way, together.
+        let reach = CGPoint(
+            x: a.frame.width / 2 - ra + b.frame.width / 2 - rb,
+            y: a.frame.height / 2 - ra + b.frame.height / 2 - rb)
+        let delta = b.center - a.center
+        let sign = CGPoint(x: delta.x < 0 ? -1 : 1, y: delta.y < 0 ? -1 : 1)
+        let gap = CGPoint(x: abs(delta.x) - reach.x, y: abs(delta.y) - reach.y)
+        if gap.x > 0 || gap.y > 0 {
+            let apart = CGPoint(x: max(gap.x, 0) * sign.x, y: max(gap.y, 0) * sign.y)
+            let distance = apart.length
+            return (distance, apart * (1 / distance))
+        }
+        return gap.x > gap.y
+            ? (gap.x, CGPoint(x: sign.x, y: 0)) : (gap.y, CGPoint(x: 0, y: sign.y))
     }
 
     /// Bigger bubbles are heavier and get pushed around less.
     @MainActor
     private static func mass(_ bubble: Bubble) -> Double {
-        pow(radius(bubble) / 100, 2)
+        bubble.frame.width * bubble.frame.height / 40000
     }
 
     /// Keeps the whole bubble inside `bounds`, bouncing it off any edge it hits.

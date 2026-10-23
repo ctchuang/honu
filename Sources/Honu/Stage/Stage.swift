@@ -137,8 +137,8 @@ final class Stage {
                 x: mouth.x + bubble.panelSize.width / 2 + 40,
                 y: mouth.y - bubble.panelSize.height / 2 - 20),
             size: bubble.panelSize)
-        // Open panels don't push each other aside, so step down and to the
-        // right of any panel already there, as windows cascade.
+        // Step down and to the right of any panel already there, as windows
+        // cascade, so the two push apart diagonally rather than stacked.
         for _ in 0..<Self.cascadeLimit {
             let taken = bubbles.contains {
                 $0 !== bubble && ($0.isOpen || $0.isInFlight) && !$0.isSwallowed
