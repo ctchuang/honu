@@ -70,14 +70,15 @@ struct BubbleView: View {
 
     private func content(appearance: Appearance, title: String) -> some View {
         VStack(spacing: 0) {
-            // Without a title, a strip of glass is left to drag the bubble by.
+            // Without a title, a strip of glass is left to drag the bubble
+            // by, tall enough to grab below the rim.
             Text(appearance.showsTitle ? title : "")
                 .font(.headline)
                 .foregroundStyle(appearance.textColor)
                 .lineLimit(1)
                 .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity)
-                .frame(height: appearance.showsTitle ? 36 : 18)
+                .frame(height: appearance.showsTitle ? 36 : 28)
                 .contentShape(Rectangle())
                 // Double-clicking the title zooms, as with a window's title bar.
                 .onTapGesture(count: 2, coordinateSpace: .named(ShellView.space)) {

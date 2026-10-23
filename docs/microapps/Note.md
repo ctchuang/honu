@@ -12,7 +12,8 @@ desktop. It follows `../UI.md`.
   there is nothing to save, and no formatting beyond its title.
 - A note's title is its first line with text. The note shows it larger
   and bold, so the bubble shows no title above it, only a strip of glass
-  to drag it by. A note with nothing in it yet is titled "Note".
+  to drag it by, tall enough to grab easily below the rim that resizes
+  it. A note with nothing in it yet is titled "Note".
 - Formatting pasted in, or typed with ⌘B and the like, is dropped: a note
   is plain text, and is kept as plain text.
 - ⌘Z undoes typing in the note, each note with an undo history of its
