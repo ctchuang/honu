@@ -60,7 +60,7 @@ struct ZOrderTests {
     @Test func cutsFollowTheOutlineOfAWobblingBubbleAbove() throws {
         add(500, 300)
         let cover = add(560, 330)
-        cover.velocity = CGPoint(x: 0, y: 3000)
+        cover.velocity = CGPoint(x: 0, y: 600)
         stage.step(dt: 1.0 / 60)
         stage.step(dt: 1.0 / 60)
         let outline = try #require(cover.drawnOutline(grownBy: StageView.gap))

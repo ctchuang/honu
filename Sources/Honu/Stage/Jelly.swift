@@ -22,6 +22,9 @@ struct Jelly {
     /// Pull of each point toward where it rests relative to its neighbors
     /// (1/s²), which keeps corners round and sides smooth.
     static let bending = 4 * stiffness
+    /// Push back on whatever pokes past the edge of a bubble pushing this
+    /// one (1/s²).
+    static let contactStiffness = 6 * stiffness
     /// Push back on whatever pokes past a screen edge (1/s²).
     static let wallStiffness = 25 * stiffness
     /// How much more the ring feels a change in the bubble's velocity than
@@ -153,6 +156,14 @@ struct Jelly {
         }
     }
 
+    /// Swells the ring outward at `rate` (1/s), or draws it in if negative.
+    mutating func inflate(_ rate: Double) {
+        guard rate != 0 else { return }
+        for (i, p) in rest.enumerated() {
+            speeds[i] = speeds[i] + p * rate
+        }
+    }
+
     /// Flattens and widens the ring by `strength` (1/s), as when it lands.
     mutating func splat(_ strength: Double) {
         for (i, p) in rest.enumerated() {
@@ -162,21 +173,24 @@ struct Jelly {
 
     /// Advances the ring by `dt` seconds while the bubble moves at
     /// `velocity`, keeping it inside `walls` (relative to the center).
-    mutating func step(dt: Double, velocity: CGPoint, walls: CGRect) {
+    mutating func step(dt: Double, velocity: CGPoint, walls: CGRect, contacts: [Contact] = []) {
         let fade = exp(-dt / Self.kickMemory)
         felt *= fade
         kicked = Self.kickLimit * atanh(min(felt / Self.kickLimit, 0.999))
         let stretch = Self.stretching(velocity)
         let h = dt / Double(Self.substeps)
         for _ in 0..<Self.substeps {
-            substep(h, stretch: stretch, walls: walls)
+            substep(h, stretch: stretch, walls: walls, contacts: contacts)
         }
     }
 
-    private mutating func substep(_ dt: Double, stretch: CGAffineTransform, walls: CGRect) {
+    private mutating func substep(
+        _ dt: Double, stretch: CGAffineTransform, walls: CGRect, contacts: [Contact]
+    ) {
         let k = Self.stiffness
         let damping = 2 * Self.dampingRatio * k.squareRoot()
-        let goal = Self.blend(Self.keepingArea(fit().linear), stretch, Self.shapeKeeping)
+        let goal = Self.blend(
+            Self.keepingArea(Self.withoutRotation(fit().linear)), stretch, Self.shapeKeeping)
         let limit = Self.strainLimit * min(size.width, size.height)
         let count = points.count
         var pulls = [CGPoint](repeating: .zero, count: count)
@@ -189,6 +203,9 @@ struct Jelly {
             pull = pull + (middle - q - (restMiddle - p)) * Self.bending
             pull.x += Self.push(q.x, u.x, within: walls.minX, walls.maxX)
             pull.y += Self.push(q.y, u.y, within: walls.minY, walls.maxY)
+            for contact in contacts {
+                pull = pull + contact.push(q, u)
+            }
             pulls[i] = pull
         }
         for i in 0..<count {
@@ -199,6 +216,28 @@ struct Jelly {
                 q = rest[i] + strain * (limit / strain.length)
             }
             points[i] = q
+        }
+    }
+
+    /// The edge of a bubble pushing this one, relative to its center: a
+    /// soft wall the ring is pressed flat against, as long as the push lasts.
+    struct Contact: Equatable {
+        /// A point on the edge.
+        var point: CGPoint
+        /// The way the push goes, away from the pushing bubble; the ring
+        /// stays on this side of the edge.
+        var normal: CGPoint
+
+        /// Pull (1/s²) on a point at `position`, moving at `speed`, that
+        /// pokes past the edge: softer than the screen's edges, so the ring
+        /// gives a little before it flattens.
+        func push(_ position: CGPoint, _ speed: CGPoint) -> CGPoint {
+            let depth = -(position - point).dot(normal)
+            guard depth > 0 else { return .zero }
+            let stiffness = Jelly.contactStiffness
+            let closing = min(speed.dot(normal), 0)
+            let damping = 2 * 0.7 * stiffness.squareRoot()
+            return normal * (stiffness * depth - damping * closing)
         }
     }
 
@@ -240,6 +279,17 @@ struct Jelly {
         return (restInverse.concatenating(sum), centroid)
     }
 
+    /// `map` without the rotation in it, so a bubble never turns: what is
+    /// left only squashes, stretches, and shears.
+    static func withoutRotation(_ map: CGAffineTransform) -> CGAffineTransform {
+        // In `CGAffineTransform`, x' = a x + c y and y' = b x + d y.
+        let angle = atan2(map.b - map.c, map.a + map.d)
+        let (cos, sin) = (Foundation.cos(angle), Foundation.sin(angle))
+        return CGAffineTransform(
+            a: cos * map.a + sin * map.b, b: -sin * map.a + cos * map.b,
+            c: cos * map.c + sin * map.d, d: -sin * map.c + cos * map.d, tx: 0, ty: 0)
+    }
+
     /// `map` scaled to keep area, or the identity if it folds the ring.
     private static func keepingArea(_ map: CGAffineTransform) -> CGAffineTransform {
         let area = map.a * map.d - map.b * map.c
@@ -277,7 +327,8 @@ struct Jelly {
     /// center: the map that best fits the ring, exaggerated by
     /// `contentExaggeration` for a cartoon look, moved with the ring.
     var contentTransform: CGAffineTransform {
-        let (linear, offset) = fit()
+        let (fitted, offset) = fit()
+        let linear = Self.withoutRotation(fitted)
         let more = Self.contentExaggeration
         return CGAffineTransform(
             a: 1 + (linear.a - 1) * more, b: linear.b * more, c: linear.c * more,

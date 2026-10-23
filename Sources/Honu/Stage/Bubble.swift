@@ -53,11 +53,21 @@ final class Bubble: Identifiable {
     @ObservationIgnored private var jelly: Jelly?
     /// Where it was drawn last frame, if it was free then.
     @ObservationIgnored private var lastSpot: CGPoint?
-    /// How fast where it is drawn moves, smoothed, in points per second.
-    @ObservationIgnored private var pace: CGPoint = .zero
+    /// How fast where it is drawn moves, smoothed, in points per second;
+    /// none until it has been drawn twice in a row.
+    @ObservationIgnored private var pace: CGPoint?
     /// Whether it has just landed from a flight out of the turtle or the
     /// octopus, and is to splat.
     @ObservationIgnored private var landed = false
+    /// The scale it was drawn at last frame, and how fast it was growing.
+    @ObservationIgnored private var lastScale: CGFloat?
+    @ObservationIgnored private var growth: Double?
+    /// How much other bubbles pushing it changed its velocity since last
+    /// frame.
+    @ObservationIgnored private var knocks = CGPoint.zero
+    /// The edges of the bubbles pushing it this frame, in the stage's
+    /// coordinates, which its jelly is pressed flat against.
+    @ObservationIgnored private var contacts: [Jelly.Contact] = []
 
     static let doomedScale: CGFloat = 0.6
     /// How deep the rim is at the sides and bottom, around the content.
@@ -87,6 +97,17 @@ final class Bubble: Identifiable {
     static let restPace: Double = 20
     /// How hard a bubble splats when it lands (1/s).
     static let splat: Double = 4
+    /// How much more its jelly feels other bubbles pushing it than the push
+    /// moves it, so a bump shows even when the push is gentle.
+    static let knockInertia: Double = 6
+    /// How much its jelly lags behind it growing or shrinking as it flies
+    /// out of the turtle, so it overshoots and wobbles.
+    static let growthInertia: Double = 1
+    /// How much of the changes in its pace its jelly feels while it flies
+    /// out of the turtle.
+    static let flightInertia: Double = 0.4
+    /// Change in growth (1/s) in one frame that sets a bubble wobbling.
+    static let wobbleGrowth: Double = 0.05
 
     init(
         id: BubbleID, target: ViewTarget, center: CGPoint, appearance: Appearance,
@@ -266,31 +287,85 @@ final class Bubble: Identifiable {
         }
     }
 
+    /// Another bubble pushing it changed its velocity by `change`, which its
+    /// jelly feels more than the push moves it.
+    func knock(_ change: CGPoint) {
+        knocks = knocks + change
+    }
+
+    /// Another bubble pushes it this frame along `normal`, its edge passing
+    /// through `point`: its jelly is pressed flat against that edge.
+    func press(at point: CGPoint, toward normal: CGPoint) {
+        contacts.append(Jelly.Contact(point: point, normal: normal))
+    }
+
     /// Advances its jelly by `dt` seconds, on a screen of `bounds`: changes
-    /// in how where it is drawn moves set it wobbling, and it comes to rest
-    /// once settled. A bubble being resized, flying, or swallowed, or whose
+    /// in how where it is drawn moves, other bubbles pushing it, and growing
+    /// as it flies out set it wobbling, and it comes to rest once settled. A
+    /// bubble being resized, flying into the octopus, or swallowed, or whose
     /// size changed, comes to rest at once.
     func wobble(dt: Double, bounds: CGSize, resizing: Bool) {
         let scale = drawnScale
-        guard isFree, !resizing, dt > 0, scale > 0.1, jelly.map({ $0.size == size }) ?? true
+        var spawning = false
+        if case .spawn = flight?.kind {
+            spawning = true
+        }
+        guard isFree || spawning, !resizing, dt > 0, scale > 0.1,
+            jelly.map({ $0.size == size }) ?? true
         else {
             rest()
             lastSpot = nil
+            lastScale = nil
+            knocks = .zero
+            contacts = []
             return
         }
         let spot = CGPoint(x: center.x + motionOffset.width, y: center.y + motionOffset.height)
+        // Its pace starts as it is found, so a flight out of the turtle
+        // starting fast, or letting go after resizing, is no kick; changes
+        // after that are.
         var change = CGPoint.zero
         if let lastSpot {
             let velocity = (spot - lastSpot) * (1 / dt)
-            let smoothed = pace + (velocity - pace) * (1 - exp(-dt / Self.paceSmoothing))
-            change = smoothed - pace
-            pace = smoothed
+            if let pace {
+                let smoothed = pace + (velocity - pace) * (1 - exp(-dt / Self.paceSmoothing))
+                change = smoothed - pace
+                self.pace = smoothed
+            } else {
+                pace = velocity
+            }
         } else {
-            pace = .zero
+            pace = nil
         }
         lastSpot = spot
+        // A flight follows a path of its own, so it shakes the jelly less.
+        if spawning {
+            change = change * Self.flightInertia
+        }
+        let pace = self.pace ?? .zero
+        // Its growth is known from its second frame on, and changes from its
+        // third.
+        var growthChange = 0.0
+        if let lastScale {
+            let rate = (scale - lastScale) / dt
+            growthChange = growth.map { rate - $0 } ?? 0
+            growth = rate
+        } else {
+            growth = nil
+        }
+        lastScale = scale
+        let knock = knocks * Self.knockInertia
+        knocks = .zero
+        // The edges pressing on it, relative to where it is drawn, at full scale.
+        let pressing = contacts.map {
+            Jelly.Contact(point: ($0.point - spot) * (1 / scale), normal: $0.normal)
+        }
+        contacts = []
         if jelly == nil {
-            guard landed || change.length > Self.wobbleKick || pace.length > Self.wobblePace
+            guard
+                landed || change.length > Self.wobbleKick || pace.length > Self.wobblePace
+                    || knock.length > Self.wobbleKick || abs(growthChange) > Self.wobbleGrowth
+                    || !pressing.isEmpty
             else { return }
             jelly = Jelly(size: size, cornerRadius: cornerRadius)
         }
@@ -299,12 +374,15 @@ final class Bubble: Identifiable {
             jelly.splat(Self.splat)
             landed = false
         }
-        jelly.feel(change)
+        jelly.feel(change + knock)
+        // Lagging behind its growth, it bulges as growing slows, and caves
+        // in as it speeds up.
+        jelly.inflate(-growthChange * Self.growthInertia)
         let walls = CGRect(
             x: -spot.x / scale, y: -spot.y / scale, width: bounds.width / scale,
             height: bounds.height / scale)
-        jelly.step(dt: dt, velocity: pace, walls: walls)
-        if jelly.isSettled && pace.length < Self.restPace {
+        jelly.step(dt: dt, velocity: pace, walls: walls, contacts: pressing)
+        if jelly.isSettled && pace.length < Self.restPace && pressing.isEmpty {
             rest()
             return
         }

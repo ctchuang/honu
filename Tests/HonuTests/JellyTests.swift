@@ -52,6 +52,15 @@ struct JellyTests {
         #expect(jelly.rest.allSatisfy { ($0 - corner).length > 10 })
     }
 
+    @Test func neverTurns() {
+        let turn = CGAffineTransform(rotationAngle: 0.3)
+        #expect(Jelly.withoutRotation(turn).isNearlyIdentity)
+        let squash = CGAffineTransform(scaleX: 0.8, y: 1.25)
+        let squashed = Jelly.withoutRotation(squash.concatenating(turn))
+        #expect(abs(squashed.a - 0.8) < 0.001 && abs(squashed.d - 1.25) < 0.001)
+        #expect(abs(squashed.b) < 0.001 && abs(squashed.c) < 0.001)
+    }
+
     @Test func ringLeftAloneStaysAtRest() {
         var jelly = jelly()
         run(&jelly, 2)
@@ -182,6 +191,8 @@ struct BubbleJellyTests {
 
     @Test func draggedBubbleTrailsThePointer() {
         let bubble = bubble(500)
+        // It sits still a moment before it is picked up, as on screen.
+        simulate(0.1)
         stage.startDrag(bubble)
         var wobbled = false
         for frame in 1...30 {
@@ -228,6 +239,39 @@ struct BubbleJellyTests {
             }
         }
         #expect(splatted, "did not splat wider when it landed")
+    }
+
+    @Test func spatOutBubbleWobblesAsItGrows() {
+        let bubble = bubble(500)
+        stage.spit(bubble, from: CGPoint(x: 100, y: 900))
+        var wobbledInFlight = false
+        simulate(Bubble.spawnSeconds) {
+            wobbledInFlight = wobbledInFlight || (bubble.isInFlight && bubble.outline != nil)
+        }
+        #expect(wobbledInFlight)
+    }
+
+    @Test func swallowedBubbleDoesNotWobble() {
+        let bubble = bubble(500)
+        bubble.velocity = CGPoint(x: 2000, y: 0)
+        simulate(0.1)
+        stage.swallow(bubble, into: CGPoint(x: 1900, y: 950))
+        simulate(Self.dt) { #expect(isAtRest(bubble)) }
+    }
+
+    @Test func resizingIntoANeighborMakesItWobble() {
+        let resized = bubble(500)
+        let neighbor = bubble(900)
+        stage.startResize(resized, edges: .right)
+        var squashed = 1.0
+        for frame in 1...40 {
+            stage.resized(by: CGSize(width: 8 * Double(frame), height: 0))
+            stage.step(dt: Self.dt)
+            squashed = min(squashed, neighbor.contentTransform.a)
+        }
+        stage.endResize()
+        #expect(squashed < 0.93, "the neighbor squashed only to \(squashed)")
+        #expect(neighbor.center.x > 900, "the neighbor was not pushed")
     }
 }
 

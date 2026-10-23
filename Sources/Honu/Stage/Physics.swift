@@ -18,7 +18,11 @@ enum Physics {
     /// impact when bubbles collide, so they bump and share momentum instead
     /// of jiggling.
     static let pushDamping = 0.45
+    /// The deepest a bubble pushing another presses its jelly in, relative
+    /// to how far the pressed one reaches from its center that way.
+    static let dent = 0.25
     /// Fraction of speed kept after bouncing off a screen edge.
+
     static let bounce = 0.5
     /// Speed limit (points/s) for thrown bubbles.
     static let maxSpeed = 2500.0
@@ -48,6 +52,19 @@ enum Physics {
                 let push = max(pushStiffness * (minDist - dist) + damping * closingSpeed, 0)
                 accel[i] = accel[i] - dir * (push / ma)
                 accel[j] = accel[j] + dir * (push / mb)
+                // Their jelly feels the bump, and is pressed flat against the
+                // other's edge while the push lasts.
+                a.knock(dir * (-push / ma * dt))
+                b.knock(dir * (push / mb * dt))
+                if push > 0 {
+                    let (edgeA, edgeB) = (reach(a, along: dir), reach(b, along: dir))
+                    let overlap = (a.center + dir * edgeA - (b.center - dir * edgeB)).dot(dir)
+                    b.press(
+                        at: b.center - dir * (edgeB - min(overlap, dent * edgeB)), toward: dir)
+                    a.press(
+                        at: a.center + dir * (edgeA - min(overlap, dent * edgeA)),
+                        toward: dir * -1)
+                }
             }
         }
 
@@ -103,6 +120,12 @@ enum Physics {
         }
         return gap.x > gap.y
             ? (gap.x, CGPoint(x: sign.x, y: 0)) : (gap.y, CGPoint(x: 0, y: sign.y))
+    }
+
+    /// How far `bubble`'s frame reaches from its center along `direction`.
+    @MainActor
+    private static func reach(_ bubble: Bubble, along direction: CGPoint) -> Double {
+        bubble.frame.width / 2 * abs(direction.x) + bubble.frame.height / 2 * abs(direction.y)
     }
 
     /// Bigger bubbles are heavier and get pushed around less.

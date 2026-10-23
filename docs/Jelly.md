@@ -62,9 +62,11 @@ it.
 2. As a user, I drag a bubble around quickly; it stretches along the way
    it moves and trails behind the pointer, and when I stop, it
    overshoots and jiggles.
-3. As a user, I knock one bubble into another; both jiggle.
-4. As a user, I click the turtle; the new bubble lands with a splat and
-   wobbles into shape.
+3. As a user, I knock one bubble into another, or resize a bubble into
+   another; the one pushed is pressed flat where it is pushed, and
+   jiggles.
+4. As a user, I click the turtle; the new bubble wobbles as it grows on
+   its way out, lands with a splat, and wobbles into shape.
 5. As a user, a bubble that rises or wobbles to show its status
    jiggles as it does.
 6. As a user, I read, type, or click a link in a bubble at rest, and
@@ -83,7 +85,8 @@ jelly in a jar would. That one rule covers every case:
 | Bouncing off a screen edge | The bubble reverses at once | The side that hit flattens against the edge, the rest bulges out, then it wobbles. |
 | Being dragged | The pointer's starts, stops, and turns | It trails behind the pointer, and overshoots when the pointer stops. |
 | Being thrown and gliding | Friction slows it | It leans back a little as it slows. |
-| Being pushed by another bubble | The push | It jiggles. |
+| Being pushed by another bubble, thrown or being resized | The push, felt more than it moves the bubble | The side pushed flattens against the other's edge while the push lasts, then it jiggles. |
+| Flying out of the turtle | The flight's path, softened, and its growing | It leans along the way and bulges as its growing slows. |
 | Rising or wobbling for its status | The motion, which moves the drawn bubble | It jiggles along. |
 
 On top of that, a fast bubble stretches along the way it moves and
@@ -116,8 +119,8 @@ the octopus): it flattens and widens, then wobbles back.
 - Hit-testing, the rim that resizes, and the cursor follow the bubble at
   rest. A wobble lasts about a second; presses during it land on the
   content as AppKit maps them through the content transform.
-- A bubble being resized, flying, or swallowed does not wobble, and a
-  bubble whose size changes (resizing, zooming, its microapp asking for
+- A bubble being resized, flying into the octopus, or swallowed does not
+  wobble, and a bubble whose size changes (resizing, zooming, its microapp asking for
   another size) comes to rest at once.
 - A bubble at rest is drawn exactly as today, and nothing about it is
   computed each frame.
@@ -181,7 +184,14 @@ center, at full scale, pure value code that tests can drive:
   limit ever more slowly, so a hard hit stays a cartoon squash rather
   than a collapse.
 - **Walls**: a stiff spring pushes back whatever pokes past the screen
-  edges.
+  edges, and a softer one whatever pokes past the edge of a bubble
+  pushing this one (a `Contact`), no deeper than a quarter of the way
+  to the center, so a push presses it flat without crushing it.
+- **Knocks and growth**: pushes from other bubbles are felt six times
+  as hard as they move the bubble; a bubble flying out of the turtle
+  feels its path at 40% and lags behind its growing (`inflate`). A
+  bubble's pace starts as it is first found, so starting to track it
+  is no kick.
 - **Splat**: an impulse on the ring's points that widens and flattens
   it.
 - **Settling**: once every point is within a fraction of a point of its
@@ -204,7 +214,10 @@ every free bubble's jelly after the physics.
 - `BubbleView`: the content takes `transformEffect(contentTransform)`;
   the glass and the clip take the outline (the rounded rectangle at
   rest, the smooth curve through the ring otherwise), swollen by
-  breathing along the normals.
+  breathing along the normals. Liquid Glass hands its shape a rectangle
+  already scaled while the bubble is drawn scaled (flying, or shrunk
+  over the octopus), so the outline and the cuts are fitted to that
+  rectangle rather than drawn at full size.
 - `StageView.cuts`: a cut is the outline of the bubble above, mapped
   into the one below, grown by the gap: the rounded rectangle as today
   for a bubble at rest, the curve for one wobbling.
@@ -262,3 +275,18 @@ lint on their own.
 - `UI.md`: jelly in principle 4 and in **Bubbles**; `CLAUDE.md`: the
   architecture; `TODO.md`: the jelly effect is off the list; the steps
   here are marked (done).
+
+### Step 6: Growing and pushing (done)
+
+- `Bubble` wobbles while it flies out of the turtle, feeling its path
+  softened and its growing (`Jelly.inflate`), and its pace starts as it
+  is first found; `Physics` knocks the jelly of both bubbles in a push
+  (`Bubble.knock`) and presses each flat against the other's edge
+  (`Bubble.press`, `Jelly.Contact`).
+- `CutAway` fits the outline and the cuts to the rectangle it is drawn
+  in, since Liquid Glass hands it one already scaled while the bubble
+  is; drawn at full size, a growing bubble's glass was too big for its
+  content.
+- Tests (`JellyTests`): a bubble wobbles as it grows, a swallowed one
+  does not, a bubble resized into another squashes it, and the jelly
+  never turns.
