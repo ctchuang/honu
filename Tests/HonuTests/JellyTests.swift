@@ -41,6 +41,29 @@ struct JellyTests {
         return abs(sum) / 2
     }
 
+    @Test func hardHitsAndSlowFramesNeitherBreakNorOverstretchIt() {
+        var jelly = jelly()
+        let limit = Jelly.strainLimit * min(Self.size.width, Self.size.height)
+        // Walls hugging the ring, hit hard every slow frame for a second.
+        let walls = CGRect(
+            x: -Self.size.width / 2, y: -Self.size.height / 2, width: Self.size.width,
+            height: Self.size.height)
+        let dt = 1.0 / 30
+        for frame in 0..<30 {
+            jelly.feel(CGPoint(x: frame.isMultiple(of: 2) ? 1e6 : -1e6, y: 3e5))
+            jelly.step(dt: dt, velocity: CGPoint(x: 1e5, y: 0), walls: walls)
+            for (point, rest) in zip(jelly.points, jelly.rest) {
+                #expect(point.x.isFinite && point.y.isFinite)
+                #expect((point - rest).length <= limit + 0.001)
+            }
+            #expect(jelly.contentTransform.a.isFinite && jelly.contentTransform.d.isFinite)
+        }
+        for _ in 0..<Int(5 / dt) {
+            jelly.step(dt: dt, velocity: .zero, walls: Self.open)
+        }
+        #expect(jelly.isSettled)
+    }
+
     @Test func restsOnTheRoundedRectangle() {
         let jelly = jelly()
         let box = bounds(jelly.rest)
@@ -172,6 +195,35 @@ struct BubbleJellyTests {
 
     private func isAtRest(_ bubble: Bubble) -> Bool {
         bubble.outline == nil && bubble.contentTransform == .identity
+    }
+
+    @Test func theJellyFollowsTheBubbleButNeverMovesIt() {
+        // The same throw, into a wall and a neighbor, with and without jelly.
+        let plain = Stage(size: stage.size)
+        var pairs: [(Bubble, Bubble)] = []
+        for (x, speed) in [(1200.0, 2500.0), (1600.0, 0.0)] {
+            let target = ViewTarget(app: AppID("test"), item: ItemID(rawValue: 1))
+            let wobbly = bubble(x)
+            let still = plain.add(
+                target: target, center: wobbly.center, appearance: Appearance(),
+                viewState: nil)
+            wobbly.velocity = CGPoint(x: speed, y: 300)
+            still.velocity = wobbly.velocity
+            pairs.append((wobbly, still))
+        }
+        var wobbled = false
+        for _ in 0..<120 {
+            stage.step(dt: Self.dt)
+            for (_, still) in pairs {
+                still.animate(dt: Self.dt)
+            }
+            Physics.step(plain.bubbles, bounds: plain.size, held: nil, dt: Self.dt)
+            for (wobbly, still) in pairs {
+                #expect(wobbly.center == still.center && wobbly.velocity == still.velocity)
+                wobbled = wobbled || wobbly.outline != nil
+            }
+        }
+        #expect(wobbled)
     }
 
     @Test func bubbleLeftAloneNeverWobbles() {
