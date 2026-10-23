@@ -316,6 +316,62 @@ struct MakerTests {
         #expect(microapp.problems.count == 1)
     }
 
+    @Test func onlyARunningPageReportsErrorsAndOnlyAFewOfThem() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        for n in 0..<(GeneratedApp.maxProblems + 5) {
+            microapp.report("error \(n)", at: 100)
+        }
+        #expect(microapp.problems.count == GeneratedApp.maxProblems)
+        #expect(microapp.problems.last == "error \(GeneratedApp.maxProblems - 1)")
+
+        // While Claude writes the fix, the old page's errors are not kept.
+        _ = microapp.poll(claude, at: 100 + GeneratedApp.fixDelay)
+        #expect(microapp.status == .writing(.fixing))
+        microapp.report("error: late", at: 102)
+        #expect(!microapp.problems.contains("error: late"))
+    }
+
+    @Test func revertingClearsTheNoticeAndWaitsForTheUserToFix() throws {
+        let maker = app()
+        let item = made(maker, "a clock", answer("Clock"))
+        let microapp = try #require(maker.microapp(of: item))
+        microapp.draft = "make it blue"
+        maker.change(item)
+        claude.streams[1].send(.text(answer("Blue Clock")))
+        claude.streams[1].send(.done)
+        _ = update(maker)
+        microapp.draft = "make it red"
+        maker.change(item)
+        claude.streams[2].send(.failed("Rate limited."))
+        _ = update(maker)
+        #expect(microapp.notice != nil)
+
+        maker.revert(item)
+        #expect(microapp.notice == nil)
+        #expect(maker.title(of: item) == "Clock")
+        // Errors as the page it went back to starts are not fixed without asking.
+        _ = microapp.loaded(at: 100)
+        microapp.report("error: x is not defined", at: 100)
+        _ = microapp.poll(claude, at: 100 + GeneratedApp.fixDelay + 1)
+        #expect(claude.requests.count == 3)
+        #expect(microapp.status == .running)
+    }
+
+    @Test func aTileTakesTheSymbolThePageNamesIfItExists() {
+        let maker = app()
+        let named = made(maker, "a clock", answer("Clock", symbol: "clock"))
+        let unknown = made(maker, "a timer", answer("Timer", symbol: "no.such.symbol"))
+        let unnamed = made(
+            maker, "a list",
+            "<!doctype html><html><head><title>List</title></head><body></body></html>")
+        let symbols = [named, unknown, unnamed].map {
+            maker.microapp(of: $0).map(MakerApp.symbol(of:))
+        }
+        #expect(symbols == ["clock", MakerApp.defaultSymbol, MakerApp.defaultSymbol])
+    }
+
     @Test func microappsComeBackAfterARelaunch() throws {
         let maker = app()
         let clock = made(maker, "a clock", answer("Clock"))
