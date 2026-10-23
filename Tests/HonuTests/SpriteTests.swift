@@ -83,6 +83,23 @@ struct TurtleTests {
         #expect(turtle.grid(at: time).pixel(22, 7) == "E")
         #expect(turtle.grid(at: time + 1).pixel(22, 7) != "E")
     }
+
+    @Test func itBobsWhileIdleAndHopsWhenClicked() {
+        let turtle = Turtle(stageSize: screen)
+        // Idle, it rises a sprite pixel on every other bob.
+        let bobs = Set(stride(from: 0.0, to: 4, by: 0.1).map { turtle.lift(at: $0) })
+        #expect(bobs == [0, spritePixel])
+
+        turtle.hop(at: 10)
+        let peak = turtle.lift(at: 10 + Turtle.hopSeconds / 2)
+        let height = CGFloat(Turtle.hopPixels) * spritePixel
+        #expect(peak == height)
+        let hop = stride(from: 10.0, to: 10 + Turtle.hopSeconds, by: 0.01).map {
+            turtle.lift(at: $0)
+        }
+        #expect(hop.allSatisfy { $0 >= 0 && $0 <= peak })
+        #expect(hop.allSatisfy { $0.truncatingRemainder(dividingBy: spritePixel) == 0 })
+    }
 }
 
 @MainActor

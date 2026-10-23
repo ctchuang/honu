@@ -183,6 +183,23 @@ struct ShellTests {
         #expect(corner.y + size.height < screen.height)
     }
 
+    @Test func theLauncherOpensWhereTheTurtleWasClickedButStaysOnScreen() throws {
+        let shell = makeShell()
+        #expect(shell.launcherFrame == nil)
+        let point = CGPoint(x: 100, y: 200)
+        shell.clickTurtle(at: point)
+        #expect(shell.launcherFrame?.origin == point)
+
+        let screen = CGRect(origin: .zero, size: shell.stage.size)
+        for corner in [CGPoint(x: 1190, y: 790), CGPoint(x: 1190, y: 10), CGPoint(x: 10, y: 790)] {
+            shell.clickTurtle(at: corner)
+            let frame = try #require(shell.launcherFrame)
+            #expect(screen.contains(frame), "off screen when opened at \(corner)")
+        }
+        shell.rightClickTurtle(at: point)
+        #expect(shell.launcherFrame == nil, "a frame for the system menu")
+    }
+
     @Test func aMicroappGetsATileOnceMadeWhichLaunchesItAgain() throws {
         let claude = FakeClaude()
         let shell = makeShell(claude: claude)
