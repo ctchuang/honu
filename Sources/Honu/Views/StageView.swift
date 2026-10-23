@@ -85,26 +85,34 @@ struct Cut: Equatable {
 
 /// A bubble's glass: `shape`, or the curve along its wobbling `outline`,
 /// grown by `swell` on every side (past the view's own bounds), with the
-/// outlines of the bubbles above cut away.
+/// outlines of the bubbles above cut away. The outline and the cuts are in
+/// the coordinates of a bubble of `size`, and are fitted to the rectangle the
+/// shape is drawn in, which Liquid Glass hands over already scaled while the
+/// bubble is.
 struct CutAway: Shape {
     let shape: RoundedRectangle
+    let size: CGSize
     var outline: Outline? = nil
     var swell: CGFloat = 0
     let cuts: [Cut]
 
     func path(in rect: CGRect) -> Path {
+        let fit = CGAffineTransform(
+            a: rect.width / max(size.width, 1), b: 0, c: 0, d: rect.height / max(size.height, 1),
+            tx: rect.minX, ty: rect.minY)
         var path: Path
         if let outline {
-            let middle = CGPoint(x: rect.midX, y: rect.midY)
+            let middle = CGPoint(x: size.width / 2, y: size.height / 2)
             path = Path(
                 smoothlyClosedThrough: zip(outline.points, outline.normals).map {
                     middle + $0 + $1 * swell
-                })
+                }
+            ).applying(fit)
         } else {
             path = shape.inset(by: -swell).path(in: rect)
         }
         for cut in cuts {
-            path = path.subtracting(cut.path)
+            path = path.subtracting(cut.path.applying(fit))
         }
         return path
     }
