@@ -113,7 +113,12 @@ final class MakerApp: MicroApp, PageHost {
 
     /// The SF Symbol of `microapp`: the one its page names, if it exists.
     static func symbol(of microapp: GeneratedApp) -> String {
-        let named = microapp.meta.symbol.flatMap {
+        symbol(named: microapp.meta.symbol)
+    }
+
+    /// The SF Symbol `name`, if there is one so named, or else the default.
+    static func symbol(named name: String?) -> String {
+        let named = name.flatMap {
             NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil ? nil : $0
         }
         return named ?? defaultSymbol

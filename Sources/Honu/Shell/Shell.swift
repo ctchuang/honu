@@ -104,13 +104,19 @@ final class Shell {
     private static let summonDistance: CGFloat = 40
 
     /// A shell for a screen of `size`, saving to and restoring from
-    /// `storeURL`, whose microapps share `services`.
+    /// `storeURL`, whose microapps share `services`, with a microapp for
+    /// each of the `pages` built into Honu.
     init(
-        size: CGSize, storeURL: URL = Autosave.storeURL, services: Services = .live()
+        size: CGSize, storeURL: URL = Autosave.storeURL, services: Services = .live(),
+        pages: [BundledPage] = BuiltinCatalog.shipped
     ) {
         autosave = Autosave(url: storeURL)
         maker = MakerApp(root: MakerApp.root(for: storeURL), services: services)
-        registry = Registry([NotesApp(), AskApp(services: services), WebApp(), maker])
+        let bundled = pages.map {
+            BundledWebApp(page: $0, root: BundledWebApp.root(for: storeURL)) as any MicroApp
+        }
+        registry = Registry(
+            [NotesApp(), AskApp(services: services), WebApp()] + bundled + [maker])
         stage = Stage(size: size)
         turtle = Turtle(stageSize: size)
         trash = Trash()

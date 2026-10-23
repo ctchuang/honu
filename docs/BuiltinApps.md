@@ -123,7 +123,8 @@ false) stay registered so saved items load, and show in no folder.
   and `save` (its instance's state), `fetch`, and `resize`; its bubbles
   rise once the page loads. It has no change bar. Errors it reports are
   not sent to Claude; they wobble its bubbles, as a page that fails to
-  load does.
+  load does, once until the page loads again, so a page that keeps
+  failing does not keep them shaking.
 - Each web built-in microapp has an origin of its own,
   `honu-builtin://<name>/`, apart from the installed microapps'
   `honu-app://`, so the two never share storage. The scheme serves only
@@ -203,18 +204,19 @@ A refactor; no behavior changes.
   `instances/` as now.
 - The existing tests pass unchanged.
 
-### Step 3: Web built-in microapps
+### Step 3: Web built-in microapps (done)
 
-- `Package.swift` copies `BuiltinApps/` into the resources.
 - `BuiltinCatalog` lists the folders of `BuiltinApps/` and reads each
   page's `PageMeta`, skipping folders whose name breaks the name rule.
 - `BundledWebApp`, a `MicroApp` per web built-in microapp (`AppID`
   `builtin.<name>`): an `ItemTable` of instances (data UUID and size),
   `appearance` from its meta and size, `content` through `MicroappView`
   with the `honu-builtin://` scheme, rise on load, wobble on errors.
+  `MakerApp` becomes a `PageHost` too, so both run pages the same way.
 - `Shell.init` registers one per catalog entry, after the native ones;
-  their tiles go into the folder.
-- Restoring drops bubbles of an app id no microapp has.
+  their tiles go into the folder. It takes the pages, so tests run
+  without what Honu ships.
+- Restoring drops bubbles of an app id no microapp has (it already did).
 - Tests: the catalog reads a page's meta; every folder in `BuiltinApps/`
   keeps the name rule, and the catalog skips one that does not; two
   instances save apart and come back after a relaunch; the scheme stays
@@ -225,6 +227,8 @@ A refactor; no behavior changes.
 
 - One small page in `BuiltinApps/`, declaring its title, size, and
   symbol, saving its state through `honu.save`.
+- `Package.swift` copies `BuiltinApps/` into the resources (SwiftPM
+  wants the folder to hold something).
 
 ### Step 5: Docs
 

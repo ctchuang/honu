@@ -16,13 +16,14 @@ func temporaryStoreURL() -> URL {
 
 /// A shell on a screen of `size`, saving to `storeURL` (a store of its own
 /// unless given one), whose microapps ask `claude`, so tests never run the
-/// real Claude Code.
+/// real Claude Code, with a microapp for each of `pages` built in (none
+/// unless given some, so tests do not depend on what Honu ships).
 @MainActor
 func makeShell(
     size: CGSize = CGSize(width: 1200, height: 800), storeURL: URL = temporaryStoreURL(),
-    claude: FakeClaude = FakeClaude()
+    claude: FakeClaude = FakeClaude(), pages: [BundledPage] = []
 ) -> Shell {
-    Shell(size: size, storeURL: storeURL, services: Services(claude: claude))
+    Shell(size: size, storeURL: storeURL, services: Services(claude: claude), pages: pages)
 }
 
 /// What tests do to a shell over and over.
