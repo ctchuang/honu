@@ -61,7 +61,7 @@ The folders follow the layers: `App/` hosts SwiftUI in AppKit, `Shell/` is the c
 
 ## Conventions
 
-- The PRDs in `docs/` are the design to follow: `docs/UI.md` for the UI's principles and behavior, `docs/Launcher.md` for the launcher. Read the relevant one before changing what it covers, keep changes to it, and update it in the same change when the design itself changes. A new design that takes more than a few sentences gets a PRD of its own in `docs/`.
+- The PRDs in `docs/` are the design to follow: `docs/UI.md` for the UI's principles and behavior, `docs/Launcher.md` for the launcher, `docs/Resizing.md` for resizing bubbles. Read the relevant one before changing what it covers, keep changes to it, and update it in the same change when the design itself changes. A new design that takes more than a few sentences gets a PRD of its own in `docs/`.
 - Everything in the repository must be in English: identifiers, comments, UI strings, docs, and commit messages — even when the conversation is in Chinese.
 - After changing Swift code, run `swift build`, `swift test`, and `swift format lint --strict -r Sources Tests Package.swift` before reporting the work as done, and fix any warnings they raise.
 - Honu asks Claude through the user's Claude Code login and uses no API key. `.env` and `.env.*` stay git-ignored so an old key file is never committed; never read, print, or commit one, and never put a key anywhere in the repository.
