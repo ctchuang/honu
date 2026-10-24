@@ -34,10 +34,8 @@ satellite map of Taiwan:
 
 <p align="center">
   <img src="docs/images/typhoon.jpg" alt="A satellite map of a typhoon east
-  of Taiwan, with the active storms listed below" width="456">
+  of Taiwan, with the active storms listed below" width="320">
 </p>
-
-> **TODO:** drag bubbles onto the turtle to give Claude their contents as context.
 
 ## Quick start in 30 seconds
 
