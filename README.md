@@ -29,6 +29,14 @@ into the bar below restyles both at once](docs/images/demo.gif)
 Pomodoro timer, and a habit tracker with a change request typed into its
 bar) beside the turtle's launcher](docs/images/demo.jpg)
 
+Microapps can show live data. When a typhoon was coming, I asked for a
+satellite map of Taiwan:
+
+<p align="center">
+  <img src="docs/images/typhoon.jpg" alt="A satellite map of a typhoon east
+  of Taiwan, with the active storms listed below" width="456">
+</p>
+
 > **TODO:** drag bubbles onto the turtle to give Claude their contents as context.
 
 ## Quick start in 30 seconds
