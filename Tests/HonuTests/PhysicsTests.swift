@@ -88,6 +88,17 @@ struct PhysicsTests {
         #expect(a.velocity == .zero && b.velocity == .zero, "still creeping")
     }
 
+    @Test func bubblesRestingAtTheEdgeOfEachOthersSpaceSettle() {
+        // As far apart as pushing leaves them: a hair inside the space their
+        // rounded corners allow, where a push would be ever fainter.
+        let a = small(500)
+        let space = Physics.personalSpace * 2 * a.cornerRadius
+        let b = small(500 + 160 - 2 * a.cornerRadius + space - 1e-9)
+        simulate(3)
+        #expect(a.velocity == .zero && b.velocity == .zero, "still creeping")
+        #expect(a.outline == nil && b.outline == nil, "still pressed against each other")
+    }
+
     @Test func bubblesCornerToCornerArePushedApartDiagonally() {
         let (a, b) = (bubble(1000, 300), bubble(1340, 550))
         simulate(3)

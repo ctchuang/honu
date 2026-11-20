@@ -11,6 +11,12 @@ enum Physics {
     /// `1 - personalSpace` of the sum of their corner radii, so slight
     /// overlaps (which show off the glass) are left alone.
     static let personalSpace = 0.8
+    /// How deep (points) bubbles may come into each other's personal space
+    /// before they push. Pushed apart, bubbles come to rest at its edge;
+    /// without this they would rest a hair inside it, pushing ever more
+    /// faintly for ever, and their jelly, pressed all the while, would
+    /// never settle.
+    static let slop = 0.5
     /// Spring stiffness of the push between crowded bubbles; a bubble of
     /// radius 100 pressed in by 1 point is pushed back at this many points/s².
     static let pushStiffness = 160.0
@@ -44,7 +50,7 @@ enum Physics {
                 let (a, b) = (bubbles[i], bubbles[j])
                 let (dist, dir) = separation(a, b)
                 let minDist = personalSpace * (roundness(a) + roundness(b))
-                guard dist < minDist else { continue }
+                guard dist < minDist - slop else { continue }
                 let (ma, mb) = (mass(a), mass(b))
                 let closingSpeed = (a.velocity - b.velocity).dot(dir)
                 let damping = pushDamping * 2 * (pushStiffness * ma * mb / (ma + mb)).squareRoot()
