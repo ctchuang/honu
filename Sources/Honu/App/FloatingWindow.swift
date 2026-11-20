@@ -31,13 +31,21 @@ final class FloatingWindow: NSWindow {
     /// Mission Control's Space thumbnails leave out every window that lies
     /// wholly inside one above them, as if it were opaque, so Honu's window
     /// must be behind the others there (issue #5); see `sendBack`.
+    ///
+    /// It also joins every app's windows (`canJoinAllApplications`), so
+    /// Stage Manager shows it beside whichever app is in front rather than
+    /// setting it aside as Honu's own stage, which would hide the bubbles
+    /// until Honu is chosen.
+    ///
+    /// Being transient keeps it out of Mission Control, where windows are
+    /// dragged to another desktop, so on one desktop it moves to whichever
+    /// is in use when Honu becomes active (`moveToActiveSpace`), as when
+    /// its Dock icon is clicked there.
     var isOnAllDesktops: Bool {
         get { collectionBehavior.contains(.canJoinAllSpaces) }
         set {
-            collectionBehavior = [.transient, .fullScreenNone]
-            if newValue {
-                collectionBehavior.insert(.canJoinAllSpaces)
-            }
+            collectionBehavior = [.transient, .fullScreenNone, .canJoinAllApplications]
+            collectionBehavior.insert(newValue ? .canJoinAllSpaces : .moveToActiveSpace)
         }
     }
 

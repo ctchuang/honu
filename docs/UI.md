@@ -29,7 +29,12 @@ stays small while what it can do grows.
    Honu back behind it. Even in front, clicks pass through to the apps
    below everywhere except on something of Honu's. It never goes full
    screen, and Mission Control hides it: it shares the screen with the
-   other apps rather than taking it over.
+   other apps rather than taking it over. Stage Manager never sets it
+   aside as a stage of its own: it stays on its desktop beside whichever
+   app is in front, whether or not it shows on all desktops. On one
+   desktop, it moves to whichever desktop is in use when Honu becomes
+   active there, as when its Dock icon is clicked, since Mission Control,
+   where windows are dragged between desktops, leaves it out.
 2. **Start empty, stay quiet.** Honu starts with only the turtle in the
    bottom-left corner. Anything else appears when needed and leaves when
    done: the octopus rises only while something is dragged toward it or
