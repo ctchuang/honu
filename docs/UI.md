@@ -112,7 +112,7 @@ about a second, its content squashing along. See `Jelly.md`.
 
 | Input | Result |
 |---|---|
-| Drag the title | Moves it; let go while moving, it glides on. |
+| Drag the title | Moves it; let go while moving, it glides on. Dragging the content does not move it, so the content can drag things of its own, such as a map. |
 | Drag the rim (the glass around the content), or a corner | Resizes it, as a window: the opposite edge stays put, and the bubbles it grows into are pushed aside. The pointer shows the system's resize cursor there. |
 | Double-click the title | Zooms it, as a window: from the size the user chose to the size its microapp asks for, and back. |
 | Press anywhere on it | Brings it to the top, over every other bubble. |

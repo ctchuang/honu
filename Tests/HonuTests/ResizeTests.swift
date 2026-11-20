@@ -164,6 +164,14 @@ struct ShellResizeTests {
         #expect(!shell.stage.isDragging && !shell.stage.isResizing)
     }
 
+    @Test func draggingTheContentLeavesTheBubbleWhereItIs() {
+        let shell = makeShell()
+        let bubble = shell.addNote(at: CGPoint(x: 600, y: 400))
+        drag(shell, bubble, from: CGPoint(x: 600, y: 400), by: CGSize(width: 200, height: 0))
+        #expect(bubble.frame == CGRect(x: 410, y: 250, width: 380, height: 300))
+        #expect(!shell.stage.isDragging && !shell.octopus.isSummoned)
+    }
+
     @Test func resizingOverTheOctopusDoesNotDelete() throws {
         let shell = makeShell()
         let bubble = shell.addNote(at: CGPoint(x: 600, y: 400))

@@ -76,6 +76,11 @@ final class Bubble: Identifiable {
     static let topRimWidth: CGFloat = 6
     /// How far from a corner the rim resizes both ways.
     static let cornerReach: CGFloat = 20
+    /// How tall the title is, above the content.
+    static let titleHeight: CGFloat = 36
+    /// How tall the strip of glass left to drag by is, in place of the
+    /// title, when the content shows the title itself.
+    static let untitledHeight: CGFloat = 28
     /// Seconds a flight out of the turtle or back from the octopus lasts.
     nonisolated static let spawnSeconds: Double = 0.8
     /// Seconds a bubble takes to go down into the octopus.
@@ -185,6 +190,18 @@ final class Bubble: Identifiable {
             edges.insert(.bottom)
         }
         return edges
+    }
+
+    /// Whether `point` is on its content, below the title (or the strip in
+    /// its place, without one) and inside the rim, which dragging leaves to
+    /// the content, such as a map a page pans.
+    func contentContains(_ point: CGPoint, showsTitle: Bool) -> Bool {
+        let top = showsTitle ? Self.titleHeight : Self.untitledHeight
+        let content = CGRect(
+            x: frame.minX + Self.rimWidth, y: frame.minY + top,
+            width: frame.width - 2 * Self.rimWidth,
+            height: frame.height - top - Self.rimWidth)
+        return content.contains(point)
     }
 
     /// Where it is drawn this frame, moved by the motion being played.

@@ -2,8 +2,9 @@ import SwiftUI
 
 /// One bubble in interactive Liquid Glass, tinted the way its microapp says.
 /// It shows its title (unless its content shows it) over the content its
-/// microapp makes. Dragging its rim resizes it, dragging it elsewhere moves
-/// it, and double-clicking its title zooms it.
+/// microapp makes. Dragging its rim resizes it, dragging its title moves it,
+/// dragging its content is left to the content, and double-clicking its title
+/// zooms it.
 struct BubbleView: View {
     let bubble: Bubble
     let shell: Shell
@@ -51,7 +52,6 @@ struct BubbleView: View {
             .pointerStyle(
                 Self.cursor(for: shell.stage.resizedEdges(of: bubble) ?? hovered.wrappedValue)
             )
-            .gesture(drag)
     }
 
     /// The system's resize cursor for `edges`, or none off the rim.
@@ -77,27 +77,37 @@ struct BubbleView: View {
     }
 
     private func content(appearance: Appearance, title: String) -> some View {
-        VStack(spacing: 0) {
-            // Without a title, a strip of glass is left to drag the bubble
-            // by, tall enough to grab below the rim.
-            Text(appearance.showsTitle ? title : "")
-                .font(.headline)
-                .foregroundStyle(appearance.textColor)
-                .lineLimit(1)
-                .padding(.horizontal, 24)
-                .frame(maxWidth: .infinity)
-                .frame(height: appearance.showsTitle ? 36 : 28)
-                .contentShape(Rectangle())
-                // Double-clicking the title zooms, as with a window's title bar.
-                .onTapGesture(count: 2, coordinateSpace: .named(ShellView.space)) {
-                    if bubble.rimEdges(at: $0).isEmpty {
-                        shell.zoom(bubble)
-                    }
+        let top = appearance.showsTitle ? Bubble.titleHeight : Bubble.untitledHeight
+        // Without a title, a strip of glass is left to drag the bubble by,
+        // tall enough to grab below the rim.
+        return Text(appearance.showsTitle ? title : "")
+            .font(.headline)
+            .foregroundStyle(appearance.textColor)
+            .lineLimit(1)
+            .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity)
+            .frame(height: top)
+            .contentShape(Rectangle())
+            // Double-clicking the title zooms, as with a window's title bar.
+            .onTapGesture(count: 2, coordinateSpace: .named(ShellView.space)) {
+                if bubble.rimEdges(at: $0).isEmpty {
+                    shell.zoom(bubble)
                 }
-            UndoScope(history: shell.undoManager(for: bubble), content: shell.content(of: bubble))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .contentShape(Rectangle())
+            // The title and the rim move and resize the bubble. The content
+            // lies over them, out of the drag's reach, so what it drags (a
+            // map a page pans, text selected in a note) is its own.
+            .gesture(drag)
+            .overlay {
+                UndoScope(
+                    history: shell.undoManager(for: bubble), content: shell.content(of: bubble)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .padding([.horizontal, .bottom], 10)
-        }
+                .padding(.top, top)
+                .padding([.horizontal, .bottom], Bubble.rimWidth)
+            }
     }
 
     private var drag: some Gesture {

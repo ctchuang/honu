@@ -323,8 +323,10 @@ final class Shell {
         octopus.summon(summoned, turtle: turtle.center)
     }
 
-    /// Drags `bubble`, picked up at `start`: from its rim, resizing it,
-    /// otherwise moving it. A drag goes on doing what it started doing.
+    /// Drags `bubble`, picked up at `start`: from its rim, resizing it, from
+    /// its title, moving it, and from its content, not at all, since the
+    /// content may drag things of its own. A drag goes on doing what it
+    /// started doing.
     func dragBubble(
         _ bubble: Bubble, from start: CGPoint, by translation: CGSize, velocity: CGSize,
         pointer: CGPoint
@@ -333,6 +335,8 @@ final class Shell {
             let edges = bubble.rimEdges(at: start)
             if !edges.isEmpty {
                 stage.startResize(bubble, edges: edges)
+            } else if bubble.contentContains(start, showsTitle: appearance(of: bubble).showsTitle) {
+                return
             }
         }
         if stage.isResizing {

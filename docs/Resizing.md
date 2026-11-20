@@ -196,7 +196,8 @@ comes first.
   only 6 at the top (`topRimWidth`), so most of the title still moves
   the bubble; corners reach 20 points (`cornerReach`).
 - `Shell.dragBubble(_:from:by:velocity:pointer:)`: a drag that starts on
-  the rim resizes, any other moves, and `endBubbleDrag` ends either.
+  the rim resizes, one on the title moves, one on the content is left to
+  the content (`Bubble.contentContains`), and `endBubbleDrag` ends either.
 - `BubbleView`: its one drag gesture goes through it; a hover sets the
   system's resize cursor (`pointerStyle(.frameResize(position:))`, kept
   while resizing), and a double-click on the title zooms.
@@ -205,7 +206,8 @@ comes first.
   views still take the presses inside them.
 - Tests (`ResizeTests`): edges and corners are found where the table
   above says, the title, the content, and past the outline are not rim,
-  dragging the rim resizes while dragging the title moves, and resizing
+  dragging the rim resizes while dragging the title moves and dragging
+  the content does neither, and resizing
   over the octopus does not delete.
 
 ### Step 6: Microapp pages that fit any size (done)
