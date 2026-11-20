@@ -39,13 +39,15 @@ final class FloatingWindow: NSWindow {
     ///
     /// Being transient keeps it out of Mission Control, where windows are
     /// dragged to another desktop, so on one desktop it moves to whichever
-    /// is in use when Honu becomes active (`moveToActiveSpace`), as when
-    /// its Dock icon is clicked there.
+    /// is in use when Honu becomes active there, as when its Dock icon is
+    /// clicked; see `bringFront`.
     var isOnAllDesktops: Bool {
         get { collectionBehavior.contains(.canJoinAllSpaces) }
         set {
             collectionBehavior = [.transient, .fullScreenNone, .canJoinAllApplications]
-            collectionBehavior.insert(newValue ? .canJoinAllSpaces : .moveToActiveSpace)
+            if newValue {
+                collectionBehavior.insert(.canJoinAllSpaces)
+            }
         }
     }
 
@@ -56,9 +58,33 @@ final class FloatingWindow: NSWindow {
     }
 
     /// Brings the window in front of the others, as it should while Honu is
-    /// in use.
+    /// in use, moving it to the desktop in use if it is on another.
+    ///
+    /// It moves by being made key with `moveToActiveSpace`, which it keeps
+    /// only until it has arrived (`settle`): kept on, the window would
+    /// follow the user to every desktop they switch to while another app is
+    /// in front, since it joins every app's windows.
     func bringFront() {
-        orderFront(nil)
+        guard !isOnAllDesktops, !isOnActiveSpace else {
+            orderFront(nil)
+            return
+        }
+        collectionBehavior.insert(.moveToActiveSpace)
+        makeKeyAndOrderFront(nil)
+        settle(tries: 10)
+    }
+
+    /// Stops moving to the desktop in use once the window is on it, checking
+    /// every tenth of a second, at most `tries` times.
+    private func settle(tries: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            if self.isOnActiveSpace || tries <= 1 {
+                self.collectionBehavior.remove(.moveToActiveSpace)
+            } else {
+                self.settle(tries: tries - 1)
+            }
+        }
     }
 
     // Borderless windows refuse key status by default, but web pages need it for typing.
