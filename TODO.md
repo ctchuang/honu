@@ -37,9 +37,6 @@
 - **Every microapp is an MCP server**, offering its items and actions as
   tools, so Claude can read, change, and drive them. (No obvious CUJs
   yet.)
-- **Stick bubbles together to share their context with Claude**
-  (gimmick?): drag one into another to hand both to Claude. Needs
-  bubbles that stick, not just collide.
 
 ## Project
 
