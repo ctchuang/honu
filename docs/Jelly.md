@@ -103,8 +103,9 @@ the octopus): it flattens and widens, then wobbles back.
   It squashes a little more than the glass does, for a cartoon look, and
   never pokes out past it: where it would, the glass grows there, so the
   rim stays.
-- The deformation is large enough to see from across the screen: a hard
-  bounce squashes a bubble by up to about a quarter, and it wobbles
+- The deformation is large enough to see from across the screen, but
+  not so large that it distracts: a hard bounce squashes a bubble by up
+  to about a seventh, and it wobbles
   about three times a second for around a second before it settles.
 - Breathing still swells the glass, along the outline.
 - A bubble on top still covers the ones below completely: the glass and
@@ -274,6 +275,13 @@ lint on their own.
   bump into another bubble, and a new note landing all looked as
   described, the text squashing sharply with the glass; squashed corners
   came to a point with three points per corner, so they have five.
+- Retuned after use (November 2026), at about half: the look was too
+  much day to day. `Jelly.inertia`, `Jelly.stretch`, `Bubble.splat`, and
+  `Bubble.knockInertia` are halved, and `contentExaggeration` is 1.15.
+  Measured on the stage: a bubble dragged at 1500 points/s stretches by
+  about 9% (from 20%), hitting the edge at that speed squashes its glass
+  by about 15% (from 21%), and at 2000 points/s its content to 0.92 of
+  its width.
 
 ### Step 5: Docs (done)
 

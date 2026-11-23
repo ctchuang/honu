@@ -259,5 +259,25 @@ final class Stage {
         for bubble in bubbles {
             bubble.wobble(dt: dt, bounds: size, resizing: bubble === resize?.bubble)
         }
+        logUnrest(dt: dt)
+    }
+
+    /// Whether to log, once a second, every bubble that is not at rest, to
+    /// find what keeps one moving: set `HONU_LOG_PHYSICS` to any value.
+    private static let logsPhysics = ProcessInfo.processInfo.environment["HONU_LOG_PHYSICS"] != nil
+    @ObservationIgnored private var sinceLog = 0.0
+
+    private func logUnrest(dt: Double) {
+        guard Self.logsPhysics else { return }
+        sinceLog += dt
+        guard sinceLog >= 1 else { return }
+        sinceLog = 0
+        let restless = bubbles.compactMap(\.unrest)
+        let held = drag != nil ? " (one held)" : resize != nil ? " (one resized)" : ""
+        // Standard error, which is not buffered, so the log keeps up when piped.
+        let lines =
+            ["[physics] \(restless.count) of \(bubbles.count) bubbles not at rest\(held)"]
+            + restless.map { "[physics]   \($0)" }
+        FileHandle.standardError.write(Data((lines.joined(separator: "\n") + "\n").utf8))
     }
 }

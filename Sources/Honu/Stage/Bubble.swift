@@ -68,6 +68,10 @@ final class Bubble: Identifiable {
     /// The edges of the bubbles pushing it this frame, in the stage's
     /// coordinates, which its jelly is pressed flat against.
     @ObservationIgnored private var contacts: [Jelly.Contact] = []
+    /// The bubbles pushing it this frame, and those that pressed on it last
+    /// frame, for the physics log.
+    @ObservationIgnored private var pressers: [ViewTarget] = []
+    @ObservationIgnored private var lastPressers: [ViewTarget] = []
 
     static let doomedScale: CGFloat = 0.6
     /// How deep the rim is at the sides and bottom, around the content.
@@ -101,10 +105,10 @@ final class Bubble: Identifiable {
     /// Pace (points/s) below which a settled ring comes to rest.
     static let restPace: Double = 20
     /// How hard a bubble splats when it lands (1/s).
-    static let splat: Double = 4
+    static let splat: Double = 2
     /// How much more its jelly feels other bubbles pushing it than the push
     /// moves it, so a bump shows even when the push is gentle.
-    static let knockInertia: Double = 3
+    static let knockInertia: Double = 1.5
     /// How much its jelly lags behind it growing or shrinking as it flies
     /// out of the turtle, so it overshoots and wobbles.
     static let growthInertia: Double = 1
@@ -312,8 +316,9 @@ final class Bubble: Identifiable {
 
     /// Another bubble pushes it this frame along `normal`, its edge passing
     /// through `point`: its jelly is pressed flat against that edge.
-    func press(at point: CGPoint, toward normal: CGPoint) {
+    func press(at point: CGPoint, toward normal: CGPoint, by other: Bubble) {
         contacts.append(Jelly.Contact(point: point, normal: normal))
+        pressers.append(other.target)
     }
 
     /// Advances its jelly by `dt` seconds, on a screen of `bounds`: changes
@@ -335,6 +340,7 @@ final class Bubble: Identifiable {
             lastScale = nil
             knocks = .zero
             contacts = []
+            pressers = []
             return
         }
         let spot = CGPoint(x: center.x + motionOffset.width, y: center.y + motionOffset.height)
@@ -378,6 +384,8 @@ final class Bubble: Identifiable {
             Jelly.Contact(point: ($0.point - spot) * (1 / scale), normal: $0.normal)
         }
         contacts = []
+        lastPressers = pressers
+        pressers = []
         if jelly == nil {
             guard
                 landed || change.length > Self.wobbleKick || pace.length > Self.wobblePace
@@ -409,6 +417,28 @@ final class Bubble: Identifiable {
         contentTransform = middle.inverted()
             .concatenating(jelly.contentTransform)
             .concatenating(middle)
+    }
+
+    /// What keeps it from resting, for the physics log (`HONU_LOG_PHYSICS`):
+    /// its velocity, its pace, and its jelly's unrest and presses; none at rest.
+    var unrest: String? {
+        let pace = self.pace ?? .zero
+        guard velocity != .zero || jelly != nil || pace.length >= Self.restPace else {
+            return nil
+        }
+        var line = String(
+            format: "%@#%d frame %@ velocity (%.2f, %.2f) pace (%.1f, %.1f)",
+            target.app.rawValue, target.item.rawValue, "\(frame.integral)", velocity.x,
+            velocity.y, pace.x, pace.y)
+        if let jelly {
+            let (distance, speed) = jelly.unrest
+            line += String(
+                format: " jelly off %.2f moving %.2f settled %@ pressed by [%@]", distance, speed,
+                jelly.isSettled ? "yes" : "no",
+                lastPressers.map { "\($0.app.rawValue)#\($0.item.rawValue)" }.joined(
+                    separator: ", "))
+        }
+        return line
     }
 
     /// Drops its jelly: its outline is its rounded rectangle again, and its

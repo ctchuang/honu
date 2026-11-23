@@ -143,7 +143,7 @@ struct JellyTests {
         var jelly = jelly()
         run(&jelly, 1.5, velocity: CGPoint(x: 0, y: 2500))
         let box = bounds(jelly.points)
-        #expect(box.height > Self.size.height * 1.1, "stretched only to \(box.height)")
+        #expect(box.height > Self.size.height * 1.05, "stretched only to \(box.height)")
         #expect(box.width < Self.size.width * 0.93, "narrowed only to \(box.width)")
     }
 
@@ -236,7 +236,7 @@ struct BubbleJellyTests {
         bubble.velocity = CGPoint(x: 2000, y: 0)
         var squashed = 1.0
         simulate(0.6) { squashed = min(squashed, bubble.contentTransform.a) }
-        #expect(squashed < 0.85, "content squashed only to \(squashed)")
+        #expect(squashed < 0.95, "content squashed only to \(squashed)")
         simulate(4)
         #expect(isAtRest(bubble))
     }

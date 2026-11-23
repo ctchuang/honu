@@ -92,8 +92,75 @@ struct PhysicsTests {
         let room = b.frame.minX - a.frame.maxX
         // Side by side, with room between them.
         #expect(room > StageView.gap, "only \(room) points apart")
-        #expect(abs(b.center.y - a.center.y - 20) < 1, "pushed sideways, not up or down")
+        // Mostly sideways, leaning a little the way they lay apart.
+        let drift = b.center.y - a.center.y - 20
+        #expect(drift >= 0 && drift < 10, "pushed \(drift) points up or down")
         #expect(a.velocity == .zero && b.velocity == .zero, "still creeping")
+    }
+
+    @Test func aColumnTallerThanTheScreenSlidesApartAndRests() {
+        // Four bubbles 300 points tall stacked on a screen 1000 points tall:
+        // pushed only up and down, they would press each other for ever.
+        let column = [(1000, 150), (1020, 400), (990, 620), (1010, 850)].map {
+            bubble(CGFloat($0.0), CGFloat($0.1))
+        }
+        simulate(8)
+        for bubble in column {
+            #expect(bubble.velocity == .zero, "still pushed at \(bubble.center)")
+            #expect(bubble.outline == nil, "still pressed at \(bubble.center)")
+        }
+    }
+
+    @Test func aCrowdedDeskComesToRestWithoutWandering() {
+        // A real desk of fifteen bubbles, saved where they were, relative
+        // to the center of a screen 3008 by 1595 points. Packed this tight,
+        // neighbors used to press each other, and creep along, for ever.
+        let stage = Stage(size: CGSize(width: 3008, height: 1595))
+        let note = Appearance().size
+        let desk: [(CGFloat, CGFloat, CGSize)] = [
+            (1384, -684, CGSize(width: 240, height: 214)),
+            (1074, -514, CGSize(width: 260, height: 566)),
+            (1370, -415, CGSize(width: 267, height: 300)),
+            (-1299, -306, CGSize(width: 410, height: 900)),
+            (751, -654, CGSize(width: 380, height: 287)),
+            (1267, 216, CGSize(width: 377, height: 295)),
+            (1314, 444, CGSize(width: 380, height: 160)),
+            (367, -647, note),
+            (857, 125, CGSize(width: 346, height: 461)),
+            (-480, -647, note),
+            (-887, -647, note),
+            (-927, 647, note),
+            (1111, 661, CGSize(width: 716, height: 273)),
+            (1314, -81, CGSize(width: 380, height: 160)),
+            (-56, -569, CGSize(width: 460, height: 446)),
+        ]
+        let bubbles = desk.enumerated().map { index, place in
+            stage.add(
+                target: ViewTarget(app: AppID("test"), item: ItemID(rawValue: index + 1)),
+                center: CGPoint(x: 1504 + place.0, y: 797.5 + place.1),
+                appearance: Appearance(size: place.2), viewState: nil)
+        }
+        let start = bubbles.map(\.center)
+        for _ in 0..<Int(15 / Self.dt) {
+            stage.step(dt: Self.dt)
+        }
+        for (bubble, start) in zip(bubbles, start) {
+            #expect(bubble.velocity == .zero, "still moving at \(bubble.center)")
+            #expect(bubble.outline == nil, "still wobbling at \(bubble.center)")
+            let moved = (bubble.center - start).length
+            #expect(moved < 100, "wandered \(moved) points from \(start)")
+        }
+    }
+
+    @Test func bubblesPressedAgainstTheScreenEdgesRest() {
+        // Two bubbles a little too tall together for the screen, one against
+        // its top edge and one against its bottom: they push each other into
+        // the edges, which push back, so neither can move.
+        let size = CGSize(width: 200, height: 500)
+        let (top, bottom) = (bubble(1000, 250, size: size), bubble(1000, 749, size: size))
+        simulate(3)
+        #expect(top.velocity == .zero && bottom.velocity == .zero, "still pushed")
+        #expect(top.outline == nil && bottom.outline == nil, "still pressed")
     }
 
     @Test func bubblesRestingAtTheEdgeOfEachOthersSpaceSettle() {

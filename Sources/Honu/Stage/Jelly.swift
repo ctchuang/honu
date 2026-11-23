@@ -29,7 +29,7 @@ struct Jelly {
     static let wallStiffness = 25 * stiffness
     /// How much more the ring feels a change in the bubble's velocity than
     /// real jelly would, for a cartoon squash.
-    static let inertia = 3.0
+    static let inertia = 1.5
     /// The most change in velocity (points/s) the ring feels within about
     /// `kickMemory` seconds: kicks add up toward it ever more slowly, so a
     /// hard hit squashes a lot rather than collapsing the ring.
@@ -40,13 +40,13 @@ struct Jelly {
     static let squash = 0.6
     /// How much more the content squashes, stretches, and shears than the
     /// ring does; where it would poke out, the glass grows to cover it.
-    static let contentExaggeration = 1.3
+    static let contentExaggeration = 1.15
     /// The least and most the content squashes or stretches along any
     /// direction.
     static let contentStretch = 0.6...1.6
     /// How much a fast bubble stretches along its velocity at most, and
     /// the speed (points/s) at which it does.
-    static let stretch = 0.2
+    static let stretch = 0.1
     static let stretchSpeed = 2000.0
     /// The farthest a point strays from where it rests, relative to the
     /// shorter side.
@@ -134,6 +134,15 @@ struct Jelly {
             normal: CGPoint(x: -1, y: 0))
         corner(around: CGPoint(x: left, y: top), from: .pi)
         return (points, normals)
+    }
+
+    /// How far the point farthest from where it rests is, and how fast the
+    /// fastest point moves, for the physics log.
+    var unrest: (distance: CGFloat, speed: CGFloat) {
+        (
+            zip(points, rest).map { ($0 - $1).length }.max() ?? 0,
+            speeds.map(\.length).max() ?? 0
+        )
     }
 
     /// Whether every point is back where it rests and nearly still.
