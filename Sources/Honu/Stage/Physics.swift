@@ -7,11 +7,13 @@ import Foundation
 enum Physics {
     /// Velocity decay rate (1/s); higher stops a thrown bubble sooner.
     static let friction = 4.0
-    /// Bubbles only push each other once they overlap by more than
-    /// `1 - personalSpace` of the sum of their corner radii, so slight
-    /// overlaps (which show off the glass) are left alone.
-    static let personalSpace = 0.8
-    /// How deep (points) bubbles may come into each other's personal space
+    /// The room (points) bubbles keep between their outlines: closer, they
+    /// push each other apart. It is wider than the gap a bubble on top cuts
+    /// out of the glass below it (`StageView.gap`), so bubbles at rest never
+    /// overlap; a bubble overlapping another at rest would have its side cut
+    /// away all along, and look pressed flat for good.
+    static let spacing = 4.0
+    /// How deep (points) bubbles may come into each other's `spacing`
     /// before they push. Pushed apart, bubbles come to rest at its edge;
     /// without this they would rest a hair inside it, pushing ever more
     /// faintly for ever, and their jelly, pressed all the while, would
@@ -49,7 +51,7 @@ enum Physics {
             for j in bubbles.indices where j > i && bubbles[j].isFree {
                 let (a, b) = (bubbles[i], bubbles[j])
                 let (dist, dir) = separation(a, b)
-                let minDist = personalSpace * (roundness(a) + roundness(b))
+                let minDist = roundness(a) + roundness(b) + spacing
                 guard dist < minDist - slop else { continue }
                 let (ma, mb) = (mass(a), mass(b))
                 let closingSpeed = (a.velocity - b.velocity).dot(dir)

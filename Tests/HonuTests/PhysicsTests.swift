@@ -71,29 +71,36 @@ struct PhysicsTests {
         #expect(Double(frame) * Self.dt < Bubble.spawnSeconds + 0.1)
     }
 
-    @Test func aSlightOverlapIsKept() {
-        // 10 points of overlap, less than their rounded corners allow.
+    @Test func aSlightOverlapIsPushedApart() {
+        // 10 points of overlap, which would cut one's side away all along.
         let (a, b) = (small(500), small(650))
         simulate(3)
-        #expect(a.center.x == 500 && b.center.x == 650)
+        let room = b.frame.minX - a.frame.maxX
+        #expect(room > StageView.gap, "only \(room) points apart")
+        #expect(a.velocity == .zero && b.velocity == .zero, "still creeping")
+    }
+
+    @Test func bubblesFarEnoughApartStayPut() {
+        let (a, b) = (small(500), small(500 + 160 + Physics.spacing))
+        simulate(3)
+        #expect(a.center.x == 500 && b.center.x == 500 + 160 + Physics.spacing)
     }
 
     @Test func crowdedBubblesArePushedApartAndComeToRest() {
         let (a, b) = (bubble(1000), bubble(1150, 520))
         simulate(4)
-        let gap = b.center.x - a.center.x
-        // Side by side, overlapping by no more than their rounded corners allow.
-        #expect(gap > 360, "still \(gap) points apart")
+        let room = b.frame.minX - a.frame.maxX
+        // Side by side, with room between them.
+        #expect(room > StageView.gap, "only \(room) points apart")
         #expect(abs(b.center.y - a.center.y - 20) < 1, "pushed sideways, not up or down")
         #expect(a.velocity == .zero && b.velocity == .zero, "still creeping")
     }
 
     @Test func bubblesRestingAtTheEdgeOfEachOthersSpaceSettle() {
-        // As far apart as pushing leaves them: a hair inside the space their
-        // rounded corners allow, where a push would be ever fainter.
+        // As far apart as pushing leaves them: a hair inside the room they
+        // keep, where a push would be ever fainter.
         let a = small(500)
-        let space = Physics.personalSpace * 2 * a.cornerRadius
-        let b = small(500 + 160 - 2 * a.cornerRadius + space - 1e-9)
+        let b = small(500 + 160 + Physics.spacing - 1e-9)
         simulate(3)
         #expect(a.velocity == .zero && b.velocity == .zero, "still creeping")
         #expect(a.outline == nil && b.outline == nil, "still pressed against each other")
