@@ -41,14 +41,9 @@
 ## Project
 
 - Test multiple displays.
-- **Restore old versions of data safely**, perhaps by keeping `~/.honu/`
-  in a local git repository (a commit per autosave that changed
-  something, or per hour).
-- **Sync across devices**, perhaps through iCloud. Never put a git
-  repository in iCloud Drive, which syncs `.git` file by file and
-  corrupts it; keep history local and sync apart from it (CloudKit
-  records per item, rather than one `state.json` that two Macs
-  overwrite). Needs a PRD in `docs/`.
+- **Restore old versions of data safely** and **sync across devices**
+  (draft: `docs/Sync.md`): local snapshots with Go Back in Time, then
+  per-item records synced through an iCloud Drive folder.
 - **Package Honu as a downloadable app.** A release build is a bare
   executable: no Info.plist, icon, or bundle id, it opens Terminal from
   the Finder, and `Bundle.module` fails without `Honu_Honu.bundle`.
