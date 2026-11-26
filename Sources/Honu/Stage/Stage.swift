@@ -264,7 +264,7 @@ final class Stage {
 
     /// Whether to log, once a second, every bubble that is not at rest, to
     /// find what keeps one moving: set `HONU_LOG_PHYSICS` to any value.
-    private static let logsPhysics = ProcessInfo.processInfo.environment["HONU_LOG_PHYSICS"] != nil
+    static let logsPhysics = ProcessInfo.processInfo.environment["HONU_LOG_PHYSICS"] != nil
     @ObservationIgnored private var sinceLog = 0.0
 
     private func logUnrest(dt: Double) {

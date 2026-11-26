@@ -407,6 +407,20 @@ final class Bubble: Identifiable {
             x: -spot.x / scale, y: -spot.y / scale, width: bounds.width / scale,
             height: bounds.height / scale)
         jelly.step(dt: dt, velocity: pace, walls: walls, contacts: pressing)
+        // A ring gone to infinity or NaN never settles, and its outline,
+        // drawn nowhere, would let the glass of the bubbles around it merge
+        // with its own: it comes back to rest at once.
+        guard jelly.isFinite else {
+            if Stage.logsPhysics {
+                let inputs =
+                    "dt \(dt) change \(change) knock \(knock) growth \(growthChange) "
+                    + "pace \(pace) scale \(scale) walls \(walls) pressing \(pressing)"
+                FileHandle.standardError.write(
+                    Data("[physics] \(target) jelly broke: \(inputs)\n".utf8))
+            }
+            rest()
+            return
+        }
         if jelly.isSettled && pace.length < Self.restPace && pressing.isEmpty {
             rest()
             return

@@ -303,6 +303,15 @@ struct BubbleJellyTests {
         #expect(wobbledInFlight)
     }
 
+    @Test func aBrokenJellyComesBackToRest() {
+        // However it happens, a ring gone to NaN must not stay: its outline
+        // would be drawn nowhere, merging the glass around it.
+        let bubble = bubble(500)
+        bubble.knock(CGPoint(x: CGFloat.infinity, y: 0))
+        simulate(Self.dt)
+        #expect(isAtRest(bubble))
+    }
+
     @Test func swallowedBubbleDoesNotWobble() {
         let bubble = bubble(500)
         bubble.velocity = CGPoint(x: 2000, y: 0)

@@ -145,6 +145,11 @@ struct Jelly {
         )
     }
 
+    /// Whether every point and speed is a finite number.
+    var isFinite: Bool {
+        (points + speeds).allSatisfy { $0.x.isFinite && $0.y.isFinite }
+    }
+
     /// Whether every point is back where it rests and nearly still.
     var isSettled: Bool {
         zip(points, rest).allSatisfy { ($0 - $1).length < Self.settleDistance }
