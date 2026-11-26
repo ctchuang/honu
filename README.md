@@ -98,6 +98,21 @@ it edits, through the hook in `.claude/settings.json`.
 swift build -c release   # optimized build
 ```
 
+## Versions
+
+Releases are git tags. A big new feature raises the minor version (0.3 → 0.4);
+a bug fix or small change raises the patch version (0.3.1 → 0.3.2).
+
+- **0.4.1**: Honu moves to the display whose Dock icon you click; crowded bubbles
+  no longer bounce against the screen edges.
+- **0.4**: crowded bubbles come to rest without overlapping; gentler jelly.
+- **0.3.2**: drag a bubble's content without moving the bubble.
+- **0.3.1**: the Reef of built-in microapps, starting with a Timer; Honu stays put
+  under Stage Manager.
+- **0.3**: jelly bubbles you can resize.
+- **0.2**: Honu on every desktop, behind your apps until you use it.
+- **0.1**: bubbles on the desktop, the turtle's launcher, and microapps Claude makes.
+
 ## License
 
 [MIT](LICENSE)
