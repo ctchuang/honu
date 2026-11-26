@@ -281,6 +281,20 @@ final class Bubble: Identifiable {
         velocity = .zero
     }
 
+    /// Moves it, and any flight it is on, by `offset`, as when Honu moves to
+    /// another screen; its jelly comes to rest and feels no jump.
+    func shift(by offset: CGPoint) {
+        center = center + offset
+        if let flight {
+            self.flight = Flight(
+                kind: flight.kind, from: flight.from + offset, to: flight.to + offset,
+                progress: flight.progress)
+        }
+        rest()
+        lastSpot = nil
+        pace = nil
+    }
+
     /// Advances the breathing, the motion, and the flight by `dt` seconds.
     func animate(dt: Double) {
         let target: Double = isBusy ? 1 : 0

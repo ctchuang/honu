@@ -60,6 +60,16 @@ final class Trash {
         return swallowed
     }
 
+    /// Moves where every swallowed bubble goes back to through `place`, as
+    /// when Honu moves to another screen.
+    func move(_ place: (CGPoint) -> CGPoint) {
+        gulps = gulps.map {
+            Swallowed(
+                morsels: $0.morsels.map { .init(bubble: $0.bubble, home: place($0.home)) },
+                microapp: $0.microapp, at: $0.at)
+        }
+    }
+
     /// Forgets what is too old to bring back at `time`, returning it; it is
     /// now deleted for good.
     func forget(at time: TimeInterval = now()) -> [Swallowed] {

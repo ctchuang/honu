@@ -46,7 +46,7 @@ final class Turtle {
     private var hoppedAt = -TimeInterval.infinity
     /// When the turtle last spat out a bubble.
     private var spatAt = -TimeInterval.infinity
-    let stageSize: CGSize
+    var stageSize: CGSize
 
     init(stageSize: CGSize) {
         self.stageSize = stageSize

@@ -9,7 +9,7 @@ import SwiftUI
 @MainActor
 final class Stage {
     private(set) var bubbles: [Bubble] = []
-    let size: CGSize
+    private(set) var size: CGSize
     @ObservationIgnored private var nextID = 1
     /// The bubble being dragged, always the top one, and where it was picked up.
     private(set) var drag: (bubble: Bubble, home: CGPoint)?
@@ -209,6 +209,45 @@ final class Stage {
         return true
     }
 
+    // MARK: Moving to another screen
+
+    /// Fits the stage to a screen of `newSize`, as when Honu moves to another
+    /// display: every bubble keeps its place in proportion to the screen,
+    /// so a crowded desk stays spread out rather than piling up at the edges
+    /// of a smaller screen, and stays on it, those the user resized fitted
+    /// to it.
+    func resize(to newSize: CGSize) {
+        let place = Self.proportion(from: size, to: newSize)
+        size = newSize
+        drag = drag.map { ($0.bubble, place($0.home)) }
+        resize = resize.map {
+            let center = place(CGPoint(x: $0.start.midX, y: $0.start.midY))
+            return (
+                $0.bubble, $0.edges,
+                $0.start.offsetBy(
+                    dx: center.x - $0.start.midX, dy: center.y - $0.start.midY)
+            )
+        }
+        for bubble in bubbles {
+            bubble.shift(by: place(bubble.destination) - bubble.destination)
+            guard bubble.isFree else { continue }
+            if let userSize = bubble.userSize {
+                setUserSize(of: bubble, to: userSize, zoomed: bubble.isZoomed)
+            } else {
+                bubble.center = clamped(bubble.center, size: bubble.size)
+            }
+        }
+    }
+
+    /// Takes a point on a screen of `old` size to the same place, in
+    /// proportion, on one of `new` size.
+    static func proportion(from old: CGSize, to new: CGSize) -> (CGPoint) -> CGPoint {
+        let scale = CGPoint(
+            x: old.width > 0 ? new.width / old.width : 1,
+            y: old.height > 0 ? new.height / old.height : 1)
+        return { CGPoint(x: $0.x * scale.x, y: $0.y * scale.y) }
+    }
+
     // MARK: Flying in and out
 
     /// Has `bubble`, just added, pop out of `mouth` and fly to a place up and
@@ -246,7 +285,8 @@ final class Stage {
         guard let index = bubbles.firstIndex(where: { $0 === bubble }) else { return }
         bubbles.remove(at: index)
         putOnTop(bubble)
-        bubble.fly(from: mouth, to: home)
+        // On screen, should Honu have moved to a smaller one since.
+        bubble.fly(from: mouth, to: clamped(home, size: bubble.size))
     }
 
     /// Advances every bubble's flight, motion, and jelly by `dt` seconds. A

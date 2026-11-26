@@ -70,7 +70,7 @@ final class Octopus {
         case microapp
     }
 
-    let stageSize: CGSize
+    var stageSize: CGSize
     /// What it has swallowed that can still come back, which keeps it up.
     let trash: Trash
     /// Whether it is up, in view, rather than hidden below the bottom edge.

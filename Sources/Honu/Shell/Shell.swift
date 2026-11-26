@@ -207,6 +207,28 @@ final class Shell {
         }
     }
 
+    /// Fits Honu to a screen of `size`, as when it moves to another display
+    /// or the Dock moves: the turtle, the bubbles, and where swallowed ones
+    /// go back to keep their places in proportion to the screen, and stay
+    /// on it. Any menu closes, since it was placed for the old screen.
+    func resize(to size: CGSize) {
+        guard size != stage.size else { return }
+        let place = Stage.proportion(from: stage.size, to: size)
+        closePopup()
+        stage.resize(to: size)
+        trash.move(place)
+        octopus.stageSize = size
+        if turtle.rest != nil {
+            let center = place(turtle.center)
+            turtle.stageSize = size
+            turtle.move(
+                to: CGPoint(
+                    x: center.x - turtle.size.width / 2, y: center.y - turtle.size.height / 2))
+        } else {
+            turtle.stageSize = size
+        }
+    }
+
     func dragTurtle(by translation: CGSize) {
         let start = turtleDragStart ?? turtle.origin
         turtleDragStart = start

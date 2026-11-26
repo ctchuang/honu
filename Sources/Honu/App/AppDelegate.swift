@@ -39,6 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.window = window
         self.shell = shell
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.fitScreen() }
+        }
         NSApp.activate()
     }
 
@@ -46,6 +51,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// sprite was clicked, or the user switched to it.
     func applicationDidBecomeActive(_ notification: Notification) {
         window?.bringFront()
+    }
+
+    /// Clicking Honu's Dock icon moves it to the display the pointer is on,
+    /// whose Dock was clicked, as it moves to the desktop in use.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)
+        -> Bool
+    {
+        let mouse = NSEvent.mouseLocation
+        if let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) {
+            move(to: screen)
+        }
+        return false
+    }
+
+    /// Fits the window to the display it is on, or the main one if that one
+    /// is gone, after the displays change or the Dock moves.
+    private func fitScreen() {
+        guard let window else { return }
+        move(to: window.screen ?? NSScreen.screens[0])
+    }
+
+    /// Moves the window, and the shell with it, to cover `screen` but its
+    /// menu bar and Dock.
+    private func move(to screen: NSScreen) {
+        guard let window, let shell else { return }
+        let frame = screen.visibleFrame
+        guard frame != window.frame else { return }
+        shell.resize(to: frame.size)
+        window.setFrame(frame, display: true)
+        if NSApp.isActive {
+            window.bringFront()
+        }
     }
 
     /// Honu goes behind every window when the user turns to another app,

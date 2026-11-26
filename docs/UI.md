@@ -34,7 +34,11 @@ stays small while what it can do grows.
    app is in front, whether or not it shows on all desktops. On one
    desktop, it moves to whichever desktop is in use when Honu becomes
    active there, as when its Dock icon is clicked, since Mission Control,
-   where windows are dragged between desktops, leaves it out.
+   where windows are dragged between desktops, leaves it out. With more
+   than one display, it is on one at a time: clicking its Dock icon on
+   another display moves it there, everything keeping its place in
+   proportion to the screen and staying on it, and it fits itself to its
+   display again when the displays or the Dock change.
 2. **Start empty, stay quiet.** Honu starts with only the turtle in the
    bottom-left corner. Anything else appears when needed and leaves when
    done: the octopus rises only while something is dragged toward it or
