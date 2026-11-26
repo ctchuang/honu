@@ -113,6 +113,9 @@ enum Physics {
         }
 
         for (index, bubble) in bubbles.enumerated() where bubble.isFree {
+            // How fast it was going before this frame's pushes, which alone
+            // can bounce it off an edge.
+            let coasting = bubble.velocity
             if bubble !== held && moving[index] {
                 var velocity = (bubble.velocity + accel[index] * dt) * exp(-friction * dt)
                 let speed = velocity.length
@@ -128,7 +131,7 @@ enum Physics {
                     bubble.center = bubble.center + velocity * dt
                 }
             }
-            confine(bubble, to: bounds)
+            confine(bubble, to: bounds, coasting: coasting)
         }
     }
 
@@ -203,13 +206,20 @@ enum Physics {
         return accel
     }
 
-    /// Keeps the whole bubble inside `bounds`, bouncing it off any edge it hits.
+    /// Keeps the whole bubble inside `bounds`. Hitting an edge, it bounces
+    /// only as fast as it was `coasting` toward it before this frame's
+    /// pushes, as one thrown there does: a bubble pushed into an edge stops
+    /// against it, rather than gaining a frame's push each time it hits and
+    /// bouncing for ever.
     @MainActor
-    private static func confine(_ bubble: Bubble, to bounds: CGSize) {
+    private static func confine(_ bubble: Bubble, to bounds: CGSize, coasting: CGPoint) {
         let half = CGPoint(x: bubble.frame.width / 2, y: bubble.frame.height / 2)
         var center = bubble.center
         var velocity = bubble.velocity
-        func clamp(_ c: inout CGFloat, _ v: inout CGFloat, half: CGFloat, size: CGFloat) {
+        func clamp(
+            _ c: inout CGFloat, _ v: inout CGFloat, coasting: CGFloat, half: CGFloat,
+            size: CGFloat
+        ) {
             let (lo, hi) = (half, size - half)
             if lo > hi {
                 // The screen is smaller than the bubble: just center it.
@@ -217,14 +227,14 @@ enum Physics {
                 v = 0
             } else if c < lo {
                 c = lo
-                v = abs(v) < bounceSpeed ? 0 : abs(v) * bounce
+                v = -coasting < bounceSpeed ? 0 : -coasting * bounce
             } else if c > hi {
                 c = hi
-                v = abs(v) < bounceSpeed ? 0 : -abs(v) * bounce
+                v = coasting < bounceSpeed ? 0 : -coasting * bounce
             }
         }
-        clamp(&center.x, &velocity.x, half: half.x, size: bounds.width)
-        clamp(&center.y, &velocity.y, half: half.y, size: bounds.height)
+        clamp(&center.x, &velocity.x, coasting: coasting.x, half: half.x, size: bounds.width)
+        clamp(&center.y, &velocity.y, coasting: coasting.y, half: half.y, size: bounds.height)
         if center != bubble.center { bubble.center = center }
         if velocity != bubble.velocity { bubble.velocity = velocity }
     }

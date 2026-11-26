@@ -238,4 +238,32 @@ struct PhysicsTests {
         simulate(1)
         #expect(bubble.center == mouth && bubble.scale == 0 && bubble.isHidden)
     }
+
+    /// Bubbles too many for the screen, pushed into its edges, come to rest
+    /// overlapping rather than bouncing off the edges for ever, whatever
+    /// the screen and however they start.
+    @Test func bubblesTooManyForTheScreenComeToRest() {
+        var seed: UInt64 = 7919
+        func random() -> Double {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Double(seed >> 11) / Double(1 << 53)
+        }
+        for trial in 0..<20 {
+            let size = CGSize(width: 900 + random() * 600, height: 600 + random() * 300)
+            let stage = Stage(size: size)
+            for item in 0..<(3 + Int(random() * 10)) {
+                var look = Appearance()
+                look.size = CGSize(width: 260 + random() * 300, height: 180 + random() * 300)
+                stage.add(
+                    target: ViewTarget(app: AppID("test"), item: ItemID(rawValue: item)),
+                    center: CGPoint(x: random() * size.width, y: random() * size.height),
+                    appearance: look, viewState: nil)
+            }
+            for _ in 0..<(60 * 20) {
+                stage.step(dt: 1.0 / 60)
+            }
+            let restless = stage.bubbles.filter { $0.velocity != .zero || $0.outline != nil }
+            #expect(restless.isEmpty, "trial \(trial)")
+        }
+    }
 }
